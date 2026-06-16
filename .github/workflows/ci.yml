@@ -6,7 +6,8 @@
 # Most hooks self-bootstrap their pinned env (shellcheck, typos, gitleaks, ruff,
 # rumdl, validate-pyproject, uv-lock, the pre-commit-hooks builtins), so the only
 # tools to install are the `language: system` ones CI actually needs: fish (the
-# fish hooks) and bats (the behavior tests). uv runs the `ty` hook + pytest. The
+# fish hooks), bats (the behavior tests), and ripgrep (the fsearch behavior test,
+# which gates on `rg` before its usage path). uv runs the `ty` hook + pytest. The
 # pytest suite includes Playwright docs-site tests that drive a real browser, so a
 # (cached) Chromium is installed just before that step.
 #
@@ -48,7 +49,7 @@ jobs:
           enable-cache: true
 
       - name: Install system-hook tools
-        run: sudo apt-get update && sudo apt-get install -y fish bats
+        run: sudo apt-get update && sudo apt-get install -y fish bats ripgrep
 
       - name: Cache prek hook environments
         uses: actions/cache@v4
