@@ -7,6 +7,8 @@ SPDX-License-Identifier: MIT
 
 My personal dotfiles.
 
+📖 **[Documentation site →](https://nivintw.github.io/dotfiles/)**
+
 ## Layout
 
 - `home/` — mirrors `$HOME`. Symlinked into place with [GNU Stow](https://www.gnu.org/software/stow/).
