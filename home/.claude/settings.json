@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(uv run ruff *)",
+      "Bash(uv run pytest *)",
+      "Bash(prek run *)",
+      "Bash(bash -n *)",
+      "WebFetch(domain:docs.docker.com)",
+      "WebFetch(domain:docs.google.com)",
+      "WebFetch(domain:docs.python.org)",
+      "WebFetch(domain:code.claude.com)",
+      "Bash(trivy fs *)",
+      "Bash(brew leaves *)",
+      "Bash(brew list *)",
+      "Bash(brew info *)"
+    ],
+    "deny": [
+      "Read(*.env)",
+      "Read(**/*.pem)",
+      "Bash(git clean*)"
+    ],
+    "defaultMode": "default"
+  },
+  "effortLevel": "high",
+  "theme": "dark",
+  "remoteControlAtStartup": true,
+  "inputNeededNotifEnabled": true,
+  "agentPushNotifEnabled": true,
+  "skipWorkflowUsageWarning": true
+}

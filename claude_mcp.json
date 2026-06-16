@@ -1,0 +1,15 @@
+{
+  "1password": {
+    "type": "stdio",
+    "command": "/Applications/1Password.app/Contents/MacOS/onepassword-mcp",
+    "args": [],
+    "env": {}
+  },
+  "github": {
+    "type": "http",
+    "url": "https://api.githubcopilot.com/mcp/",
+    "headers": {
+      "Authorization": "Bearer {{ op://MCP/github-claude-pat/credential }}"
+    }
+  }
+}

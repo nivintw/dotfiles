@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Personal default config for typos-cli (crate-ci/typos).
+#
+# Discovery: typos walks UP the directory tree from the files it checks and
+# uses the first config it finds. Since this lives at ~/.typos.toml (stowed),
+# it's the default for every repo under $HOME that does NOT ship its own typos
+# config. A repo-local _typos.toml shadows this entirely — project rules should
+# win — and `typos --isolated` ignores ancestors (including this) altogether.
+#
+# Philosophy: treat typos as a CHECK-ONLY signal. Do NOT wire `--write-changes`
+# into a trusted hook: an auto-applied "correction" can land silently on a line
+# that already had other edits, and a wrong fix (e.g. a mangled URL) is then
+# very hard to spot. Run check-only in CI / pre-push; fixing is a human-invoked,
+# human-reviewed `typos --write-changes` you read like any other diff.
+
+[default]
+# Ignore whole syntactic categories that are never typos but frequently get
+# mangled. Regex spans are far more robust than whitelisting each victim word:
+# you exclude the *shape* once instead of playing whack-a-mole per token.
+extend-ignore-re = [
+  # Scheme URLs (http, https, ftp, git, ssh, …) and bare www.* hosts.
+  "(?:\\w+://|\\bwww\\.)\\S+",
+  # Email addresses.
+  "\\b[\\w.+-]+@[\\w.-]+\\.\\w+\\b",
+  # Bare domains by common TLD (womens.com, sub.example.io). TLD-anchored so
+  # it catches hostnames without swallowing code like `recieveData.value`.
+  # Add TLDs here as needed.
+  "\\b(?:[\\w-]+\\.)+(?:com|org|net|io|dev|gov|edu|co|app|ai|cloud|info|xyz)\\b",
+  # Per-line escape hatch: append `# typos:disable-line` (also // -- ;) to a
+  # line to skip it entirely — no central-config edit needed.
+  "(?m)^.*(?:#|//|--|;)[ \\t]*typos:disable-line[ \\t]*$",
+]
+
+# When a per-line ignore is too broad, whitelist a specific token by mapping it
+# to itself. Use extend-words for plain words, extend-identifiers for whole
+# code identifiers. Examples of real-world false positives, left commented:
+[default.extend-words]
+# Nd = "Nd"        # Unicode General_Category, not a misspelling of "And"
+#
+# File-extension / glob-fragment tokens from a gitignore (e.g. a repo whose
+# .gitignore was seeded from ~/.config/git/ignore). typos only sees these when a
+# file is scanned explicitly (a plain `typos .` skips hidden dotfiles), e.g. a
+# typos pre-commit hook that passes filenames. Whitelisted here so any such repo
+# under $HOME without its own typos config stays clean.
+acn = "acn"       # *.acn  (LaTeX glossaries)
+cripts = "cripts" # from the [Ss]cripts venv glob
+fot = "fot"       # *.fot  (LaTeX)
+ist = "ist"       # *.ist  (LaTeX makeindex style)
+lod = "lod"       # *.lod  (LaTeX)
+nclude = "nclude" # from the [Ii]nclude venv glob
+sav = "sav"       # *.sav  (editor backup)
+thm = "thm"       # *.thm  (LaTeX amsthm)
+
+[default.extend-identifiers]
+# someIdent = "someIdent"

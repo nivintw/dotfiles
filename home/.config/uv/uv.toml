@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Global uv configuration. uv reads ~/.config/uv/uv.toml automatically.
+#
+# Always use uv-managed Python interpreters; never fall back to a system or
+# Homebrew Python. Keeps project environments fully isolated and reproducible.
+python-preference = "only-managed"

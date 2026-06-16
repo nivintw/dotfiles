@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Topgrade — one command to update everything. It auto-detects most tools
+# (Homebrew, Mac App Store via `mas`, uv, VS Code, tmux/TPM, ...) and runs each
+# in turn. This file tunes that behavior and adds the one updater topgrade can't
+# discover on its own (fisher).
+# Reference: https://github.com/topgrade-rs/topgrade/blob/main/config.example.toml
+
+[misc]
+# Prompt before disruptive actions. You're new to topgrade — keep it interactive
+# until you trust what it does, then flip to true for unattended runs.
+assume_yes = false
+
+# Run each tool's own cleanup (e.g. `brew cleanup`) after upgrading.
+cleanup = true
+
+# Report failures at the end instead of pausing to retry mid-run.
+no_retry = true
+
+# Homebrew owns the topgrade binary, so don't let it try to self-update.
+no_self_update = true
+
+[brew]
+# Leave casks that auto-update (Chrome, etc.) to themselves rather than having
+# topgrade re-download them. Flip to true if you'd rather force everything.
+greedy_cask = false
+autoremove = true   # `brew autoremove` unused dependencies after upgrades
+
+[commands]
+# Custom steps topgrade can't auto-detect. Note: uv tools (`uv tool upgrade
+# --all`) and tmux/TPM plugins are NOT here — topgrade's native `uv` and `tmux`
+# steps already cover them. Only fisher has no native step.
+"fisher plugins" = "fish -c 'fisher update'"

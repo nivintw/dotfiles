@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+function eachdir --description "Run a (simple) command in each immediate subdirectory"
+    if test -z "$argv[1]"
+        echo "usage: eachdir <command...>" >&2
+        return 2
+    end
+
+    for dir in (find . -mindepth 1 -maxdepth 1 -type d | sort)
+        echo "── "(string replace -r '^\./' '' -- $dir)" ──"
+        pushd $dir >/dev/null
+        $argv
+        popd >/dev/null
+    end
+end

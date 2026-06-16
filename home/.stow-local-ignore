@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Patterns (Perl regex) of paths under home/ that stow should NOT symlink into
+# $HOME. Providing this file REPLACES stow's built-in default ignore list, so
+# the stow defaults are reproduced below, plus our own additions.
+#
+# Why this exists: macOS Finder scatters .DS_Store files everywhere. Without
+# this, `stow` tries to link ~/.DS_Store -> the repo copy and aborts the whole
+# run on the inevitable conflict with the real (Finder-regenerated) ~/.DS_Store.
+
+# --- our additions ---
+\.DS_Store
+\._.*
+
+# --- stow's built-in defaults (kept, since this file overrides them) ---
+RCS
+.+,v
+CVS
+\.\#.+
+\.cvsignore
+\.svn
+_darcs
+\.hg
+\.git
+\.gitignore
+\.gitmodules
+.+~
+\#.*\#
+^/README.*
+^/LICENSE.*
+^/COPYING

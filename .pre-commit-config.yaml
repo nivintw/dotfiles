@@ -1,0 +1,207 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Pre-commit hooks for this dotfiles repo, run by prek (https://github.com/j178/prek).
+# Designed to run identically in CI — most hooks self-bootstrap a pinned env. The
+# `language: system` hooks (fish, ty, taplo, the local scripts) need their tool
+# present: CI installs fish (Brewfile/apt) and taplo, and runs ty via `uv run`.
+#
+#   Run on demand:   prek run --all-files
+#   Install hooks:    prek install   (also auto-installed via the git template dir)
+#   Bump pins:        prek autoupdate   (keep `typos` pinned to the local typos-cli
+#                     version so local and CI flag identically)
+
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit, manual]
+
+# Binary plist is not text-lintable; keep every hook off it.
+exclude: '^iterm2/com\.googlecode\.iterm2\.plist$'
+
+repos:
+  # ------------------------------ 🔧 Meta / Self-checks ----------------------------- #
+  - repo: meta
+    hooks:
+      - id: check-hooks-apply
+        name: "🔧 pre-commit · Ensure all hooks apply to at least one file"
+      - id: check-useless-excludes
+        name: "🔧 pre-commit · Check for useless excludes"
+
+  # ------------------------------- 🌳 Git Hygiene Tools ----------------------------- #
+  # prek's `builtin` repo: Rust-native implementations, no Python env to bootstrap.
+  - repo: builtin
+    hooks:
+      - id: check-added-large-files
+        name: "🌳 git · Block large file commits"
+        args: ["--maxkb=1024"]
+      - id: check-merge-conflict
+        name: "🌳 git · Detect conflict markers"
+      - id: no-commit-to-branch
+        name: "🌳 git · Protect main (commit via a branch, then merge)"
+      - id: check-case-conflict
+        name: "🌳 git · Detect case-insensitive name clashes (macOS FS)"
+      - id: check-shebang-scripts-are-executable
+        name: "🌳 git · Shebang scripts must be executable"
+      - id: check-executables-have-shebangs
+        name: "🌳 git · Executables must have a shebang"
+      - id: detect-private-key
+        name: "🔒 security · Block committed private keys"
+      - id: mixed-line-ending
+        name: "🧹 cleanup · Normalize line endings (LF)"
+        args: ["--fix=lf"]
+      - id: trailing-whitespace
+        name: "🧹 cleanup · Remove trailing whitespace"
+        args: ["--markdown-linebreak-ext=md"] # keep intentional MD line breaks
+      - id: end-of-file-fixer
+        name: "🧹 cleanup · Ensure single newline at EOF"
+      - id: check-yaml
+        name: "🗂️ config · Validate YAML"
+      - id: check-json
+        name: "🗂️ config · Validate JSON"
+        files: '\.json$'
+        # VS Code settings.json is JSONC (comments + trailing commas) — skip it.
+        exclude: '^home/Library/Application Support/Code/User/settings\.json$'
+      - id: check-toml
+        name: "🗂️ config · Validate TOML"
+
+  # -------------------------------- 🐚 Shell Tools ---------------------------------- #
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        name: "🐚 shell · Lint shell scripts with shellcheck"
+        args: ["-s", "bash"]
+
+  # ------------------------------- 🔒 Security Tools -------------------------------- #
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        name: "🔒 security · Detect secrets with gitleaks"
+
+  # --------------------------- ⚖️ Licensing & Compliance ---------------------------- #
+  # hawkeye adds/maintains the SPDX headers (config: licenserc.toml); reuse verifies
+  # overall REUSE compliance (headers + REUSE.toml). hawkeye is local/system because
+  # installing it via prek compiles from source (slow); it's in the Brewfile.
+  - repo: local
+    hooks:
+      - id: hawkeye-format
+        name: "⚖️ license · Add/format SPDX headers with hawkeye"
+        entry: hawkeye format
+        language: system
+        pass_filenames: false
+        require_serial: true
+
+  - repo: https://github.com/fsfe/reuse-tool
+    rev: v6.2.0
+    hooks:
+      - id: reuse
+        name: "⚖️ license · Check REUSE compliance"
+
+  # ------------------------------- ✨ Language / Spelling --------------------------- #
+  - repo: https://github.com/crate-ci/typos
+    # Pinned to the local typos-cli version so local and CI flag identically.
+    rev: v1.47.2
+    hooks:
+      - id: typos
+        name: "✨ language · Check spelling with typos"
+        # CHECK-ONLY: the hook default is [--write-changes, --force-exclude] — it
+        # auto-corrects and exits 0, violating this repo's never-auto-write typos
+        # policy (home/.typos.toml header). Drop --write-changes; keep --force-exclude.
+        args: ["--force-exclude"]
+        # Directory scan (skips hidden paths, so home/.config/git/ignore — under the
+        # hidden .config/ — isn't scanned). Config is _typos.toml (mirrors
+        # home/.typos.toml) for CI parity.
+        pass_filenames: false
+
+  # -------------------------------- 🐍 Python Tools --------------------------------- #
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.17 # keep in step with the ruff dev-dependency in pyproject.toml
+    hooks:
+      - id: ruff-check
+        name: "🐍 python · Lint with Ruff"
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+        name: "🐍 python · Format with Ruff"
+
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.25
+    hooks:
+      - id: validate-pyproject
+        name: "🐍 python · Validate pyproject.toml"
+        additional_dependencies: ["validate-pyproject-schema-store[all]"]
+
+  # -------------------------------- 📝 Markdown / TOML ------------------------------ #
+  - repo: https://github.com/rvben/rumdl-pre-commit
+    rev: v0.2.17
+    hooks:
+      - id: rumdl
+        name: "📝 markdown · Lint/format with rumdl"
+        args: [--fix] # config in .rumdl.toml (MD013 off, fenced code blocks)
+
+  # ----------------------------- ⚙️ Environment Management -------------------------- #
+  # Keep uv.lock in sync with pyproject.toml so CI's `uv sync` never drifts.
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.11.21
+    hooks:
+      - id: uv-lock
+        name: "⚙️ uv · Keep uv.lock in sync with pyproject.toml"
+
+  # ------------------------------ ✨ Commit Messages -------------------------------- #
+  - repo: https://github.com/ljnsn/cz-conventional-gitmoji
+    rev: v0.7.0
+    hooks:
+      - id: conventional-gitmoji
+        name: "✨ commit-msg · Add gitmoji to conventional commits"
+
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.16.3
+    hooks:
+      - id: commitizen
+        name: "✨ commit-msg · Enforce Conventional Commits with Gitmoji"
+        stages: [commit-msg]
+        additional_dependencies: [cz-conventional-gitmoji]
+
+  # --------------------- 🛠️ Local Tools (prek can't bootstrap) ---------------------- #
+  - repo: local
+    hooks:
+      # Validate this config with prek itself — the only tool that knows its schema.
+      - id: prek-validate-config
+        name: "🔧 pre-commit · Validate .pre-commit-config.yaml"
+        entry: prek validate-config
+        language: system
+        files: '^\.pre-commit-config\.yaml$'
+
+      # fish has no published pre-commit hook and prek can't bootstrap a fish env.
+      - id: fish-syntax
+        name: "🐟 fish · Check syntax (fish -n)"
+        entry: bash -c 'for f in "$@"; do fish -n "$f" || exit 1; done' --
+        language: system
+        files: '\.fish$'
+      - id: fish-indent
+        name: "🐟 fish · Check formatting (fish_indent)"
+        entry: bash -c 'fish_indent --check "$@"' --
+        language: system
+        files: '\.fish$'
+
+      # ty has no published hook yet; run it from the project env (uv).
+      - id: ty
+        name: "🐍 python · Type-check with ty"
+        entry: uv run ty check .
+        language: system
+        types: [python]
+        pass_filenames: false
+      # taplo is awkward to bootstrap via prek; use the system binary (Brewfile).
+      - id: taplo
+        name: "📝 toml · Format with taplo"
+        entry: taplo format
+        language: system
+        types: [toml]
+        pass_filenames: false
+
+      # Our own repo script; `language: script` runs it directly (bash + grep).
+      - id: no-concrete-ssh-hosts
+        name: "🔒 security · Keep tracked SSH config generic"
+        entry: scripts/check-ssh-config.sh
+        language: script
+        files: '^home/\.ssh/config$'
+        pass_filenames: false

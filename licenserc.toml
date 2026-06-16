@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# hawkeye (https://github.com/korandoru/hawkeye) — inserts & maintains SPDX license
+# headers for REUSE compliance. Run: `hawkeye format` (or `check`). The `reuse` hook
+# verifies overall compliance. Header text is templated from [properties] below so the
+# year/holder/license live in one place. Only files with no usable comment syntax stay
+# in REUSE.toml: strict JSON, the iTerm binary plist, the uv-generated lockfile, and
+# the fisher plugin manifest (fisher reads every non-blank line as a plugin spec).
+
+# REUSE-IgnoreStart — this template literally contains an SPDX-License-Identifier line;
+# without the guard, `reuse lint` tries to parse the {{ ... }} placeholder as a license.
+inlineHeader = """
+SPDX-FileCopyrightText: © {{ props["inceptionYear"] }} {{ props["copyrightHolder"] }}
+SPDX-License-Identifier: {{ props["spdxLicenseIdentifier"] }}
+"""
+# REUSE-IgnoreEnd
+
+# Negations cancel hawkeye's built-in default excludes (which skip **/*.md and
+# **/.gitignore) so those get headered too. `**/.claude/` is a directory-form exclude
+# (note: no trailing /**) — it prunes the whole tree, so the blanket `!**/*.md` can't
+# re-include markdown inside it (CLAUDE.md, skills/*/SKILL.md). A contents-form
+# `**/.claude/**` would NOT work here: hawkeye keeps walking the tree and the `!**/*.md`
+# force-include re-headers those .md anyway. Keep this list in sync with REUSE.toml:
+# anything excluded here gets annotated there instead.
+excludes = [
+  "LICENSE",
+  "LICENSES/**",
+  "iterm2/**",
+  "uv.lock",
+  "**/*.json",
+  "home/.config/fish/fish_plugins",
+  "!**/*.md",
+  "!**/.gitignore",
+  "**/.claude/",                    # SPDX headers break Claude Code's frontmatter parsers
+  "**/.python-version",             # bare version string, no comment syntax
+  "**/.vscode/*",                   # editor config (JSON), can't take a header
+  "docs/.nojekyll",                 # empty GitHub Pages marker; annotated in REUSE.toml
+]
+
+additionalHeaders = ["markdown-header.toml"]
+
+[mapping.MARKDOWN_CUSTOM]
+extensions = ["md"]
+
+# '#'-comment files hawkeye doesn't map by default: fish/bats/uv_tools.txt by
+# extension, plus dotfiles and the Brewfile (Ruby DSL) matched by exact filename.
+[mapping.SCRIPT_STYLE]
+extensions = ["fish", "bats", "txt"]
+filenames = [
+  "Brewfile",
+  ".gitignore",
+  ".gitconfig",
+  "ignore",             # ~/.config/git/ignore — the global gitignore (XDG default location)
+  ".envrc",
+  "config",
+  ".stow-local-ignore",
+  "tmux.conf",
+]
+
+[properties]
+inceptionYear = "2026"
+spdxLicenseIdentifier = "MIT"
+copyrightHolder = "Tyler Nivin"

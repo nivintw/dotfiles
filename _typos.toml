@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Repo-level typos config — used by the typos pre-commit hook and in CI.
+#
+# This mirrors the rules in home/.typos.toml (the user-level ~/.typos.toml), kept
+# as a STANDALONE COPY rather than a symlink so that (a) the repo and the personal
+# config can diverge without surprises, and (b) it still works on a checkout
+# without symlink support (e.g. core.symlinks=false). If you change the shared
+# rules, update both. typos is treated as CHECK-ONLY (see .pre-commit-config.yaml
+# and the home/.typos.toml header).
+
+[default]
+# Ignore whole syntactic categories that are never typos but frequently get
+# mangled — exclude the *shape* once instead of whitelisting each victim token.
+extend-ignore-re = [
+  # Scheme URLs (http, https, ftp, git, ssh, …) and bare www.* hosts.
+  "(?:\\w+://|\\bwww\\.)\\S+",
+  # Email addresses.
+  "\\b[\\w.+-]+@[\\w.-]+\\.\\w+\\b",
+  # Bare domains by common TLD, TLD-anchored so it doesn't swallow code like
+  # `recieveData.value`. Add TLDs as needed.
+  "\\b(?:[\\w-]+\\.)+(?:com|org|net|io|dev|gov|edu|co|app|ai|cloud|info|xyz)\\b",
+  # Per-line escape hatch: trailing `# typos:disable-line` (also // -- ;).
+  "(?m)^.*(?:#|//|--|;)[ \\t]*typos:disable-line[ \\t]*$",
+]
+
+# Whitelist specific tokens by mapping them to themselves. These are file-extension
+# / glob-fragment tokens from gitignore-style files (see home/.config/git/ignore);
+# typos only sees them when a file is scanned explicitly (e.g. a typos hook that
+# passes filenames — a plain `typos .` skips hidden dotfiles).
+[default.extend-words]
+acn = "acn"       # *.acn  (LaTeX glossaries)
+cripts = "cripts" # from the [Ss]cripts venv glob
+fot = "fot"       # *.fot  (LaTeX)
+ist = "ist"       # *.ist  (LaTeX makeindex style)
+lod = "lod"       # *.lod  (LaTeX)
+nclude = "nclude" # from the [Ii]nclude venv glob
+sav = "sav"       # *.sav  (editor backup)
+thm = "thm"       # *.thm  (LaTeX amsthm)

@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# CI — runs the same prek hooks + tests as local, on a free ubuntu-latest runner.
+#
+# Most hooks self-bootstrap their pinned env (shellcheck, typos, gitleaks, ruff,
+# rumdl, validate-pyproject, uv-lock, the pre-commit-hooks builtins), so the only
+# tools to install are the `language: system` ones CI actually needs: fish (the
+# fish hooks) and bats (the behavior tests). uv runs the `ty` hook + pytest. The
+# pytest suite includes Playwright docs-site tests that drive a real browser, so a
+# (cached) Chromium is installed just before that step.
+#
+# SKIP=taplo,hawkeye-format: those two are Rust-only system *formatters*. Pulling a
+# Rust toolchain into CI just to re-check formatting isn't worth it, and their
+# correctness is already covered by self-bootstrapping hooks (`check-toml` validates
+# TOML; the `reuse` hook verifies REUSE/license compliance). They still run at local
+# commit time. To make CI byte-identical, drop the SKIP and add a step:
+#   - run: npm i -g @taplo/cli && cargo install hawkeye --locked
+#
+# PORTING TO FORGEJO ACTIONS (self-hosted homelab, or Codeberg): copy this to
+# .forgejo/workflows/ci.yml — the YAML is the same. Tweaks: Forgejo's default runner
+# image is lean (Debian + Node), so install what you need or set a `container:`
+# image; `permissions:` is ignored; `uses:` actions resolve from the runner's
+# configured source. Structure and steps are otherwise identical.
+
+name: ci
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv (+ managed Python)
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install system-hook tools
+        run: sudo apt-get update && sudo apt-get install -y fish bats
+
+      - name: Cache prek hook environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/prek
+          key: prek-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run prek hooks (same as local)
+        env:
+          SKIP: taplo,hawkeye-format
+        run: uvx prek run --all-files
+
+      - name: Fish behavior tests (bats)
+        run: bats tests/
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('uv.lock') }}
+
+      - name: Install Playwright Chromium (for the docs-site tests)
+        run: uv run playwright install --with-deps chromium
+
+      - name: Config-validity + docs-site tests (pytest)
+        run: uv run pytest

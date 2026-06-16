@@ -1,0 +1,91 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+[core]
+	# No excludesfile here on purpose: git reads the XDG default
+	# ~/.config/git/ignore automatically when it's unset (that's where the
+	# global ignore now lives — see home/.config/git/ignore).
+	pager = delta
+[user]
+	name = Tyler Nivin
+	email = tyler.nivin@gmail.com
+	signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK+gQ3ljvXAaFK2HsCuwsH6f6mzmMdjfHta8OA0h4Jp/
+[init]
+	defaultBranch = main
+	; Auto-install prek hooks into every newly cloned/inited repo (shims live in
+	; ~/.config/git/template/hooks, populated by `prek init-template-dir` in install.sh).
+	; Tradeoff: a malicious .pre-commit-config.yaml in an untrusted clone would run
+	; on first commit. Accepted — only trusted repos are cloned here.
+	templateDir = ~/.config/git/template
+[gpg]
+	format = ssh
+[gpg "ssh"]
+	program = /Applications/1Password.app/Contents/MacOS/op-ssh-sign
+[commit]
+	gpgsign = true
+[filter "lfs"]
+	required = true
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+[interactive]
+	# Pipe `git add -p` etc. through delta for color (color-only: no extra chrome).
+	diffFilter = delta --color-only
+[delta]
+	navigate = true        # n/N to jump between files in the diff
+	side-by-side = true
+	line-numbers = true
+	hyperlinks = true      # clickable file/line links in supporting terminals
+[merge]
+	# Show the common ancestor in conflict markers (far more legible than diff2).
+	conflictstyle = zdiff3
+[diff]
+	# Fewer false matches than the default Myers algorithm on repetitive code.
+	algorithm = histogram
+	# `git diff` uses delta (pager). `git difftool` launches difftastic for an
+	# AST-aware structural view; `git dft` is a shortcut (see [alias]).
+	tool = difftastic
+[difftool]
+	prompt = false
+[difftool "difftastic"]
+	cmd = difft "$LOCAL" "$REMOTE"
+[rerere]
+	# Remember and replay conflict resolutions across repeated rebases.
+	enabled = true
+[pull]
+	# Error instead of silently creating a merge commit on a diverged branch.
+	# Use `git pull --rebase` or an explicit `git merge` when you do want to integrate.
+	ff = only
+[branch]
+	sort = -committerdate  # `git branch` lists most-recently-committed first
+[push]
+	autoSetupRemote = true # no more `--set-upstream` on first push
+[help]
+	autocorrect = prompt   # ask before running an unambiguous mistyped subcommand
+[transfer]
+	fsckObjects = true     # validate object integrity on fetch (supply-chain hygiene)
+[include]
+	# Per-machine overrides (work vs personal vs homelab) outside the tracked file.
+	path = ~/.gitconfig_local
+# URL shorthands: `git clone gh:owner/repo` etc.
+[url "git@github.com:"]
+	insteadOf = gh:
+[url "git@gitlab.com:"]
+	insteadOf = gl:
+[url "https://gist.github.com/"]
+	insteadOf = gist:
+# Push to GitHub over SSH (1Password key) even when the remote is an https URL;
+# clones of public repos over https still work read-only.
+[url "git@github.com:"]
+	pushInsteadOf = https://github.com/
+[alias]
+	# Branches by most-recent commit, with relative date (20 newest).
+	recent-branches = "!git for-each-ref --sort=-committerdate refs/heads/ --format='%(committerdate:relative)%09%(refname:short)' | head -20"
+	# Record a checkpoint stash WITHOUT disturbing the working tree.
+	snapshot = "!git stash store -m \"snapshot $(date)\" $(git stash create)"
+	# Pickaxe: every commit that added/removed a string, across all refs.
+	search-git-history = "!f() { git log --all --oneline -S\"$1\"; }; f"
+	# Stashes, one line each.
+	show-stashes = stash list --format='%gd: %s'
+	# AST-aware structural diff via difftastic.
+	dft = difftool -t difftastic

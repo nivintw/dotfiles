@@ -1,0 +1,343 @@
+{
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "rvben.rumdl"
+  },
+  "[python]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit"
+    },
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnType": true
+  },
+  "[toml]": {
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
+  },
+  "[yaml]": {
+    "editor.autoIndent": "keep",
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.quickSuggestions": {
+      "comments": false,
+      "other": true,
+      "strings": true
+    },
+    "gitlens.codeLens.scopes": ["document"]
+  },
+  "application.shellEnvironmentResolutionTimeout": 30,
+  "better-comments.tags": [
+    {
+      "backgroundColor": "transparent",
+      "bold": false,
+      "color": "#FF2D00",
+      "italic": false,
+      "strikethrough": false,
+      "tag": "!?",
+      "underline": false
+    },
+    {
+      "backgroundColor": "transparent",
+      "bold": false,
+      "color": "#3498DB",
+      "italic": false,
+      "strikethrough": false,
+      "tag": "?",
+      "underline": false
+    },
+    {
+      "backgroundColor": "transparent",
+      "bold": false,
+      "color": "#474747",
+      "italic": false,
+      "strikethrough": true,
+      "tag": "//",
+      "underline": false
+    },
+    {
+      "backgroundColor": "transparent",
+      "bold": false,
+      "color": "#FF8C00",
+      "italic": false,
+      "strikethrough": false,
+      "tag": "todo",
+      "underline": false
+    },
+    {
+      "backgroundColor": "transparent",
+      "bold": false,
+      "color": "#98C379",
+      "italic": false,
+      "strikethrough": false,
+      "tag": "!!",
+      "underline": false
+    }
+  ],
+  "cSpell.enabledFiletypes": [
+    "dockerfile",
+    "drawio",
+    "env",
+    "fish",
+    "helm",
+    "jinja-dockerfile",
+    "jinja-md",
+    "terraform",
+    "terraform-vars",
+    "*"
+  ],
+  "cSpell.userWords": [
+    "astype",
+    "autogen",
+    "automations",
+    "autoscaler",
+    "autouse",
+    "backoff",
+    "boto",
+    "botocore",
+    "cloudpi",
+    "codespell",
+    "configfile",
+    "confs",
+    "conftest",
+    "cookiecutter",
+    "covid",
+    "dataframe",
+    "delenv",
+    "dotenv",
+    "falsey",
+    "filelock",
+    "fillna",
+    "fout",
+    "fullmatch",
+    "geerlingguy",
+    "ichunked",
+    "iloc",
+    "interrobang",
+    "ipython",
+    "isort",
+    "jmes",
+    "markupsafe",
+    "maxsplit",
+    "mkdirs",
+    "mutex",
+    "pformat",
+    "pihole",
+    "procs",
+    "pycodestyle",
+    "pydocstyle",
+    "pyright",
+    "pyspark",
+    "pytest",
+    "pytester",
+    "setenv",
+    "wifi"
+  ],
+  "diffEditor.ignoreTrimWhitespace": false,
+  "editor.accessibilitySupport": "off",
+  "editor.fontFamily": "Hack, Menlo, Monaco, 'Courier New', monospace",
+  "terminal.integrated.fontFamily": "MesloLGS NF",
+  "editor.formatOnSave": true,
+  "editor.guides.bracketPairs": true,
+  "explorer.confirmDragAndDrop": false,
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.patterns": {
+    ".gitignore": ".bumpversion.cfg,.python-version,.gitlab-ci.yml,.pre-commit-config.yaml,.java-version,docker-compose-local.yml,.gitattributes,licenserc.toml,.rumdl.toml,_typos.toml,REUSE.toml,.editorconfig,ruff.toml,.ruff.toml,.taplo.toml,taplo.toml,.gitleaks.toml,cz.toml,.cz.toml,.shellcheckrc",
+    "Dockerfile": ".dockerignore, docker-compose.yml",
+    "pyproject.toml": "poetry.lock, uv.lock"
+  },
+  "explorer.incrementalNaming": "smart",
+  "explorer.openEditors.minVisible": 6,
+  "explorer.openEditors.sortOrder": "alphabetical",
+  "files.associations": {
+    "**/ansible/**/hosts": "ini",
+    "**/ansible/**/inventory": "ini",
+    "**/defaults/**/*.yml": "jinja-yaml",
+    "**/group_vars/**/*": "jinja-yaml",
+    "**/host_vars/**/*": "jinja-yaml",
+    "**/vars/**/*.yml": "jinja-yaml",
+    "ansible.cfg": "ini"
+  },
+  "explorer.excludeGitIgnore": true,
+  "files.exclude": {
+    "**/*.egg-info": true,
+    "**/*.pyc": true,
+    "**/*.tmp": true,
+    "**/.coverage*": true,
+    "**/.hypothesis": true,
+    "**/.pytest_cache": true,
+    "**/__pycache__": true,
+    "**/build": true,
+    "**/coverage-reports": true,
+    "**/dist": true
+  },
+  "files.watcherExclude": {
+    "**/.coverage/**": true
+  },
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  "gitlens.views.commits.files.layout": "tree",
+  "gitlens.views.searchAndCompare.files.compact": false,
+  "hediet.vscode-drawio.codeLinkActivated": true,
+  "hediet.vscode-drawio.theme": "Kennedy",
+  "jupyter.askForKernelRestart": false,
+  "jupyter.disableJupyterAutoStart": true,
+  "jupyter.interactiveWindow.cellMarker.codeRegex": "^(#\\s*COMMAND\\s*[-]*|#\\s*%%|#\\s*\\<codecell\\>|#\\s*In\\[\\d*?\\]|#\\s*In\\[ \\])",
+  "notebook.cellFocusIndicator": "border",
+  "notebook.cellToolbarLocation": {
+    "default": "right",
+    "jupyter-notebook": "left"
+  },
+  "notebook.lineNumbers": "on",
+  "notebook.output.textLineLimit": 100,
+  "prettier.resolveGlobalModules": true,
+  "python.analysis.completeFunctionParens": true,
+  "python.analysis.enablePytestExtra": false,
+  "python.analysis.inlayHints.functionReturnTypes": true,
+  "python.analysis.inlayHints.pytestParameters": true,
+  "python.analysis.typeCheckingMode": "basic",
+  "python.languageServer": "Pylance",
+  "python.terminal.activateEnvInCurrentTerminal": true,
+  "redhat.telemetry.enabled": false,
+  "search.exclude": {
+    "**/__pycache__": true
+  },
+  "search.seedWithNearestWord": true,
+  "search.useGlobalIgnoreFiles": true,
+  "search.useParentIgnoreFiles": true,
+  "security.workspace.trust.untrustedFiles": "open",
+  "sortLines.sortEntireFile": true,
+  "terminal.integrated.copyOnSelection": true,
+  "terminal.integrated.cursorBlinking": true,
+  "terminal.integrated.cursorStyle": "line",
+  "testing.automaticallyOpenTestResults": "openOnTestFailure",
+  "todo-tree.filtering.includeHiddenFiles": true,
+  "todo-tree.filtering.useBuiltInExcludes": "file and search excludes",
+  "todo-tree.highlights.useColourScheme": true,
+  // Todo Tree ships no ripgrep of its own — it borrows VS Code's bundled copy.
+  // VS Code 1.122 relocated that binary to node_modules/@vscode/ripgrep-universal/
+  // bin/<platform>/, a path Todo Tree 0.0.226's hardcoded lookup doesn't know, so it
+  // fails with "Failed to find vscode-ripgrep". Pinning to our Brewfile-managed rg
+  // fixes it and stays stable across VS Code updates (the bundled path keeps moving).
+  "todo-tree.ripgrep.ripgrep": "/opt/homebrew/bin/rg",
+  "workbench.colorCustomizations": {
+    "activityBar.activeBorder": "#80CBC4",
+    "activityBarBadge.background": "#80CBC4",
+    "breadcrumb.activeSelectionForeground": "#80CBC4",
+    "editor.findMatchBorder": "#80CBC4",
+    "editorSuggestWidget.highlightForeground": "#80CBC4",
+    "editorWidget.border": "#80CBC4",
+    "editorWidget.resizeBorder": "#80CBC4",
+    "list.activeSelectionForeground": "#80CBC4",
+    "list.highlightForeground": "#80CBC4",
+    "list.inactiveSelectionForeground": "#80CBC4",
+    "menu.selectionForeground": "#80CBC4",
+    "menubar.selectionForeground": "#80CBC4",
+    "notificationLink.foreground": "#80CBC4",
+    "panelTitle.activeBorder": "#80CBC4",
+    "pickerGroup.foreground": "#80CBC4",
+    "progressBar.background": "#80CBC4",
+    "scrollbarSlider.activeBackground": "#80CBC450",
+    "selection.background": "#80CBC440",
+    "settings.headerForeground": "#80CBC4",
+    "settings.modifiedItemIndicator": "#80CBC4",
+    "statusBarItem.remoteBackground": "#80CBC4",
+    "tab.activeBorder": "#80CBC4",
+    "textLink.foreground": "#80CBC4",
+    "[Vira*]": {
+      "statusBar.debuggingBackground": "#57D7FF33",
+      "statusBar.debuggingForeground": "#57D7FF",
+      "toolbar.activeBackground": "#57D7FF26",
+      "button.background": "#57D7FF",
+      "button.hoverBackground": "#57D7FFcc",
+      "extensionButton.separator": "#57D7FF33",
+      "extensionButton.background": "#57D7FF14",
+      "extensionButton.foreground": "#57D7FF",
+      "extensionButton.hoverBackground": "#57D7FF33",
+      "extensionButton.prominentForeground": "#57D7FF",
+      "extensionButton.prominentBackground": "#57D7FF14",
+      "extensionButton.prominentHoverBackground": "#57D7FF33",
+      "activityBarBadge.background": "#57D7FF",
+      "activityBar.activeBorder": "#57D7FF",
+      "activityBarTop.activeBorder": "#57D7FF",
+      "list.inactiveSelectionIconForeground": "#57D7FF",
+      "list.activeSelectionForeground": "#57D7FF",
+      "list.inactiveSelectionForeground": "#57D7FF",
+      "list.highlightForeground": "#57D7FF",
+      "sash.hoverBorder": "#57D7FF80",
+      "list.activeSelectionIconForeground": "#57D7FF",
+      "scrollbarSlider.activeBackground": "#57D7FF80",
+      "editorSuggestWidget.highlightForeground": "#57D7FF",
+      "textLink.foreground": "#57D7FF",
+      "progressBar.background": "#57D7FF",
+      "pickerGroup.foreground": "#57D7FF",
+      "tab.activeBorder": "#57D7FF",
+      "tab.activeBorderTop": "#57D7FF00",
+      "tab.unfocusedActiveBorder": "#57D7FF",
+      "tab.unfocusedActiveBorderTop": "#57D7FF00",
+      "tab.activeModifiedBorder": "#57D7FF00",
+      "notificationLink.foreground": "#57D7FF",
+      "editorWidget.resizeBorder": "#57D7FF",
+      "editorWidget.border": "#57D7FF",
+      "settings.modifiedItemIndicator": "#57D7FF",
+      "panelTitle.activeBorder": "#57D7FF",
+      "breadcrumb.activeSelectionForeground": "#57D7FF",
+      "menu.selectionForeground": "#57D7FF",
+      "menubar.selectionForeground": "#57D7FF",
+      "editor.findMatchBorder": "#57D7FF",
+      "selection.background": "#57D7FF40",
+      "statusBarItem.remoteBackground": "#57D7FF14",
+      "statusBarItem.remoteHoverBackground": "#57D7FF",
+      "statusBarItem.remoteForeground": "#57D7FF",
+      "notebook.inactiveFocusedCellBorder": "#57D7FF80",
+      "chat.slashCommandForeground": "#57D7FF",
+      "chat.avatarForeground": "#57D7FF",
+      "activityBarBadge.foreground": "#000000",
+      "button.foreground": "#000000",
+      "statusBarItem.remoteHoverForeground": "#000000",
+      "editorGroupHeader.tabsBackground": "#ffffff0a",
+      "tab.border": "#ffffff01",
+      "tab.inactiveBackground": "#ffffff01"
+    }
+  },
+  "workbench.editor.limit.enabled": true,
+  "workbench.editor.limit.excludeDirty": true,
+  "workbench.editorAssociations": {
+    "*.ipynb": "jupyter-notebook"
+  },
+  "workbench.iconTheme": "vira-icons-carbon",
+  "yaml.customTags": ["!encrypted/pkcs1-oaep scalar", "!vault scalar"],
+  "gitlens.ai.model": "ollama:qwen2.5-coder:7b",
+  "gitlens.ai.ollama.url": "http://localhost:11434",
+  "workbench.productIconTheme": "viraUIIcons",
+  "terminal.integrated.profiles.osx": {
+    "bash": {
+      "path": "bash",
+      "args": ["-l"],
+      "icon": "terminal-bash"
+    },
+    "zsh": {
+      "path": "zsh",
+      "args": ["-l"]
+    },
+    "fish": {
+      "path": "/opt/homebrew/bin/fish",
+      "args": ["-l"]
+    },
+    "tmux": {
+      "path": "tmux",
+      "icon": "terminal-tmux"
+    },
+    "pwsh": {
+      "path": "pwsh",
+      "icon": "terminal-powershell"
+    }
+  },
+  "terminal.integrated.defaultProfile.osx": "fish",
+  "viraTheme.accent": "Cyan",
+  "viraTheme.hidesExplorerArrows": false,
+  "viraTheme.contrastedTabs": true,
+  "claudeCode.preferredLocation": "panel"
+}

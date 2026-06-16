@@ -1,0 +1,150 @@
+<!--
+
+    SPDX-FileCopyrightText: © 2026 Tyler Nivin
+    SPDX-License-Identifier: MIT
+
+-->
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Getting Started · dotfiles</title>
+    <meta name="description" content="Clone the repo and run one idempotent script. What each step of install.sh does, and the few human-only steps left." />
+    <link rel="stylesheet" href="assets/style.css" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          document.documentElement.dataset.theme = t;
+        } catch (e) {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap site-header__inner">
+        <a class="brand" href="index.html" aria-label="dotfiles home">
+          <span class="brand__prompt">~/</span><span class="brand__path">dotfiles</span>
+          <span class="brand__cursor" aria-hidden="true"></span>
+        </a>
+        <button class="icon-btn nav-toggle" data-nav-toggle aria-label="Toggle navigation" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <nav class="nav" data-nav aria-label="Primary">
+          <a href="getting-started.html">Getting Started</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="stack.html">The Stack</a>
+          <a href="quality.html">Quality</a>
+          <a href="security.html">Security</a>
+          <a class="icon-btn" href="https://github.com/nivintw/dotfiles" aria-label="GitHub repository" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5Z"/></svg>
+          </a>
+          <button class="icon-btn" data-theme-toggle aria-label="Toggle light/dark theme">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <div class="wrap page-head">
+        <nav class="crumb" aria-label="Breadcrumb"><a href="index.html">Home</a> <span>/</span> <span>Getting Started</span></nav>
+        <h1>Getting Started</h1>
+        <p class="section-lede">No prerequisites — <code>install.sh</code> installs <a href="https://brew.sh" rel="noopener">Homebrew</a> and <a href="https://docs.astral.sh/uv/" rel="noopener">uv</a> itself if they're missing. Clone, run, done.</p>
+      </div>
+
+      <section class="wrap">
+        <pre><code>git clone &lt;this-repo&gt; ~/dotfiles
+~/dotfiles/install.sh</code></pre>
+        <div class="note">
+          <div class="note__title">Idempotent</div>
+          Safe to re-run at any point. <code>brew bundle</code> adopts already-installed
+          casks in place, <code>stow</code> refuses to clobber existing real files, and
+          MCP/symlink/shell steps all no-op when already done.
+        </div>
+      </section>
+
+      <section class="wrap">
+        <h2><span class="hash">#</span>What the bootstrap does</h2>
+        <p class="section-lede">In order — privileged steps are grouped into a single <code>sudo</code> session so you authenticate once.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Step</th><th>What happens</th></tr></thead>
+            <tbody>
+              <tr><td>0</td><td>Toolchain</td><td>Install Homebrew &amp; uv if missing</td></tr>
+              <tr><td>1</td><td><code>brew bundle</code></td><td>All CLI tools, <a href="https://fishshell.com/" rel="noopener">fish</a>, GUI casks, the <a href="https://github.com/romkatv/powerlevel10k" rel="noopener">MesloLGS NF</a> font</td></tr>
+              <tr><td>2</td><td>Privileged block</td><td>Touch&nbsp;ID for sudo (<code>sudo_local</code> + <a href="https://github.com/fabianishere/pam_reattach" rel="noopener">pam_reattach</a>), fish as login shell, app firewall&nbsp;+ stealth mode — one sudo prompt</td></tr>
+              <tr><td>3</td><td><a href="https://www.gnu.org/software/stow/" rel="noopener">Stow</a></td><td>Symlink <code>home/</code> into <code>$HOME</code></td></tr>
+              <tr><td>4</td><td>SSH</td><td>Create empty <code>~/.ssh/config.local</code> for machine-local hosts</td></tr>
+              <tr><td>5</td><td><a href="https://github.com/jorgebucaran/fisher" rel="noopener">fisher</a></td><td>fish plugins from <code>fish_plugins</code> (<a href="https://github.com/IlanCosman/tide" rel="noopener">tide</a>, <a href="https://github.com/PatrickF1/fzf.fish" rel="noopener">fzf.fish</a>)</td></tr>
+              <tr><td>6</td><td><a href="https://github.com/tmux-plugins/tpm" rel="noopener">TPM</a></td><td><a href="https://github.com/tmux/tmux" rel="noopener">tmux</a> plugin manager + plugins from <code>tmux.conf</code></td></tr>
+              <tr><td>7</td><td><a href="https://atuin.sh/" rel="noopener">atuin</a></td><td>Backfill existing shell history into atuin's DB</td></tr>
+              <tr><td>8</td><td><a href="https://iterm2.com/" rel="noopener">iTerm2</a></td><td>Point iTerm at the tracked <code>iterm2/</code> prefs folder</td></tr>
+              <tr><td>9</td><td>uv tools</td><td>Install the Python CLIs in <code>uv_tools.txt</code></td></tr>
+              <tr><td>10</td><td>git template</td><td><a href="https://github.com/j178/prek" rel="noopener">prek</a> hook shims in <code>~/.config/git/template</code> (auto-install on clone)</td></tr>
+              <tr><td>11</td><td><a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a></td><td>Native installer (self-updating) → <code>~/.local/bin/claude</code></td></tr>
+              <tr><td>12</td><td>MCP servers</td><td>Replay <code>claude_mcp.json</code> into <code>~/.claude.json</code> (secrets via <code>op inject</code>)</td></tr>
+              <tr><td>13</td><td><a href="https://ollama.com/" rel="noopener">Ollama</a></td><td>Start the server &amp; pull <a href="https://ollama.com/library/qwen2.5-coder" rel="noopener"><code>qwen2.5-coder:7b</code></a> for <a href="https://www.gitkraken.com/gitlens" rel="noopener">GitLens</a>' local AI</td></tr>
+              <tr><td>14</td><td>macOS defaults</td><td><code>macos.sh</code> system tweaks</td></tr>
+              <tr><td>15</td><td>Dock</td><td>Declarative Dock layout via <code>dock.sh</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note note--warn">
+          <div class="note__title">iTerm2</div>
+          The iTerm step takes effect on iTerm's next launch — fully quit it first if it's already open.
+        </div>
+      </section>
+
+      <section class="wrap">
+        <h2><span class="hash">#</span>The human-only steps</h2>
+        <p class="section-lede">A few things no script can do for you.</p>
+        <div class="feature">
+          <span class="feature__mark">›</span>
+          <div><h3>Claude Code login</h3><p>The CLI is installed automatically; first run needs a one-time browser sign-in (<code>claude</code>). MCP servers are already registered.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">›</span>
+          <div><h3>GitHub MCP token</h3><p>Store a PAT in <a href="https://1password.com/" rel="noopener">1Password</a> at <code>op://MCP/github-claude-pat/credential</code>, enable the 1Password CLI integration, then re-run the script — <code>op inject</code> bakes it into <code>~/.claude.json</code>, never the repo.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">›</span>
+          <div><h3><a href="https://code.visualstudio.com/" rel="noopener">VS Code</a> &amp; 1Password</h3><p>Sign in to VS Code to sync, and add the 1Password browser extensions (both apps are casks).</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">›</span>
+          <div><h3><a href="https://freemacsoft.net/appcleaner/" rel="noopener">AppCleaner</a> SmartDelete</h3><p>A one-time GUI toggle (installs a privileged helper) — can't be scripted via <code>defaults</code>.</p></div>
+        </div>
+      </section>
+
+      <section class="wrap">
+        <h2><span class="hash">#</span>Updating</h2>
+        <div class="feature">
+          <span class="feature__mark">+</span>
+          <div><h3>New CLI tool / app</h3><p>Add a <code>brew</code>/<code>cask</code> line to the <code>Brewfile</code>, then <code>brew bundle install --file=~/dotfiles/Brewfile</code>.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">+</span>
+          <div><h3>Dotfile change</h3><p>Edit the file under <code>home/</code> (or its symlink in <code>$HOME</code> — same file) and commit.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">+</span>
+          <div><h3>Find untracked installs</h3><p><code>brew bundle cleanup --file=~/dotfiles/Brewfile</code> reports prune candidates.</p></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap site-footer__inner">
+        <span>© <span data-year>2026</span> Tyler Nivin · MIT licensed</span>
+        <span><a href="index.html">↑ Home</a> · <a href="https://github.com/nivintw/dotfiles" rel="noopener">github.com/nivintw/dotfiles</a></span>
+      </div>
+    </footer>
+
+    <script src="assets/main.js"></script>
+  </body>
+</html>

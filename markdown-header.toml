@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+[markdown_custom]
+firstLine = "<!--"
+# Trailing newline is intentional.
+# This is to ensure proper formatting in markdown files.
+# I.e. rumdl is unhappy if there's no blank line after the header.
+endLine = "-->\n"
+firstLineDetectionPattern = "^<!--"
+lastLineDetectionPattern = "-->"
+multipleLines = true

@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Atuin — shell history database & fuzzy search (bound to Ctrl+R via
+# conf.d/zz-atuin.fish). This is a curated config, NOT the full generated
+# default: atuin only reads this file and never rewrites it, so any key left
+# unset just uses atuin's built-in default.
+# Full reference: https://docs.atuin.sh/configuration/config/
+
+## --- Search UX -------------------------------------------------------------
+
+# Enter runs the highlighted command immediately. With this off, Enter instead
+# drops it onto the prompt for editing first. On = fewer keystrokes.
+enter_accept = true
+
+# Typo-tolerant matching that finds a command from scattered keywords.
+# Alternatives: "prefix", "fulltext", "skim".
+search_mode = "fuzzy"
+
+# Search across all history by default. While the search UI is open you can
+# cycle the scope live (Ctrl+R): global -> host -> session -> directory.
+filter_mode = "global"
+
+# Compact inline UI that doesn't take over the whole terminal.
+style = "compact"
+inline_height = 25  # rows the inline UI may use (0 = full screen)
+show_preview = true # show the full command of the highlighted entry
+
+## --- Recording -------------------------------------------------------------
+
+# Skip recording commands matching these regexes. secrets_filter (on by
+# default) already strips obvious tokens/keys; this is for your own noise.
+# "^\\s" => any command you deliberately prefix with a space won't be saved.
+history_filter = ["^\\s"]
+
+## --- Maintenance -----------------------------------------------------------
+
+# Homebrew owns the atuin binary, so silence atuin's own update-available nag.
+update_check = false
+
+## --- Sync ------------------------------------------------------------------
+# End-to-end encrypted; only does anything once you run `atuin login`.
+[sync]
+records = true # use the newer sync v2 protocol

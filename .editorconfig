@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# https://editorconfig.org — applied in VS Code by the EditorConfig.EditorConfig
+# extension (Brewfile-managed) and natively by most other editors. Enforces, live as
+# you type, the same hygiene the pre-commit hooks check at commit time
+# (end-of-file-fixer, trailing-whitespace, mixed-line-ending=lf). Keep the indent
+# sizes here in agreement with the formatters (taplo/prettier/ruff/fish_indent) so
+# format-on-save never fights them.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# ruff (Python) and fish_indent both default to 4-space indentation.
+[*.{py,fish}]
+indent_size = 4
+
+# Two trailing spaces are a hard line break in Markdown; the trailing-whitespace
+# hook preserves them too (--markdown-linebreak-ext=md).
+[*.md]
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab

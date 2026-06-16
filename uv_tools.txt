@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# uv tools to install. Consumed by install.sh.
+#
+# Each non-comment line is the argument list passed to `uv tool install`
+# (tool name plus any --with / extras). Blank lines and # comments ignored.
+#
+# Regenerate the human-readable view of what's installed with:
+#   uv tool list --show-python --show-with --show-extras
+
+ansible --with passlib --with jc --with jmespath --with netaddr --with ansible-lint
+ansible-dev-tools
+checkov
+commitizen --with cz-conventional-gitmoji
+copier
+jc
+playwright
+prek
+reuse[charset-normalizer]
+rumdl
+yq
