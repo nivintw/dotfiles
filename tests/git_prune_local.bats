@@ -19,7 +19,10 @@ setup() {
   ORIGIN="$TMP/origin.git"
   WORK="$TMP/work"
 
-  git init -q --bare "$ORIGIN"
+  # -b main so origin/HEAD resolves to main regardless of the ambient
+  # init.defaultBranch (CI leaves it unset → bare HEAD would point at a
+  # nonexistent 'master', breaking `git remote set-head origin -a` below).
+  git init -q --bare -b main "$ORIGIN"
   # --template= skips the user's init.templateDir (prek hook shims) for speed and
   # isolation; commit.gpgsign off so tests don't hit the 1Password SSH signer.
   git init -q --template= -b main "$WORK"
