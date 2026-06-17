@@ -44,14 +44,12 @@ extend-ignore-re = [
 # file is scanned explicitly (a plain `typos .` skips hidden dotfiles), e.g. a
 # typos pre-commit hook that passes filenames. Whitelisted here so any such repo
 # under $HOME without its own typos config stays clean.
-acn = "acn"       # *.acn  (LaTeX glossaries)
-cripts = "cripts" # from the [Ss]cripts venv glob
-fot = "fot"       # *.fot  (LaTeX)
-ist = "ist"       # *.ist  (LaTeX makeindex style)
-lod = "lod"       # *.lod  (LaTeX)
-nclude = "nclude" # from the [Ii]nclude venv glob
-sav = "sav"       # *.sav  (editor backup)
-thm = "thm"       # *.thm  (LaTeX amsthm)
+acn = "acn" # *.acn  (LaTeX glossaries)
+fot = "fot" # *.fot  (LaTeX)
+ist = "ist" # *.ist  (LaTeX makeindex style)
+lod = "lod" # *.lod  (LaTeX)
+sav = "sav" # *.sav  (editor backup)
+thm = "thm" # *.thm  (LaTeX amsthm)
 
 [default.extend-identifiers]
 # someIdent = "someIdent"

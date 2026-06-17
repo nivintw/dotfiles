@@ -37,11 +37,9 @@ extend-ignore-re = [
 # typos only sees them when a file is scanned explicitly (e.g. a typos hook that
 # passes filenames — a plain `typos .` skips hidden dotfiles).
 [default.extend-words]
-acn = "acn"       # *.acn  (LaTeX glossaries)
-cripts = "cripts" # from the [Ss]cripts venv glob
-fot = "fot"       # *.fot  (LaTeX)
-ist = "ist"       # *.ist  (LaTeX makeindex style)
-lod = "lod"       # *.lod  (LaTeX)
-nclude = "nclude" # from the [Ii]nclude venv glob
-sav = "sav"       # *.sav  (editor backup)
-thm = "thm"       # *.thm  (LaTeX amsthm)
+acn = "acn" # *.acn  (LaTeX glossaries)
+fot = "fot" # *.fot  (LaTeX)
+ist = "ist" # *.ist  (LaTeX makeindex style)
+lod = "lod" # *.lod  (LaTeX)
+sav = "sav" # *.sav  (editor backup)
+thm = "thm" # *.thm  (LaTeX amsthm)
