@@ -23,10 +23,21 @@
     ],
     "defaultMode": "default"
   },
+  "extraKnownMarketplaces": {
+    "nivintw-claude-skills": {
+      "source": {
+        "source": "github",
+        "repo": "nivintw/nivintw-claude-skills"
+      }
+    }
+  },
   "effortLevel": "high",
+  "skipWorkflowUsageWarning": true,
   "theme": "dark",
   "remoteControlAtStartup": true,
   "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true,
-  "skipWorkflowUsageWarning": true
+  "enabledPlugins": {
+    "castify@nivintw-claude-skills": true
+  }
 }
