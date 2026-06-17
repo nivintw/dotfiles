@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.0.3 (2026-06-17)
+
+### 🐛🚑️ Fixes
+
+- **macos**: slow key repeat to stop double-paste
+
 ## v1.0.2 (2026-06-17)
 
 ### 🐛🚑️ Fixes
