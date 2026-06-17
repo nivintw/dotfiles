@@ -58,6 +58,7 @@ filenames = [
   "config",
   ".stow-local-ignore",
   "tmux.conf",
+  "post-checkout",      # git template hook (~/.config/git/template/hooks/) — shell, '#' comments
 ]
 
 [properties]

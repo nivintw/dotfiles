@@ -61,9 +61,9 @@ _converges_ the machine to the declared state rather than clobbering what's ther
 
 - **`home/`** — mirrors `$HOME`, symlinked into place with [GNU Stow](https://www.gnu.org/software/stow/).
 - **`Brewfile`** — formulae + casks, installed with `brew bundle`.
-- **`Brewfile.d/*.brewfile`** — tracked, opt-in bundles (e.g. `personal`, `homelab`), picked from an `fzf` multi-select on first run.
+- **`Brewfile.d/*.brewfile`** — tracked, opt-in bundles (e.g. `personal`, `homelab`, `1password`), picked from an `fzf` multi-select on first run.
 - **`uv_tools.txt`** — Python tools, one `uv tool install` arg-list per line.
-- **`claude_mcp.json`** — Claude Code MCP servers; secrets are 1Password references resolved at install time, so no token is ever committed.
+- **`claude_mcp.json`** — Claude Code MCP servers; the GitHub token is a 1Password reference resolved at install time — or, on a machine without 1Password, a `GITHUB_PERSONAL_ACCESS_TOKEN` read from the environment — so no token is ever committed.
 - **`iterm2/`** — iTerm2 preferences (pointed at directly, not stowed).
 - **`software_list.md`** — the few human-only steps Brewfile and stow can't automate.
 
@@ -86,6 +86,15 @@ given machine needs.
 | **git** | `home/.gitconfig` | `~/.gitconfig_local` | `[include]` in the tracked config |
 | **fish** | `home/.config/fish/**` | `~/.config/dotfiles/local.fish` | sourced by `conf.d/zzz-local.fish` |
 | **Homebrew** | `Brewfile` + `Brewfile.d/*` | `~/.config/dotfiles/Brewfile.local` | auto-loaded by `install.sh` |
+| **Claude Code** | `home/.claude/CLAUDE.md` | `~/.config/dotfiles/CLAUDE.local.md` | `@`-imported by the tracked `CLAUDE.md` |
+| **Claude MCP** | `claude_mcp.json` | `~/.config/dotfiles/claude_mcp.local.json` | deep-merged by `install.sh` |
+| **macOS defaults** | `macos.sh` | `~/.config/dotfiles/macos.local.sh` | sourced by `macos.sh` |
+
+**No 1Password?** The baseline keeps 1Password as the personal default (SSH commit
+signing, the `op://` MCP token, the desktop app). On a machine without it, the install
+degrades gracefully: 1Password is an opt-in `1password` bundle (so it's simply not
+installed), `install.sh` disables commit signing in `~/.gitconfig_local`, and the
+GitHub MCP server falls back to a `GITHUB_PERSONAL_ACCESS_TOKEN` from the environment.
 
 **Per-directory git identity** — the clean way to use a work email and signing key
 only inside work repos:

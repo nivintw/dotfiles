@@ -63,6 +63,7 @@
         <p>No credential is ever committed. Secret-bearing config (the GitHub MCP token) is stored as a <a href="https://1password.com/" rel="noopener"><strong>1Password reference</strong></a> and resolved only at install time:</p>
         <pre><code>"Authorization": "Bearer {{ op://MCP/github-claude-pat/credential }}"</code></pre>
         <p><code>op inject</code> resolves it into <code>~/.claude.json</code> (mode <code>0600</code>) as you, using the desktop app's CLI integration — the token never lands in the repo. Rotate by updating 1Password and re-running. A <a href="https://docs.pytest.org/" rel="noopener">pytest</a> invariant asserts the auth header stays an <code>op://</code> reference, a rule <a href="https://github.com/gitleaks/gitleaks" rel="noopener">gitleaks</a> alone can't know.</p>
+        <p>On a machine without 1Password, the same secret is sourced from a <code>GITHUB_PERSONAL_ACCESS_TOKEN</code> in the environment instead — it still only ever lands in <code>~/.claude.json</code>, and the tracked file keeps its <code>op://</code> placeholder, so the committed config stays token-free either way.</p>
       </section>
 
       <section class="wrap">
@@ -94,7 +95,7 @@
               <tr><td><strong>App firewall + stealth</strong></td><td>Enabled during the bootstrap; the Mac stops answering pings/port scans</td></tr>
               <tr><td><strong>Touch ID for sudo</strong></td><td>Via <code>/etc/pam.d/sudo_local</code> (survives OS updates) + <a href="https://github.com/fabianishere/pam_reattach" rel="noopener">pam_reattach</a> for <a href="https://github.com/tmux/tmux" rel="noopener">tmux</a></td></tr>
               <tr><td><strong><code>transfer.fsckObjects</code></strong></td><td>git validates object integrity on every fetch — supply-chain hygiene</td></tr>
-              <tr><td><strong>SSH commit signing</strong></td><td>Commits are signed with a 1Password-held SSH key (<code>op-ssh-sign</code>)</td></tr>
+              <tr><td><strong>SSH commit signing</strong></td><td>Commits are signed with a 1Password-held SSH key (<code>op-ssh-sign</code>) by default; on a machine without 1Password, <code>install.sh</code> disables signing in <code>~/.gitconfig_local</code> so commits still succeed</td></tr>
             </tbody>
           </table>
         </div>

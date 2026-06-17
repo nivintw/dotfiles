@@ -69,7 +69,10 @@ repos:
     hooks:
       - id: shellcheck
         name: "🐚 shell · Lint shell scripts with shellcheck"
-        args: ["-s", "bash"]
+        # -x follows `# shellcheck source=` directives (e.g. install.sh sourcing
+        # scripts/bundle_select.sh) so a partial commit that stages only the sourcing
+        # file doesn't trip SC1091 on the un-staged source.
+        args: ["-s", "bash", "-x"]
 
   # ------------------------------- 🔒 Security Tools -------------------------------- #
   - repo: https://github.com/gitleaks/gitleaks
