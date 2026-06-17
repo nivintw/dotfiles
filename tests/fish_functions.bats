@@ -76,6 +76,58 @@ fishrun() {
   [[ "$output" == *"No such key"* ]]
 }
 
+# No argument, no agent identities, and no key files on disk: every discovery
+# tier comes up empty, so it must report none found and return 1. An empty HOME
+# (no ~/.ssh, no 1Password sockets) plus an empty SSH_AUTH_SOCK forces that state.
+@test "pubkey with nothing to discover reports none found and returns 1" {
+  empty="$(mktemp -d)"
+  run env HOME="$empty" SSH_AUTH_SOCK="" fish -c "source '$FUNCDIR/pubkey.fish'; pubkey"
+  rm -rf "$empty"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"No SSH keys found"* ]]
+}
+
+# An explicitly named but empty file must not copy its path in place of a key
+# (the contents are passed as a single collected argument and guarded when empty).
+@test "pubkey on an empty key file copies nothing and returns 1" {
+  empty_file="$(mktemp)"
+  fishrun pubkey "$empty_file"
+  rm -f "$empty_file"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no key to copy"* ]]
+}
+
+# A directory (or dangling symlink) named *.pub in ~/.ssh must be ignored by the
+# disk fallback (-type f), not offered as a key.
+@test "pubkey ignores a directory named *.pub and reports none found" {
+  empty="$(mktemp -d)"
+  mkdir -p "$empty/.ssh/decoy.pub"
+  run env HOME="$empty" SSH_AUTH_SOCK="" fish -c "source '$FUNCDIR/pubkey.fish'; pubkey"
+  rm -rf "$empty"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"No SSH keys found"* ]]
+}
+
+# Happy path: a single key in the agent is printed and copied with no picker.
+# Needs a real agent + clipboard, so it skips where those are absent (e.g. the
+# Linux CI box has no pbcopy). The multi-key picker path blocks on fzf and is
+# verified manually, per this file's header.
+@test "pubkey with one agent key prints and copies it" {
+  command -v ssh-agent >/dev/null || skip "no ssh-agent"
+  command -v ssh-keygen >/dev/null || skip "no ssh-keygen"
+  command -v pbcopy >/dev/null || skip "no pbcopy"
+  tmp="$(mktemp -d)"
+  ssh-keygen -t ed25519 -N "" -C "Bats Test Key" -f "$tmp/k" >/dev/null
+  eval "$(ssh-agent -s)" >/dev/null
+  ssh-add "$tmp/k" 2>/dev/null
+  run fish -c "source '$FUNCDIR/pubkey.fish'; pubkey"
+  ssh-agent -k >/dev/null 2>&1
+  rm -rf "$tmp"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Bats Test Key"* ]]
+  [[ "$output" == *"copied to clipboard"* ]]
+}
+
 @test "launch-docs with a non-numeric port prints usage and returns 2" {
   fishrun launch-docs not-a-port
   [ "$status" -eq 2 ]
