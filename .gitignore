@@ -160,3 +160,8 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .coverage
+
+### This project (tmux) ###
+# TPM and its plugins are bootstrapped by install.sh (prefix + I), not tracked.
+# (home/ is stowed, so TPM installs into this tracked tree via the symlink.)
+home/.config/tmux/plugins/
