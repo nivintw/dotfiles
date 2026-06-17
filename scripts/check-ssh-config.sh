@@ -37,8 +37,9 @@ while IFS= read -r line; do
     continue
   fi
 
-  # Bare IP literals (IPv4 or IPv6) anywhere — checked before the directive match
-  # so an IP on any line (e.g. `ProxyJump 10.0.0.1`) is reported as an IP literal.
+  # Bare IP literals (IPv4 or IPv6). Host lines are handled above; among the
+  # remaining (non-Host) lines this runs before the directive match, so an IP in
+  # e.g. `ProxyJump 10.0.0.1` is reported as an IP literal, not just a directive.
   if printf '%s' "$trimmed" | grep -qE '(([0-9]{1,3}\.){3}[0-9]{1,3})|(([0-9a-fA-F]{0,4}:){2,}[0-9a-fA-F]{0,4})'; then
     violations+=("IP literal: $trimmed")
     continue
