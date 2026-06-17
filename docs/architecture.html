@@ -77,7 +77,8 @@
             <thead><tr><th>Path</th><th>Role</th></tr></thead>
             <tbody>
               <tr><td><code>home/</code></td><td>Everything symlinked into <code>$HOME</code></td></tr>
-              <tr><td><code>Brewfile</code></td><td>Formulae + casks, installed by <code>brew bundle</code></td></tr>
+              <tr><td><code>Brewfile</code></td><td>Baseline formulae + casks, installed by <code>brew bundle</code></td></tr>
+              <tr><td><code>Brewfile.d/</code></td><td>Opt-in <code>&lt;name&gt;.brewfile</code> bundles (e.g. <code>personal</code>, <code>homelab</code>) layered on the baseline per machine</td></tr>
               <tr><td><code>uv_tools.txt</code></td><td>Python CLIs, one <code>uv tool install</code> arg-list per line</td></tr>
               <tr><td><code>claude_mcp.json</code></td><td><a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a> MCP servers, replayed into <code>~/.claude.json</code></td></tr>
               <tr><td><code>install.sh</code></td><td>The idempotent bootstrap</td></tr>
@@ -103,7 +104,36 @@
         </div>
         <div class="feature">
           <span class="feature__mark">≠</span>
-          <div><h3>~/.ssh/config.local</h3><p>Untracked, created empty. The tracked <code>~/.ssh/config</code> <code>Include</code>s it for machine-specific hosts that must never reach the repo.</p></div>
+          <div><h3>Machine-local overlays</h3><p>A family of untracked files outside the repo (<code>~/.ssh/config.local</code>, <code>~/.gitconfig_local</code>, and more) that the tracked config <code>Include</code>s or sources — seeded with commented examples, never symlinked. See <a href="#overlays">Machine-local overlays</a> below.</p></div>
+        </div>
+      </section>
+
+      <section class="wrap" id="overlays">
+        <h2><span class="hash">#</span>Machine-local overlays</h2>
+        <p class="section-lede">One public repo, cloned unforked on every machine. Anything machine-specific — a work box, a homelab node, personal-only apps — lives in untracked files <em>outside</em> the repo that the tracked config reads, so <code>git pull</code> never conflicts and nothing machine-specific leaks into a public repo. No fork, no <code>work</code>/<code>personal</code> branch.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tool</th><th>Tracked baseline</th><th>Untracked overlay</th><th>Wiring</th></tr></thead>
+            <tbody>
+              <tr><td>SSH</td><td><code>home/.ssh/config</code></td><td><code>~/.ssh/config.local</code></td><td><code>Include</code>d by the tracked config</td></tr>
+              <tr><td>git</td><td><code>home/.gitconfig</code></td><td><code>~/.gitconfig_local</code></td><td><code>[include]</code> in the tracked config</td></tr>
+              <tr><td>fish</td><td><code>home/.config/fish/**</code></td><td><code>~/.config/dotfiles/local.fish</code></td><td>sourced by <code>conf.d/zzz-local.fish</code></td></tr>
+              <tr><td>Homebrew</td><td><code>Brewfile</code> + <code>Brewfile.d/*.brewfile</code></td><td><code>~/.config/dotfiles/Brewfile.local</code></td><td>loaded by <code>install.sh</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The bootstrap seeds each overlay with a commented example on first run — idempotently, so it never clobbers content you've added — so the includes never dangle and the format is self-documenting.</p>
+        <div class="feature">
+          <span class="feature__mark">⊕</span>
+          <div><h3>Opt-in Brewfile bundles</h3><p>Software not wanted on every machine lives in tracked <code>Brewfile.d/&lt;name&gt;.brewfile</code> bundles. <code>install.sh</code> shows an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select of the available ones and persists your pick to <code>~/.config/dotfiles/bundles</code>; re-runs (and CI) read that file without prompting. This repo ships <code>personal</code> and <code>homelab</code>; a machine that picks nothing gets just the baseline.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">⊕</span>
+          <div><h3>An extension, not a filename</h3><p><code>brew bundle</code> ignores the filename entirely; the <code>.brewfile</code> extension exists so <a href="https://github.com/korandoru/hawkeye" rel="noopener">hawkeye</a> auto-maintains each bundle's SPDX header from one <code>licenserc.toml</code> mapping (no hand-written headers), and the editor highlights them as the Ruby DSL they are.</p></div>
+        </div>
+        <div class="note">
+          <div class="note__title">Per-directory git identity</div>
+          The cleanest way to use a work email/signing key only in work repos — set in <code>~/.gitconfig_local</code>: <code>[includeIf "gitdir:~/work/"]</code> → <code>path = ~/.gitconfig.work</code>.
         </div>
       </section>
 

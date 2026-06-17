@@ -76,10 +76,10 @@
             <thead><tr><th>#</th><th>Step</th><th>What happens</th></tr></thead>
             <tbody>
               <tr><td>0</td><td>Toolchain</td><td>Install Homebrew &amp; uv if missing</td></tr>
-              <tr><td>1</td><td><code>brew bundle</code></td><td>All CLI tools, <a href="https://fishshell.com/" rel="noopener">fish</a>, GUI casks, the <a href="https://github.com/romkatv/powerlevel10k" rel="noopener">MesloLGS NF</a> font</td></tr>
+              <tr><td>1</td><td><code>brew bundle</code></td><td>All baseline CLI tools, <a href="https://fishshell.com/" rel="noopener">fish</a>, GUI casks, the <a href="https://github.com/romkatv/powerlevel10k" rel="noopener">MesloLGS NF</a> font — then an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select for opt-in bundles (<code>personal</code>, <code>homelab</code>)</td></tr>
               <tr><td>2</td><td>Privileged block</td><td>Touch&nbsp;ID for sudo (<code>sudo_local</code> + <a href="https://github.com/fabianishere/pam_reattach" rel="noopener">pam_reattach</a>), fish as login shell, app firewall&nbsp;+ stealth mode — one sudo prompt</td></tr>
               <tr><td>3</td><td><a href="https://www.gnu.org/software/stow/" rel="noopener">Stow</a></td><td>Symlink <code>home/</code> into <code>$HOME</code></td></tr>
-              <tr><td>4</td><td>SSH</td><td>Create empty <code>~/.ssh/config.local</code> for machine-local hosts</td></tr>
+              <tr><td>4</td><td>Overlays</td><td>Seed untracked machine-local overlay files (SSH, git, fish, <code>Brewfile.local</code>) with commented examples</td></tr>
               <tr><td>5</td><td><a href="https://github.com/jorgebucaran/fisher" rel="noopener">fisher</a></td><td>fish plugins from <code>fish_plugins</code> (<a href="https://github.com/IlanCosman/tide" rel="noopener">tide</a>, <a href="https://github.com/PatrickF1/fzf.fish" rel="noopener">fzf.fish</a>)</td></tr>
               <tr><td>6</td><td><a href="https://github.com/tmux-plugins/tpm" rel="noopener">TPM</a></td><td><a href="https://github.com/tmux/tmux" rel="noopener">tmux</a> plugin manager + plugins from <code>tmux.conf</code></td></tr>
               <tr><td>7</td><td><a href="https://atuin.sh/" rel="noopener">atuin</a></td><td>Backfill existing shell history into atuin's DB</td></tr>
@@ -122,6 +122,25 @@
       </section>
 
       <section class="wrap">
+        <h2><span class="hash">#</span>Per-machine setup</h2>
+        <p class="section-lede">The same public repo runs on every machine; per-machine specifics live in untracked overlay files the bootstrap seeds. Fill in only what a given box needs — see <a href="architecture.html#overlays">Machine-local overlays</a> for the full pattern.</p>
+        <div class="feature">
+          <span class="feature__mark">⊕</span>
+          <div><h3>Opt-in software bundles</h3><p>The bootstrap's bundle step shows an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select; pick <code>personal</code> and/or <code>homelab</code>. Your choice persists to <code>~/.config/dotfiles/bundles</code> for idempotent re-runs. To enable one later without re-running the installer:</p></div>
+        </div>
+        <pre><code>echo personal &gt;&gt; ~/.config/dotfiles/bundles
+brew bundle install --file=~/dotfiles/Brewfile.d/personal.brewfile</code></pre>
+        <div class="feature">
+          <span class="feature__mark">⊕</span>
+          <div><h3>Machine-private software</h3><p>Work-only or sensitive casks the public repo shouldn't carry go in untracked <code>~/.config/dotfiles/Brewfile.local</code> — auto-loaded by <code>install.sh</code>, the Homebrew analogue of <code>~/.gitconfig_local</code>.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">⊕</span>
+          <div><h3>SSH hosts, git identity, fish tweaks</h3><p>Machine-specific SSH hosts go in <code>~/.ssh/config.local</code>, a work git identity in <code>~/.gitconfig_local</code> (e.g. an <code>includeIf "gitdir:~/work/"</code>), and shell tweaks in <code>~/.config/dotfiles/local.fish</code>. Each is seeded with a commented example.</p></div>
+        </div>
+      </section>
+
+      <section class="wrap">
         <h2><span class="hash">#</span>Updating</h2>
         <div class="feature">
           <span class="feature__mark">+</span>
@@ -134,6 +153,10 @@
         <div class="feature">
           <span class="feature__mark">+</span>
           <div><h3>Find untracked installs</h3><p><code>brew bundle cleanup --file=~/dotfiles/Brewfile</code> reports prune candidates.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">+</span>
+          <div><h3>New opt-in bundle</h3><p>Drop a <code>Brewfile.d/&lt;name&gt;.brewfile</code> — <a href="https://github.com/korandoru/hawkeye" rel="noopener">hawkeye</a> stamps its SPDX header automatically — then select it on machines that want it.</p></div>
         </div>
       </section>
     </main>
