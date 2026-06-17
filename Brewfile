@@ -105,8 +105,10 @@ brew "terminal-notifier" # Send macOS notifications from scripts (long runs)
 # ===========================================================================
 
 # --- Security & secrets ----------------------------------------------------
-cask "1password"             # Password manager (desktop app + browser extensions)
-cask "1password-cli"         # `op` CLI; backs git SSH signing via op-ssh-sign
+# 1Password (desktop app, `op` CLI, Safari extension) lives in the opt-in
+# Brewfile.d/1password.brewfile bundle, NOT here: a managed work machine may be
+# barred from installing it, so it can't sit in the unconditional baseline.
+# Personal machines enable the "1password" bundle to get it by default.
 cask "suspicious-package"    # Inspect .pkg installer contents before running them
 
 # --- Terminal, editor & fonts ----------------------------------------------
@@ -239,5 +241,4 @@ vscode "silofy.hackthebox"        # HackTheBox theme
 # Mac App Store apps (installed via `mas`; requires being signed into the Store)
 # IDs from `mas list`. Regenerate that view anytime with: mas list
 # ---------------------------------------------------------------------------
-mas "1Password for Safari", id: 1569813296   # Safari extension for 1Password
 mas "The Unarchiver",       id: 425424353    # Archive extractor

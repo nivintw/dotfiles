@@ -46,3 +46,9 @@ If you notice something off, don't silently leave it — and don't silently fix 
 Do not add Claude attribution to commits or PR descriptions. No Co-Authored-By lines, no "Generated with Claude Code" footers, no AI attribution of any kind.
 
 Follow the conventional-commit format. Capitalize the first word of the description. In the body, explain WHY over HOW.
+
+## Machine-local instructions
+
+Per-machine guidance (work vs personal) lives in an untracked file outside the dotfiles repo and is imported below. `install.sh` seeds it empty, so the import never dangles; fill it in on a given machine for work-only context that shouldn't be public.
+
+@~/.config/dotfiles/CLAUDE.local.md

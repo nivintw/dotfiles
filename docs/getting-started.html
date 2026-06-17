@@ -82,18 +82,18 @@
             <thead><tr><th>#</th><th>Step</th><th>What happens</th></tr></thead>
             <tbody>
               <tr><td>0</td><td>Toolchain</td><td>Install Homebrew &amp; uv if missing</td></tr>
-              <tr><td>1</td><td><code>brew bundle</code></td><td>All baseline CLI tools, <a href="https://fishshell.com/" rel="noopener">fish</a>, GUI casks, the <a href="https://github.com/ryanoasis/nerd-fonts" rel="noopener">MesloLGS NF</a> font — then an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select for opt-in bundles (<code>personal</code>, <code>homelab</code>)</td></tr>
+              <tr><td>1</td><td><code>brew bundle</code></td><td>All baseline CLI tools, <a href="https://fishshell.com/" rel="noopener">fish</a>, GUI casks, the <a href="https://github.com/ryanoasis/nerd-fonts" rel="noopener">MesloLGS NF</a> font — then an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select for opt-in bundles (<code>personal</code>, <code>homelab</code>, <code>1password</code>)</td></tr>
               <tr><td>2</td><td>Privileged block</td><td>Touch&nbsp;ID for sudo (<code>sudo_local</code> + <a href="https://github.com/fabianishere/pam_reattach" rel="noopener">pam_reattach</a>), fish as login shell, app firewall&nbsp;+ stealth mode — one sudo prompt</td></tr>
               <tr><td>3</td><td><a href="https://www.gnu.org/software/stow/" rel="noopener">Stow</a></td><td>Symlink <code>home/</code> into <code>$HOME</code></td></tr>
-              <tr><td>4</td><td>Overlays</td><td>Seed untracked machine-local overlay files (SSH, git, fish, <code>Brewfile.local</code>) with commented examples</td></tr>
+              <tr><td>4</td><td>Overlays</td><td>Seed untracked machine-local overlay files (SSH, git, fish, <code>Brewfile.local</code>, <code>CLAUDE.local.md</code>, <code>claude_mcp.local.json</code>, <code>macos.local.sh</code>) with commented examples; disable commit signing if 1Password is absent</td></tr>
               <tr><td>5</td><td><a href="https://github.com/jorgebucaran/fisher" rel="noopener">fisher</a></td><td>fish plugins from <code>fish_plugins</code> (<a href="https://github.com/IlanCosman/tide" rel="noopener">tide</a>, <a href="https://github.com/PatrickF1/fzf.fish" rel="noopener">fzf.fish</a>)</td></tr>
               <tr><td>6</td><td><a href="https://github.com/tmux-plugins/tpm" rel="noopener">TPM</a></td><td><a href="https://github.com/tmux/tmux" rel="noopener">tmux</a> plugin manager + plugins from <code>tmux.conf</code></td></tr>
               <tr><td>7</td><td><a href="https://atuin.sh/" rel="noopener">atuin</a></td><td>Backfill existing shell history into atuin's DB</td></tr>
               <tr><td>8</td><td><a href="https://iterm2.com/" rel="noopener">iTerm2</a></td><td>Point iTerm at the tracked <code>iterm2/</code> prefs folder</td></tr>
               <tr><td>9</td><td>uv tools</td><td>Install the Python CLIs in <code>uv_tools.txt</code></td></tr>
-              <tr><td>10</td><td>git template</td><td><strong>Opt-in</strong>, off by default: only when <code>init.templateDir</code> is set in the untracked <code>~/.gitconfig_local</code> does this populate <a href="https://github.com/j178/prek" rel="noopener">prek</a> hook shims in <code>~/.config/git/template</code> (auto-install hooks on clone)</td></tr>
+              <tr><td>10</td><td>git clone hook</td><td>A stowed <code>post-checkout</code> template hook <strong>notifies</strong> on every fresh clone that defines pre-commit hooks — running nothing from the clone, so the default is safe. Opt into auto-install with <code>git config --file ~/.gitconfig_local dotfiles.autoInstallHooks true</code> and the hook runs <a href="https://github.com/j178/prek" rel="noopener">prek</a> install itself</td></tr>
               <tr><td>11</td><td><a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a></td><td>Native installer (self-updating) → <code>~/.local/bin/claude</code></td></tr>
-              <tr><td>12</td><td>MCP servers</td><td>Replay <code>claude_mcp.json</code> into <code>~/.claude.json</code> (secrets via <code>op inject</code>)</td></tr>
+              <tr><td>12</td><td>MCP servers</td><td>Replay <code>claude_mcp.json</code> (deep-merged with an optional <code>~/.config/dotfiles/claude_mcp.local.json</code> overlay) into <code>~/.claude.json</code> — secrets via <code>op inject</code>, or a <code>GITHUB_PERSONAL_ACCESS_TOKEN</code> from the environment without 1Password</td></tr>
               <tr><td>13</td><td><a href="https://ollama.com/" rel="noopener">Ollama</a></td><td>Start the server &amp; pull <a href="https://ollama.com/library/qwen2.5-coder" rel="noopener"><code>qwen2.5-coder:7b</code></a> (~4.7&nbsp;GB) for <a href="https://www.gitkraken.com/gitlens" rel="noopener">GitLens</a>' local AI — skip it by dropping the <code>ollama-app</code> cask</td></tr>
               <tr><td>14</td><td>macOS defaults</td><td><code>macos.sh</code> system tweaks</td></tr>
               <tr><td>15</td><td>Dock</td><td>Declarative Dock layout via <code>dock.sh</code></td></tr>
@@ -123,8 +123,8 @@
               <tr><td><strong>Your apps &amp; CLIs</strong></td><td><code>Brewfile</code>, <code>Brewfile.d/*.brewfile</code></td><td>The single most personal file. Swap in the software you actually use; my <code>personal</code>/<code>homelab</code> bundles are examples of the pattern, not a menu for you.</td></tr>
               <tr><td><strong>The Dock</strong></td><td><code>dock.sh</code></td><td>It <em>rebuilds your Dock</em> from this list on every run. Edit it to your apps, or the first run replaces your Dock with mine.</td></tr>
               <tr><td><strong>macOS defaults</strong></td><td><code>macos.sh</code></td><td>System tweaks to my taste (key-repeat, Finder, screenshots, …). Read it before running — it re-asserts every run.</td></tr>
-              <tr><td><strong>Git identity</strong></td><td><code>home/.gitconfig</code></td><td>Name, email, and the 1Password SSH signing key are mine. Point them at your own (or move identity into <code>~/.gitconfig_local</code>).</td></tr>
-              <tr><td><strong>Claude MCP servers</strong></td><td><code>claude_mcp.json</code></td><td>My server list, and the secret refs point at <em>my</em> 1Password vault (<code>op://MCP/…</code>). Repoint them at your vault items or remove the servers you don't want.</td></tr>
+              <tr><td><strong>Git identity</strong></td><td><code>home/.gitconfig</code></td><td>Name, email, and the 1Password SSH signing key are mine. Point them at your own (or move identity into <code>~/.gitconfig_local</code>). On a machine without 1Password, <code>install.sh</code> disables commit signing for you.</td></tr>
+              <tr><td><strong>Claude MCP servers</strong></td><td><code>claude_mcp.json</code></td><td>My server list, and the secret refs point at <em>my</em> 1Password vault (<code>op://MCP/…</code>). Repoint them at your vault items, supply a <code>GITHUB_PERSONAL_ACCESS_TOKEN</code> via the environment, or remove the servers you don't want.</td></tr>
               <tr><td><strong>Terminal &amp; SSH</strong></td><td><code>iterm2/</code>, <code>home/.ssh/config</code></td><td>iTerm prefs are my colors/keybinds; the SSH config is a generic baseline (real hosts belong in the untracked overlay). Both optional, but yours to set.</td></tr>
             </tbody>
           </table>
@@ -147,11 +147,11 @@
         </div>
         <div class="feature">
           <span class="feature__mark">›</span>
-          <div><h3>GitHub MCP token</h3><p>Store a PAT in <a href="https://1password.com/" rel="noopener">1Password</a> at <code>op://MCP/github-claude-pat/credential</code>, enable the 1Password CLI integration, then re-run the script — <code>op inject</code> bakes it into <code>~/.claude.json</code>, never the repo.</p></div>
+          <div><h3>GitHub MCP token</h3><p>With <a href="https://1password.com/" rel="noopener">1Password</a>: store a PAT at <code>op://MCP/github-claude-pat/credential</code>, enable the 1Password CLI integration, then re-run the script — <code>op inject</code> bakes it into <code>~/.claude.json</code>, never the repo. Without 1Password: export <code>GITHUB_PERSONAL_ACCESS_TOKEN</code> (e.g. in <code>~/.config/dotfiles/local.fish</code>) and re-run — the GitHub MCP server is wired to it.</p></div>
         </div>
         <div class="feature">
           <span class="feature__mark">›</span>
-          <div><h3><a href="https://code.visualstudio.com/" rel="noopener">VS Code</a> &amp; 1Password</h3><p>Sign in to VS Code to sync, and add the 1Password browser extensions (both apps are casks).</p></div>
+          <div><h3><a href="https://code.visualstudio.com/" rel="noopener">VS Code</a> &amp; 1Password</h3><p>Sign in to VS Code to sync (the app is a cask). For 1Password, enable the opt-in <code>1password</code> bundle on personal machines; the Safari extension installs via <code>mas</code>, while the Chrome/Firefox extensions are a manual add (the desktop app prompts to connect them).</p></div>
         </div>
         <div class="feature">
           <span class="feature__mark">›</span>

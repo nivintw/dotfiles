@@ -120,13 +120,16 @@
               <tr><td>git</td><td><code>home/.gitconfig</code></td><td><code>~/.gitconfig_local</code></td><td><code>[include]</code> in the tracked config</td></tr>
               <tr><td>fish</td><td><code>home/.config/fish/**</code></td><td><code>~/.config/dotfiles/local.fish</code></td><td>sourced by <code>conf.d/zzz-local.fish</code></td></tr>
               <tr><td>Homebrew</td><td><code>Brewfile</code> + <code>Brewfile.d/*.brewfile</code></td><td><code>~/.config/dotfiles/Brewfile.local</code></td><td>loaded by <code>install.sh</code></td></tr>
+              <tr><td>Claude Code</td><td><code>home/.claude/CLAUDE.md</code></td><td><code>~/.config/dotfiles/CLAUDE.local.md</code></td><td><code>@</code>-imported by the tracked <code>CLAUDE.md</code></td></tr>
+              <tr><td>Claude MCP</td><td><code>claude_mcp.json</code></td><td><code>~/.config/dotfiles/claude_mcp.local.json</code></td><td>deep-merged by <code>install.sh</code></td></tr>
+              <tr><td>macOS defaults</td><td><code>macos.sh</code></td><td><code>~/.config/dotfiles/macos.local.sh</code></td><td>sourced by <code>macos.sh</code></td></tr>
             </tbody>
           </table>
         </div>
-        <p>The bootstrap seeds each overlay with a commented example on first run — idempotently, so it never clobbers content you've added — so the includes never dangle and the format is self-documenting.</p>
+        <p>The bootstrap seeds each overlay with a commented example on first run — idempotently, so it never clobbers content you've added — so the includes never dangle and the format is self-documenting. This is also how 1Password stays optional: the baseline keeps it as the personal default, but a machine without it gets graceful fallbacks (commit signing disabled, the GitHub MCP token read from the environment) and skips the opt-in <code>1password</code> bundle.</p>
         <div class="feature">
           <span class="feature__mark">⊕</span>
-          <div><h3>Opt-in Brewfile bundles</h3><p>Software not wanted on every machine lives in tracked <code>Brewfile.d/&lt;name&gt;.brewfile</code> bundles. <code>install.sh</code> shows an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select of the available ones and persists your pick to <code>~/.config/dotfiles/bundles</code>; re-runs (and CI) read that file without prompting. This repo ships <code>personal</code> and <code>homelab</code>; a machine that picks nothing gets just the baseline.</p></div>
+          <div><h3>Opt-in Brewfile bundles</h3><p>Software not wanted on every machine lives in tracked <code>Brewfile.d/&lt;name&gt;.brewfile</code> bundles. <code>install.sh</code> shows an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select of the available ones and persists your pick to <code>~/.config/dotfiles/bundles</code>; re-runs (and CI) read that file without prompting. This repo ships <code>personal</code>, <code>homelab</code>, and <code>1password</code>; a machine that picks nothing gets just the baseline.</p></div>
         </div>
         <div class="feature">
           <span class="feature__mark">⊕</span>

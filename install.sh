@@ -318,6 +318,18 @@ seed_if_absent "$HOME/.gitconfig_local" <<'EOF'
 # Good home for a per-directory work identity:
 #   [includeIf "gitdir:~/work/"]
 #       path = ~/.gitconfig.work   # work email, signing key, etc. — untracked
+#
+# Commit signing: the tracked ~/.gitconfig signs commits with 1Password's
+# op-ssh-sign. On a machine WITHOUT 1Password, install.sh disables signing here
+# automatically (adds commit.gpgsign=false below) so commits still work — the
+# [include] of this file sits after commit.gpgsign=true in the tracked config, so
+# this wins. To sign with a different tool instead, set your own program + key:
+#   [gpg "ssh"]
+#       program = /opt/homebrew/bin/ssh-keygen   # or a work signer
+#   [user]
+#       signingkey = ~/.ssh/id_ed25519.pub
+#   [commit]
+#       gpgsign = true
 EOF
 
 # fish sources this (conf.d/zzz-local.fish); kept outside the stowed tree.
@@ -337,6 +349,56 @@ seed_if_absent "$HOME/.config/dotfiles/Brewfile.local" <<'EOF'
 #   cask "company-vpn"
 #   brew "internal-cli-tool"
 EOF
+
+# Claude Code imports this from the tracked ~/.claude/CLAUDE.md
+# (@~/.config/dotfiles/CLAUDE.local.md). Seeded so the import target always exists.
+seed_if_absent "$HOME/.config/dotfiles/CLAUDE.local.md" <<'EOF'
+<!-- Machine-local Claude Code instructions (untracked). Imported by the tracked
+     ~/.claude/CLAUDE.md via `@~/.config/dotfiles/CLAUDE.local.md`. Put work-vs-personal
+     guidance here that shouldn't live in the public repo. Markdown, same format as
+     CLAUDE.md. Example:
+
+       ## Work
+       - Internal package registry: https://nexus.corp.example/...
+       - Never push to the public mirror from a work checkout.
+-->
+EOF
+
+# Claude Code MCP overlay: install.sh (step 12) deep-merges this over the tracked
+# claude_mcp.json (this file wins), so a machine can add or override MCP servers.
+# Strict JSON only — it's parsed by jq, so no comments. Seeded as an empty object.
+# Example contents:
+#   { "my-server": { "type": "stdio", "command": "/path/to/server", "args": [] } }
+seed_if_absent "$HOME/.config/dotfiles/claude_mcp.local.json" <<'EOF'
+{}
+EOF
+
+# macos.sh sources this just before it restarts Finder/Dock, so per-machine
+# `defaults` writes are applied in the same pass. Use `dwrite ...` (defined in
+# macos.sh) for the same MDM-safe "warn and continue" behavior on managed boxes.
+seed_if_absent "$HOME/.config/dotfiles/macos.local.sh" <<'EOF'
+# Machine-local macOS defaults (untracked). Sourced by macos.sh before it restarts
+# Finder/Dock. Use the same `defaults write` calls as macos.sh; prefer the `dwrite`
+# wrapper so a write blocked by an MDM profile warns and keeps going instead of
+# aborting. Example:
+#   dwrite com.apple.dock tilesize -int 64
+EOF
+
+# Commit signing degrades gracefully on a machine without 1Password. The tracked
+# ~/.gitconfig signs commits via 1Password's op-ssh-sign; if that binary is absent
+# and you haven't set commit.gpgsign yourself in the overlay, disable signing here so
+# commits don't fail. The [include] of ~/.gitconfig_local sits AFTER commit.gpgsign=true
+# in the tracked config, so this override wins. Personal machines (1Password present)
+# are untouched and keep signing.
+op_ssh_sign="/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
+if [ ! -x "$op_ssh_sign" ]; then
+  if [ -z "$(git config --file "$HOME/.gitconfig_local" --get commit.gpgsign 2>/dev/null || true)" ]; then
+    git config --file "$HOME/.gitconfig_local" commit.gpgsign false
+    ui_warn "1Password not found — disabled commit signing in ~/.gitconfig_local (set commit.gpgsign yourself to re-enable)."
+  else
+    ui_detail "1Password not found, but commit.gpgsign is already set in ~/.gitconfig_local — leaving it as-is"
+  fi
+fi
 
 ui_ok "overlay files ready"
 
@@ -415,44 +477,24 @@ ui_active "installing Playwright Chromium (browser for the docs-site tests)"
 uv run --project "$DOTFILES" playwright install chromium \
   || ui_warn "Playwright Chromium install failed; re-run install.sh to retry."
 
-# --- 10. Auto-install prek hooks on clone (opt-in via init.templateDir) ------
-# The public baseline does NOT auto-install git hooks on clone. That's a
-# trust-on-clone tradeoff: a hostile .pre-commit-config.yaml in an untrusted
-# clone could run on checkout/commit. Opt in per-machine from the untracked
-# ~/.gitconfig_local (never the tracked config):
+# --- 10. Git clone hook (notify-on-clone; opt-in auto-install) ---------------
+# The git template at ~/.config/git/template (stowed in step 3, wired up by
+# init.templateDir in the tracked ~/.gitconfig) drops a post-checkout hook into
+# every fresh clone. By DEFAULT it only NOTIFIES when the cloned repo defines
+# pre-commit hooks — it runs nothing from the clone, so the default carries no
+# trust-on-clone risk. To auto-install those hooks on clone instead, opt in
+# per-machine from the untracked overlay:
 #
-#   [init]
-#       templateDir = ~/.config/git/template
+#   git config --file ~/.gitconfig_local dotfiles.autoInstallHooks true
 #
-# When set, prek writes shims for all hook types into that dir so any stage a
-# cloned repo configures gets installed (each shim no-ops on repos without a
-# pre-commit config). Unset (the default) -> this step does nothing.
-#
-# `--path` expands a leading ~ to $HOME (git stores templateDir tilde'd), since
-# prek does NOT expand ~ itself. Use an absolute or ~-prefixed value in your
-# gitconfig (a relative path is passed through verbatim and prek would resolve it
-# against its own CWD — don't).
-tmpl="$(git config --path --get init.templateDir || true)"
-if [ -n "$tmpl" ]; then
-  if command -v prek >/dev/null 2>&1; then
-    ui_step "prek git template dir ($tmpl)"
-    # prek installs the shims, then runs a cosmetic post-install check comparing
-    # `git config init.templateDir` against the target via same_file::is_same_file,
-    # which does NOT expand `~`. The stored value is tilde'd, so that stat hits a
-    # path literally named `~/...`, fails with ENOENT, and prek exits non-zero —
-    # the hooks are already in place, so it's swallowed. Upstream bug in j178/prek
-    # (present on main as of 2026-06). Does NOT affect `git clone`: git copies the
-    # shims into new repos itself; prek's check only runs here.
-    if prek init-template-dir "$tmpl" \
-      -t pre-commit -t pre-merge-commit -t pre-push -t pre-rebase -t prepare-commit-msg \
-      -t commit-msg -t post-checkout -t post-commit -t post-merge -t post-rewrite; then
-      ui_ok "prek hook shims installed"
-    else
-      ui_warn "prek init-template-dir exited non-zero (hooks installed; known prek tilde-expansion bug in its init.templateDir check — harmless)"
-    fi
-  else
-    ui_warn "skipping prek git template dir (init.templateDir set but prek not installed)"
-  fi
+# Nothing to install here — the hook is stowed and self-contained (it calls
+# `prek install` itself, only when you've opted in). Just report the current mode
+# so it's discoverable.
+ui_step "Git clone hook (notify-on-clone)"
+if [ "$(git config --bool --get dotfiles.autoInstallHooks 2>/dev/null || echo false)" = "true" ]; then
+  ui_ok "fresh clones will auto-install pre-commit hooks (dotfiles.autoInstallHooks=true)"
+else
+  ui_detail "fresh clones will notify when a repo defines pre-commit hooks; set dotfiles.autoInstallHooks=true to auto-install"
 fi
 
 # --- 11. Claude Code CLI (native installer; self-updates) -------------------
@@ -474,27 +516,52 @@ fi
 # declarative source of truth lives in claude_mcp.json and is replayed here,
 # idempotently (remove-then-add).
 #
-# Secrets in claude_mcp.json are 1Password references ({{ op://... }}) resolved
-# at install time via `op inject`, so no token is committed. Resolution runs as
-# you, using the desktop app's CLI integration — the token only ever lands in
-# ~/.claude.json (0600), never in the repo.
+# Layering: the tracked claude_mcp.json baseline is deep-merged with an optional
+# untracked overlay ~/.config/dotfiles/claude_mcp.local.json (overlay wins; jq '*'
+# merges nested objects), so a machine can add or override servers without touching
+# the public repo.
 #
-# Two skip paths keep first-run bootstrap safe:
-#   - claude CLI absent          -> skip (normally installed by step 11 above;
-#                                   safety net if that install failed).
-#   - op absent / not signed in  -> register only secret-free servers; entries
-#     whose {{ op://... }} couldn't resolve are left untouched (not clobbered),
-#     so re-running after `op signin` adds them without disturbing the rest.
+# Secret resolution runs in order, so the github server works WITH or WITHOUT 1Password:
+#   1. op signed in              -> `op inject` resolves {{ op://... }} (personal default).
+#   2. else, GitHub PAT in env   -> rewrite the github server's auth header from the
+#      first non-empty of $GITHUB_PERSONAL_ACCESS_TOKEN / $GH_TOKEN / $GITHUB_TOKEN.
+#   3. else                      -> leave {{ op://... }} unresolved (those servers are
+#      skipped below; re-run after `op signin` or after exporting a PAT).
+# Either way the token only ever lands in ~/.claude.json (0600), never in the repo.
+#
+# Skip paths that keep first-run / no-1Password bootstrap safe:
+#   - claude CLI absent              -> skip the whole step (safety net if step 11 failed).
+#   - server with unresolved op://   -> skip that server (left untouched, re-runnable).
+#   - stdio server whose absolute `command` binary is missing -> skip it (covers the
+#     1password MCP server on a machine without the 1Password app installed).
 if command -v claude >/dev/null 2>&1; then
   ui_step "Claude Code MCP servers (claude_mcp.json)"
 
-  if command -v op >/dev/null 2>&1 && op whoami >/dev/null 2>&1; then
-    resolved_mcp="$(op inject -i "$DOTFILES/claude_mcp.json")"
+  # Baseline ⊕ machine-local overlay (overlay wins on key conflicts).
+  mcp_local="$HOME/.config/dotfiles/claude_mcp.local.json"
+  if [ -f "$mcp_local" ]; then
+    merged_mcp="$(jq -s '.[0] * .[1]' "$DOTFILES/claude_mcp.json" "$mcp_local")"
   else
-    if grep -q 'op://' "$DOTFILES/claude_mcp.json"; then
-      ui_warn "1Password not signed in — skipping secret-backed servers; re-run after 'op signin'."
+    merged_mcp="$(cat "$DOTFILES/claude_mcp.json")"
+  fi
+
+  # Resolve secrets: 1Password first, else a GitHub PAT from the environment.
+  if command -v op >/dev/null 2>&1 && op whoami >/dev/null 2>&1; then
+    resolved_mcp="$(printf '%s' "$merged_mcp" | op inject)"
+  else
+    resolved_mcp="$merged_mcp"
+    gh_pat="${GITHUB_PERSONAL_ACCESS_TOKEN:-${GH_TOKEN:-${GITHUB_TOKEN:-}}}"
+    if [ -n "$gh_pat" ]; then
+      # Only rewrite a github auth header that STILL holds an op:// placeholder — never
+      # fabricate a server, and don't clobber a real token an overlay already supplied.
+      resolved_mcp="$(printf '%s' "$resolved_mcp" | jq --arg t "Bearer $gh_pat" '
+        if (.github.headers.Authorization? // "" | test("op://"))
+        then .github.headers.Authorization = $t else . end')"
+      ui_detail "using a GitHub PAT from the environment for the github MCP server"
     fi
-    resolved_mcp="$(cat "$DOTFILES/claude_mcp.json")"
+    if printf '%s' "$resolved_mcp" | grep -q 'op://'; then
+      ui_warn "1Password not signed in — skipping secret-backed servers; re-run after 'op signin' or export a GitHub PAT."
+    fi
   fi
 
   while IFS=$'\t' read -r name json; do
@@ -502,6 +569,16 @@ if command -v claude >/dev/null 2>&1; then
       ui_warn "skipping '$name' (unresolved 1Password reference)"
       continue
     fi
+    # Skip a stdio server whose absolute command path isn't executable here (e.g. the
+    # 1password MCP server when the 1Password app isn't installed). http servers and
+    # bare-command (PATH-resolved) servers have no leading '/', so they pass through.
+    cmd="$(printf '%s' "$json" | jq -r '.command // empty')"
+    case "$cmd" in
+      /*) if [ ! -x "$cmd" ]; then
+            ui_warn "skipping '$name' (command not found: $cmd)"
+            continue
+          fi ;;
+    esac
     claude mcp remove "$name" --scope user >/dev/null 2>&1 || true
     claude mcp add-json "$name" "$json" --scope user >/dev/null
   done < <(printf '%s' "$resolved_mcp" | jq -r 'to_entries[] | "\(.key)\t\(.value | tojson)"')
