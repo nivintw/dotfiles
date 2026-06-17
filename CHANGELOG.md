@@ -3,6 +3,16 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.3.0 (2026-06-17)
+
+### ✨ Features
+
+- **docs**: use a real install.sh asciinema cast as the homepage hero
+
+### 🐛🚑️ Fixes
+
+- migrate stale prek hook shims off the git template on install
+
 ## v1.2.0 (2026-06-17)
 
 ### ✨ Features
