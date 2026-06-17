@@ -112,7 +112,7 @@
         </div>
         <div class="feature">
           <span class="feature__mark">⎘</span>
-          <div><h3><code>pubkey</code></h3><p>Print an SSH public key and copy it to the clipboard in one move; lists the available keys if you name one that isn't there.</p></div>
+          <div><h3><code>pubkey</code></h3><p>Print an SSH public key and copy it to the clipboard in one move. With no argument it discovers the key from the running agent (1Password, the macOS keychain, or a plain ssh-agent), falling back to <code>~/.ssh/*.pub</code>; when more than one is found it offers an fzf picker labelled by key comment and SHA256 fingerprint. Pass a path to copy a specific key.</p></div>
         </div>
         <div class="feature">
           <span class="feature__mark">⚑</span>
