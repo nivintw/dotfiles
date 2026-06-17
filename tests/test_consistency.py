@@ -10,6 +10,7 @@ are executable, and install.sh's managed-files list matches what's actually stow
 
 import os
 import re
+import tomllib
 from typing import TYPE_CHECKING
 
 import pytest
@@ -94,6 +95,35 @@ def test_docs_have_no_nested_anchors(html: pathlib.Path) -> None:
                     bad.append(lineno)
                 depth += 1
     assert not bad, f"{html.name}: nested <a> at line(s) {bad}"
+
+
+def _typos_shared_rules(path: pathlib.Path) -> dict[str, object]:
+    """Return the shared rule surface of a typos config: ignore-regexes + word whitelist."""
+    default = tomllib.loads(path.read_text()).get("default", {})
+    return {
+        "extend-ignore-re": default.get("extend-ignore-re", []),
+        "extend-words": default.get("extend-words", {}),
+    }
+
+
+def test_typos_configs_keep_shared_rules_in_sync() -> None:
+    """_typos.toml and home/.typos.toml carry an identical shared rule surface.
+
+    Both files are hand-maintained standalone copies (not a symlink — see each
+    file's header), so their ignore-regex shapes and word whitelist can silently
+    drift. That would break the stated guarantee that a token flags identically
+    under the repo hook / CI (_typos.toml) and under the personal ~/.typos.toml
+    everywhere else. Only the genuinely repo-only keys are excluded from the
+    comparison by construction: _typos.toml's [files].extend-exclude (docs/ vendored
+    + cast artifacts) and home/.typos.toml's empty [default.extend-identifiers]
+    placeholder, neither of which is part of the shared surface.
+    """
+    repo = _typos_shared_rules(REPO / "_typos.toml")
+    home = _typos_shared_rules(REPO / "home" / ".typos.toml")
+    assert repo == home, (
+        "typos shared rules drifted between _typos.toml and home/.typos.toml; "
+        "update both so local and CI flag identically (see each file's header)"
+    )
 
 
 def test_install_managed_files_are_stowed() -> None:
