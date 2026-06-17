@@ -56,7 +56,9 @@ function git_prune_local --description "Delete local branches that have been mer
         | string replace -rf '^(\S+) \[gone\]$' '$1')
 
     # Branches that are direct ancestors of the default branch (traditional merge).
-    set merged_branches (git branch --merged $default_branch | grep -v '^[*+]' | string trim | string match -v -- $default_local)
+    # The default branch itself is excluded by exact-string compare in the loop
+    # below (not `string match`, which would treat the name as a glob pattern).
+    set merged_branches (git branch --merged $default_branch | grep -v '^[*+]' | string trim)
 
     set deleted_count 0
     set skipped_count 0
@@ -119,6 +121,7 @@ function git_prune_local --description "Delete local branches that have been mer
     # Branches still tracking a live remote are left alone.
     # gone-remote branches were already handled above.
     for branch in $merged_branches
+        test "$branch" = "$default_local"; and continue # never delete the default branch
         if not contains -- $branch $gone_branches
             set upstream (git config --get branch.$branch.remote 2>/dev/null)
             if test -z "$upstream"
