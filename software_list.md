@@ -26,10 +26,11 @@ Most of a new machine is automated by [`install.sh`](install.sh), which:
 - points **iTerm2** at the tracked prefs folder (`iterm2/`); takes effect on
   iTerm's next launch
 - installs the **uv tools** listed in [uv_tools.txt](uv_tools.txt)
-- configures the **prek git template dir** (`~/.config/git/template`) so cloning
-  a repo with a pre-commit config auto-installs its hooks (`init.templateDir` in
-  `.gitconfig`). Tradeoff: a malicious config in an untrusted clone would run on
-  first commit — accepted since only trusted repos are cloned here
+- **(opt-in)** populates the **prek git template dir** so cloning a repo with a
+  pre-commit config auto-installs its hooks — only when you set
+  `init.templateDir = ~/.config/git/template` in the untracked `~/.gitconfig_local`.
+  Off by default: auto-running hooks from an untrusted clone is a trust-on-clone
+  tradeoff, so the public baseline leaves it to you to opt in
 - installs the **Claude Code CLI** via the native installer
   (`~/.local/bin/claude`), which self-updates thereafter — chosen over a brew
   cask precisely so it stays current automatically

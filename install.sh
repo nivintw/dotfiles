@@ -42,6 +42,16 @@ ui_detail() { printf '   %s%s%s\n' "$C_DIM" "$1" "$C_RESET"; }
 
 ui_banner "dotfiles bootstrap"
 
+# --- macOS only -------------------------------------------------------------
+# This bootstrap is macOS-specific: Homebrew prefixes, Touch-ID PAM, chsh, the
+# application firewall, `defaults`, and dockutil all assume macOS. Fail fast
+# rather than dying mid-run (e.g. at the firewall step inside the sudo fence) —
+# matching the self-guards already in dock.sh and macos.sh.
+if [ "$(uname)" != "Darwin" ]; then
+  ui_err "install.sh supports macOS only (detected $(uname)). Aborting."
+  exit 1
+fi
+
 # --- sudo, acquired just-in-time --------------------------------------------
 # A few steps need root (Touch-ID PAM, /etc/shells + chsh, firewall). We do NOT
 # stamp sudo up front and keep it warm: the curl|bash bootstraps (Homebrew, uv,
@@ -415,30 +425,44 @@ ui_active "installing Playwright Chromium (browser for the docs-site tests)"
 uv run --project "$DOTFILES" playwright install chromium \
   || ui_warn "Playwright Chromium install failed; re-run install.sh to retry."
 
-# --- 10. Auto-install prek hooks on clone (git template dir) ----------------
-# .gitconfig's init.templateDir points at ~/.config/git/template; prek writes
-# shims for all hook types so any stage a cloned repo configures gets installed.
-# Each shim no-ops on repos without a pre-commit config.
-if command -v prek >/dev/null 2>&1; then
-  ui_step "prek git template dir (~/.config/git/template)"
-  # prek installs all the hook shims successfully, then runs a cosmetic
-  # post-install check comparing `git config init.templateDir` against the target
-  # via same_file::is_same_file, which does NOT expand `~`. Our templateDir is
-  # stored tilde'd (correct — git expands it itself), so that stat hits a path
-  # literally named `~/.config/git/template`, fails with ENOENT, and prek exits
-  # non-zero (`error: No such file or directory (os error 2)`). The hooks are
-  # already in place, so this is swallowed. Upstream bug in j178/prek (present on
-  # main as of 2026-06). Does NOT affect `git clone`: git copies these shims into
-  # new repos itself; prek's check only runs here, when we call init-template-dir.
-  if prek init-template-dir "$HOME/.config/git/template" \
-    -t pre-commit -t pre-merge-commit -t pre-push -t pre-rebase -t prepare-commit-msg \
-    -t commit-msg -t post-checkout -t post-commit -t post-merge -t post-rewrite; then
-    ui_ok "prek hook shims installed"
+# --- 10. Auto-install prek hooks on clone (opt-in via init.templateDir) ------
+# The public baseline does NOT auto-install git hooks on clone. That's a
+# trust-on-clone tradeoff: a hostile .pre-commit-config.yaml in an untrusted
+# clone could run on checkout/commit. Opt in per-machine from the untracked
+# ~/.gitconfig_local (never the tracked config):
+#
+#   [init]
+#       templateDir = ~/.config/git/template
+#
+# When set, prek writes shims for all hook types into that dir so any stage a
+# cloned repo configures gets installed (each shim no-ops on repos without a
+# pre-commit config). Unset (the default) -> this step does nothing.
+#
+# `--path` expands a leading ~ to $HOME (git stores templateDir tilde'd), since
+# prek does NOT expand ~ itself. Use an absolute or ~-prefixed value in your
+# gitconfig (a relative path is passed through verbatim and prek would resolve it
+# against its own CWD — don't).
+tmpl="$(git config --path --get init.templateDir || true)"
+if [ -n "$tmpl" ]; then
+  if command -v prek >/dev/null 2>&1; then
+    ui_step "prek git template dir ($tmpl)"
+    # prek installs the shims, then runs a cosmetic post-install check comparing
+    # `git config init.templateDir` against the target via same_file::is_same_file,
+    # which does NOT expand `~`. The stored value is tilde'd, so that stat hits a
+    # path literally named `~/...`, fails with ENOENT, and prek exits non-zero —
+    # the hooks are already in place, so it's swallowed. Upstream bug in j178/prek
+    # (present on main as of 2026-06). Does NOT affect `git clone`: git copies the
+    # shims into new repos itself; prek's check only runs here.
+    if prek init-template-dir "$tmpl" \
+      -t pre-commit -t pre-merge-commit -t pre-push -t pre-rebase -t prepare-commit-msg \
+      -t commit-msg -t post-checkout -t post-commit -t post-merge -t post-rewrite; then
+      ui_ok "prek hook shims installed"
+    else
+      ui_warn "prek init-template-dir exited non-zero (hooks installed; known prek tilde-expansion bug in its init.templateDir check — harmless)"
+    fi
   else
-    ui_warn "prek init-template-dir exited non-zero (hooks installed; known prek tilde-expansion bug in its init.templateDir check — harmless)"
+    ui_warn "skipping prek git template dir (init.templateDir set but prek not installed)"
   fi
-else
-  ui_warn "skipping prek git template dir (prek not installed)"
 fi
 
 # --- 11. Claude Code CLI (native installer; self-updates) -------------------
@@ -539,17 +563,31 @@ fi
 
 # --- 14. macOS system defaults ----------------------------------------------
 # Curated `defaults write` tweaks. Idempotent; restarts Finder/Dock at the end.
-# Comment this out if you'd rather run it by hand (~/dotfiles/macos.sh).
+# This is config-as-code: it *asserts* the declared prefs over whatever you've
+# set by hand. Comment it out (or edit macos.sh) if you'd rather run it manually.
 ui_step "macOS system defaults (macos.sh)"
+ui_detail "applies the system preferences declared in macos.sh (overrides manual tweaks)"
 bash "$DOTFILES/macos.sh"
 ui_ok "macOS defaults applied"
 
 # --- 15. Dock layout --------------------------------------------------------
-# Declarative Dock via dockutil. NOTE: this removes every current Dock item and
-# rebuilds from dock.sh's list. Edit dock.sh (or comment out this step) first.
+# Declarative Dock via dockutil: removes every current Dock item and rebuilds
+# from dock.sh's list. That's the config-as-code contract, but it's the one step
+# that visibly discards local state, so confirm before doing it interactively.
+# Non-interactive (CI/automation) converges silently; bare Enter proceeds.
 ui_step "Dock layout (dock.sh)"
-bash "$DOTFILES/dock.sh"
-ui_ok "Dock layout applied"
+if [ -t 0 ]; then
+  ui_warn "dock.sh REPLACES your current Dock with its declared layout."
+  printf '   Rebuild the Dock now? [Y/n] '
+  read -r dock_reply || dock_reply=n   # EOF (Ctrl-D) -> treat as "no", don't abort under set -e
+  case "$dock_reply" in
+    [Nn]*) ui_warn "skipped Dock layout — run ~/dotfiles/dock.sh yourself to apply it" ;;
+    *)     bash "$DOTFILES/dock.sh"; ui_ok "Dock layout applied" ;;
+  esac
+else
+  bash "$DOTFILES/dock.sh"
+  ui_ok "Dock layout applied"
+fi
 
 ui_banner "dotfiles bootstrap complete"
 ui_detail "Restart your shell (or run 'exec fish') to pick everything up."

@@ -12,11 +12,9 @@
 	signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK+gQ3ljvXAaFK2HsCuwsH6f6mzmMdjfHta8OA0h4Jp/
 [init]
 	defaultBranch = main
-	; Auto-install prek hooks into every newly cloned/inited repo (shims live in
-	; ~/.config/git/template/hooks, populated by `prek init-template-dir` in install.sh).
-	; Tradeoff: a malicious .pre-commit-config.yaml in an untrusted clone would run
-	; on first commit. Accepted — only trusted repos are cloned here.
-	templateDir = ~/.config/git/template
+	; No init.templateDir here on purpose: auto-installing hooks into every clone
+	; is a trust-on-clone tradeoff, so it's opt-in per-machine from the untracked
+	; ~/.gitconfig_local instead (install.sh's prek step honors it when set).
 [gpg]
 	format = ssh
 [gpg "ssh"]
