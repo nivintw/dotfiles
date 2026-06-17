@@ -30,8 +30,8 @@ def _meaningful_lines(path: Path) -> Iterator[tuple[int, str]]:
 
 
 def _brewfiles() -> list[Path]:
-    """The baseline Brewfile plus every opt-in bundle under Brewfile.d/."""
-    return [REPO / "Brewfile", *sorted((REPO / "Brewfile.d").glob("*"))]
+    """The baseline Brewfile plus every opt-in bundle (Brewfile.d/<name>.brewfile)."""
+    return [REPO / "Brewfile", *sorted((REPO / "Brewfile.d").glob("*.brewfile"))]
 
 
 def test_brewfile_lines_have_known_directives() -> None:

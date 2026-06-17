@@ -43,10 +43,11 @@ additionalHeaders = ["markdown-header.toml"]
 [mapping.MARKDOWN_CUSTOM]
 extensions = ["md"]
 
-# '#'-comment files hawkeye doesn't map by default: fish/bats/uv_tools.txt by
-# extension, plus dotfiles and the Brewfile (Ruby DSL) matched by exact filename.
+# '#'-comment files hawkeye doesn't map by default: fish/bats/uv_tools.txt and the
+# Brewfile.d/*.brewfile opt-in bundles by extension, plus dotfiles and the baseline
+# Brewfile (Ruby DSL) matched by exact filename (it has no extension).
 [mapping.SCRIPT_STYLE]
-extensions = ["fish", "bats", "txt"]
+extensions = ["fish", "bats", "txt", "brewfile"]
 filenames = [
   "Brewfile",
   ".gitignore",

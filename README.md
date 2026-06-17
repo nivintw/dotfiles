@@ -86,7 +86,7 @@ needs.
 | **SSH** | `home/.ssh/config` (generic) | `~/.ssh/config.local` | `Include`d by the tracked config |
 | **git** | `home/.gitconfig` | `~/.gitconfig_local` | `[include]` in the tracked config |
 | **fish** | `home/.config/fish/**` | `~/.config/dotfiles/local.fish` | sourced by `conf.d/zzz-local.fish` |
-| **Homebrew** | `Brewfile` + tracked `Brewfile.d/<name>` | `~/.config/dotfiles/Brewfile.local` (+ opt-in list) | loaded by `install.sh` |
+| **Homebrew** | `Brewfile` + tracked `Brewfile.d/<name>.brewfile` | `~/.config/dotfiles/Brewfile.local` (+ `bundles` selection) | loaded by `install.sh` |
 
 **Per-directory git identity** — the cleanest way to use a work email/signing key
 only in work repos, set in `~/.gitconfig_local`:
@@ -99,25 +99,28 @@ only in work repos, set in `~/.gitconfig_local`:
 **Homebrew — baseline, opt-in bundles, and private additions.** Three layers:
 
 - `Brewfile` — the **baseline**, installed on every machine.
-- `Brewfile.d/<name>` — **tracked** opt-in bundles (same Ruby DSL as `Brewfile`,
-  no extension). Public and version-controlled; a machine installs one only by
-  listing its name in `~/.config/dotfiles/brewfiles` (one per line). A machine
-  that lists nothing gets just the baseline.
+- `Brewfile.d/<name>.brewfile` — **tracked** opt-in bundles (same Ruby DSL as
+  `Brewfile`). `brew bundle` ignores the filename; the `.brewfile` extension is
+  there so hawkeye auto-manages their SPDX headers and the editor highlights them.
+  On first run `install.sh` shows an `fzf` multi-select of the available bundles,
+  and your choice persists to `~/.config/dotfiles/bundles` (one name per line) for
+  idempotent re-runs. This repo ships `personal` and `homelab`; a machine that
+  picks nothing gets just the baseline.
 - `~/.config/dotfiles/Brewfile.local` — **untracked**, machine-private additions
   (e.g. work-only software you don't want in the public repo). Auto-loaded by
   `install.sh` if present — the Homebrew analogue of `~/.gitconfig_local`.
 
 ```bash
-# This repo ships Brewfile.d/personal (Discord, Steam, OpenEmu, 3D-printing,
-# Raspberry Pi imager, plus Office/Anki/Resilio that are personal or
-# work-managed). To install it on a personal machine:
-echo personal >> ~/.config/dotfiles/brewfiles
-brew bundle install --file=~/dotfiles/Brewfile.d/personal   # or re-run install.sh
+# install.sh's bundle step shows an fzf multi-select; pick "personal" and/or
+# "homelab" there. To enable one without re-running the full installer:
+echo personal >> ~/.config/dotfiles/bundles
+brew bundle install --file=~/dotfiles/Brewfile.d/personal.brewfile
 
 # Work-only software the public repo shouldn't carry → the private file:
 printf 'cask "company-vpn"\n' >> ~/.config/dotfiles/Brewfile.local
 ```
 
-Add a tracked bundle by dropping a new `Brewfile.d/<name>` with the standard
-two-line SPDX header (REUSE checks it's present; hawkeye leaves it alone — no
-`licenserc.toml` entry needed) and listing its name on machines that want it.
+Add a tracked bundle by dropping a new `Brewfile.d/<name>.brewfile` — hawkeye
+auto-inserts and maintains its SPDX header (the `brewfile` extension is mapped in
+`licenserc.toml`), so you never hand-write one. Then select it on machines that
+want it.

@@ -45,7 +45,6 @@ brew "zoxide"           # Smarter cd that learns your habits
 # --- Terminal & remote sessions --------------------------------------------
 brew "asciinema"        # Record and share terminal sessions
 brew "agg"              # Convert asciinema recordings (asciicasts) to animated GIFs
-brew "mosh"             # Remote terminal application (roaming, low-latency)
 brew "tmux"             # Terminal multiplexer
 
 # --- Dotfiles bootstrap & macOS management ---------------------------------
@@ -74,7 +73,6 @@ brew "git"              # Distributed revision control system
 brew "git-delta"        # Syntax-highlighting pager for git diff/log/show
 brew "git-filter-repo"  # Fast history rewriting / secret removal
 brew "git-lfs"          # Git Large File Storage — run `git lfs install` once after install
-brew "gource"           # Version control visualization tool
 
 # --- Code quality & dev tooling --------------------------------------------
 brew "bats-core"        # Bash automated testing system
@@ -92,10 +90,6 @@ brew "lazydocker"       # TUI for Docker / Compose
 brew "trivy"            # Vulnerability/misconfig scanner
 
 # --- Networking ------------------------------------------------------------
-brew "iperf3"           # Network throughput measurement (homelab)
-brew "mtr"              # traceroute + ping in one network diagnostic (homelab)
-brew "nmap"             # Port scanning utility for large networks
-brew "step"             # smallstep CLI — private CA, X.509/SSH certs, ACME, mTLS
 brew "wget"             # Internet file retriever
 
 # --- System monitoring & disk ----------------------------------------------
@@ -136,9 +130,11 @@ cask "obsidian"              # Second-brain / notes
 # --- System utilities ------------------------------------------------------
 cask "appcleaner"            # Thorough app uninstaller (catches leftover support files)
 
-# Software not wanted on every machine (gaming, 3D printing, plus Office/Anki/
-# sync that are personal or work-managed on a work box) lives in the opt-in
-# bundle Brewfile.d/personal — see "Machine-local overlays" in the README.
+# Software not wanted on every machine lives in opt-in bundles under Brewfile.d/
+# (each a <name>.brewfile): "personal" (gaming, 3D printing, Office/Anki/sync that
+# are personal or work-managed) and "homelab" (network diagnostics, Home Assistant).
+# Enable per machine via ~/.config/dotfiles/bundles — see "Machine-local overlays"
+# in the README.
 
 # ===========================================================================
 # VS Code extensions (installed via `code --install-extension` by brew bundle)
@@ -244,7 +240,4 @@ vscode "silofy.hackthebox"        # HackTheBox theme
 # IDs from `mas list`. Regenerate that view anytime with: mas list
 # ---------------------------------------------------------------------------
 mas "1Password for Safari", id: 1569813296   # Safari extension for 1Password
-mas "Calca",                id: 635758264    # Markdown calculator
-mas "Home Assistant",       id: 1099568401   # Home Assistant companion app
-mas "Kindle",               id: 302584613    # Kindle reader
 mas "The Unarchiver",       id: 425424353    # Archive extractor

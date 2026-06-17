@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Opt-in Brewfile bundle for homelab / self-hosting machines. Same Ruby DSL as the
+# baseline Brewfile; the .brewfile extension is what hawkeye (SPDX headers) and the
+# editor key off — brew bundle ignores the filename. Installed only when "homelab"
+# is enabled in ~/.config/dotfiles/bundles (see install.sh and "Machine-local
+# overlays" in the README). Networking/infra diagnostics and the Home Assistant
+# companion — not wanted on a locked-down work box. The SPDX header above is
+# maintained by hawkeye; no need to hand-write it.
+
+# --- Networking & remote diagnostics ---------------------------------------
+brew "iperf3"                # Network throughput measurement
+brew "mosh"                  # Roaming, low-latency remote terminal
+brew "mtr"                   # traceroute + ping in one network diagnostic
+brew "nmap"                  # Port scanning utility for large networks
+brew "step"                  # smallstep CLI — private CA, X.509/SSH certs, ACME, mTLS
+
+# --- App Store (personal Apple ID) -----------------------------------------
+mas "Home Assistant", id: 1099568401   # Home Assistant companion app

@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Opt-in Brewfile bundle. Same Ruby DSL as the baseline Brewfile; the .brewfile
+# extension is purely what hawkeye (SPDX headers) and the editor key off — brew
+# bundle ignores the filename. Installed only when "personal" is enabled in
+# ~/.config/dotfiles/bundles (see install.sh and "Machine-local overlays" in the
+# README). Holds software not wanted on every machine — personal apps, or things
+# that are work-managed on a work box. Tracked & public; for machine-PRIVATE
+# additions use the untracked ~/.config/dotfiles/Brewfile.local instead.
+#
+# The two-line SPDX header above is inserted and maintained by hawkeye via the
+# `brewfile` extension mapping in licenserc.toml — no need to hand-write it.
+
+# --- Media & gaming --------------------------------------------------------
+cask "discord"               # Discord
+cask "openemu"               # Retro game console emulator
+cask "steam"                 # Steam game client
+
+# --- Hardware & 3D printing ------------------------------------------------
+cask "creality-print"        # Slicer for Creality FDM 3D printers
+cask "raspberry-pi-imager"   # Flash Raspberry Pi OS images to SD cards
+
+# --- Productivity (personal, or work-managed on a work machine) ------------
+cask "anki"                  # Spaced-repetition flashcards
+cask "microsoft-office"      # Office 365 (work-managed on a work machine). Bundles "Defender Shim"; conflicts with a standalone onedrive cask, so don't add one.
+cask "resilio-sync"          # Peer-to-peer file sync
+
+# --- Dev & visualization ---------------------------------------------------
+brew "gource"                # Version control history visualization
+
+# --- App Store (personal Apple ID) -----------------------------------------
+mas "Kindle", id: 302584613  # Kindle reader
+mas "Calca",  id: 635758264  # Markdown calculator
