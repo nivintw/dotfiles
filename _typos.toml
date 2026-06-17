@@ -10,6 +10,13 @@
 # rules, update both. typos is treated as CHECK-ONLY (see .pre-commit-config.yaml
 # and the home/.typos.toml header).
 
+# Generated / vendored artifacts under docs/ — not prose to spell-check. The
+# asciinema-player bundle is minified third-party code (false positives like
+# "alis"/"seeked"); the .cast files are recorded terminal output, not text we
+# author. (Repo-specific; not mirrored in home/.typos.toml.)
+[files]
+extend-exclude = ["docs/assets/asciinema-player.*", "docs/casts/*.cast"]
+
 [default]
 # Ignore whole syntactic categories that are never typos but frequently get
 # mangled — exclude the *shape* once instead of whitelisting each victim token.

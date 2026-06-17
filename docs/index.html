@@ -44,6 +44,7 @@
           <a href="getting-started.html">Getting Started</a>
           <a href="architecture.html">Architecture</a>
           <a href="stack.html">The Stack</a>
+          <a href="commands.html">Commands</a>
           <a href="quality.html">Quality</a>
           <a href="security.html">Security</a>
           <a class="icon-btn" href="https://github.com/nivintw/dotfiles" aria-label="GitHub repository" rel="noopener">
@@ -64,16 +65,21 @@
           <span class="badge"><a href="https://fishshell.com/" rel="noopener"><b>fish</b></a> shell</span>
           <span class="badge">MIT · <a href="https://reuse.software/" rel="noopener"><b>REUSE</b></a> 3.3</span>
         </div>
-        <h1>One command to a <span class="grad">fully provisioned</span> Mac.</h1>
+        <h1>Setting up my new computer: <span class="grad">clone. run. done.</span></h1>
         <p class="lede">
-          A declarative, idempotent dotfiles repo. <code>home/</code> mirrors
-          <code>$HOME</code> and is symlinked into place with GNU Stow; everything
-          else — tools, shell, editor, security posture — is reproduced from a
-          single bootstrap script.
+          My actual macOS setup — the same repo I clone onto every Mac I own.
+          <code>home/</code> mirrors <code>$HOME</code> and is symlinked into place
+          with GNU Stow; everything else — tools, shell, editor, security posture —
+          is reproduced from a single bootstrap script.
+        </p>
+        <p class="lede lede--sub">
+          And it's <strong>built to be forked</strong>. The layout and machinery are
+          the reusable part; the package list, the Dock, the keys are mine — yours to
+          swap out. <a href="getting-started.html#make-it-yours">Make it yours →</a>
         </p>
         <div class="cta">
           <a class="btn btn--primary" href="getting-started.html">Get started →</a>
-          <a class="btn btn--ghost" href="https://github.com/nivintw/dotfiles" rel="noopener">View on GitHub</a>
+          <a class="btn btn--ghost" href="https://github.com/nivintw/dotfiles" rel="noopener">Fork on GitHub</a>
         </div>
 
         <div class="term" aria-hidden="true">
@@ -81,10 +87,10 @@
             <span class="term__dot" style="background: var(--term-red)"></span>
             <span class="term__dot" style="background: var(--term-yellow)"></span>
             <span class="term__dot" style="background: var(--term-green)"></span>
-            <span class="term__title">~/dotfiles — bootstrap</span>
+            <span class="term__title">~/dotfiles — new machine</span>
           </div>
           <div class="term__body">
-            <div class="line"><span class="prompt">❯</span> <span class="cmd">git clone &lt;repo&gt; ~/dotfiles &amp;&amp; ~/dotfiles/install.sh</span></div>
+            <div class="line"><span class="prompt">❯</span> <span class="cmd">git clone https://github.com/nivintw/dotfiles ~/dotfiles &amp;&amp; ~/dotfiles/install.sh</span></div>
             <div class="line out"><strong>dotfiles bootstrap</strong></div>
             <div class="line"><span class="ok">✔</span> <span class="out"><a href="https://brew.sh" rel="noopener">Homebrew</a> packages installed</span></div>
             <div class="line"><span class="ok">✔</span> <span class="out">opt-in bundles: personal homelab</span></div>
@@ -131,7 +137,7 @@
 
       <section class="wrap">
         <h2><span class="hash">#</span>Explore the docs</h2>
-        <p class="section-lede">Six pages, from first boot to the security model.</p>
+        <p class="section-lede">From first boot to the custom commands and the security model.</p>
         <div class="grid">
           <a class="card" href="getting-started.html">
             <div class="card__icon">🚀</div>
@@ -149,6 +155,12 @@
             <div class="card__icon">🛠️</div>
             <h3>The Stack</h3>
             <p>fish, Homebrew, the CLI toolbelt, the editor, and the AI tooling.</p>
+            <span class="card__more">Read →</span>
+          </a>
+          <a class="card" href="commands.html">
+            <div class="card__icon">⌨️</div>
+            <h3>Commands</h3>
+            <p>The custom fish functions — fuzzy git, live search, process kill — with recorded demos.</p>
             <span class="card__more">Read →</span>
           </a>
           <a class="card" href="quality.html">
@@ -174,16 +186,17 @@
 
       <section class="wrap">
         <h2><span class="hash">#</span>Quick start</h2>
-        <p class="section-lede">No prerequisites — the script installs Homebrew and <a href="https://docs.astral.sh/uv/" rel="noopener">uv</a> itself if they're missing.</p>
-        <pre><code>git clone &lt;this-repo&gt; ~/dotfiles
+        <p class="section-lede">No toolchain to set up first — the script installs Homebrew and <a href="https://docs.astral.sh/uv/" rel="noopener">uv</a> itself if they're missing.</p>
+        <pre><code>git clone https://github.com/nivintw/dotfiles ~/dotfiles
 ~/dotfiles/install.sh</code></pre>
         <div class="note">
-          <div class="note__title">Idempotent</div>
-          Re-run it any time. <code>brew bundle</code> adopts already-installed casks in
-          place, <code>stow</code> refuses to clobber real files, and every step skips
-          work it has already done — except the declarative <code>macos.sh</code> and
-          <code>dock.sh</code> steps, which re-assert system prefs and rebuild the Dock
-          by design (the Dock step prompts first when interactive).
+          <div class="note__title">Forking? Read this first</div>
+          This installs <em>my</em> taste — package list, Dock layout, macOS defaults,
+          keys. Fork it and review <a href="getting-started.html#make-it-yours">the handful
+          of files that are mine</a> before you run it. It's safe to re-run any time:
+          <code>install.sh</code> converges the machine to the declared state rather than
+          clobbering it (the full idempotency story is on
+          <a href="getting-started.html">Getting Started</a>).
         </div>
       </section>
     </main>
@@ -192,7 +205,7 @@
       <div class="wrap site-footer__inner">
         <span>© <span data-year>2026</span> Tyler Nivin · MIT licensed</span>
         <span>
-          Built dependency-free ·
+          This site is dependency-free (no framework, no build) ·
           <a href="https://github.com/nivintw/dotfiles" rel="noopener">github.com/nivintw/dotfiles</a>
         </span>
       </div>

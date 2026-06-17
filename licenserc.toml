@@ -36,6 +36,7 @@ excludes = [
   "**/.python-version",             # bare version string, no comment syntax
   "**/.vscode/*",                   # editor config (JSON), can't take a header
   "docs/.nojekyll",                 # empty GitHub Pages marker; annotated in REUSE.toml
+  "docs/assets/asciinema-player.*", # vendored third-party player (Apache-2.0); annotated in REUSE.toml
 ]
 
 additionalHeaders = ["markdown-header.toml"]
