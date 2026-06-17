@@ -100,6 +100,11 @@ ui_ok "Homebrew packages installed"
 # Absent/empty selection = baseline only, exactly what a machine that shouldn't get
 # the personal apps leaves it as. See "Machine-local overlays" in the README.
 ui_step "Opt-in Brewfile bundles"
+# write_bundles / parse_bundles — the selection-file writer and its inverse parser,
+# factored into a sourceable lib so the round-trip is unit-tested (tests/bundle_select.bats)
+# without running this bootstrap. Sourcing has no side effects.
+# shellcheck source=scripts/bundle_select.sh
+. "$DOTFILES/scripts/bundle_select.sh"
 bundles_dir="$DOTFILES/Brewfile.d"
 bundles_sel="$HOME/.config/dotfiles/bundles"
 mkdir -p "$HOME/.config/dotfiles"
@@ -121,26 +126,11 @@ for bf in "$bundles_dir"/*.brewfile; do
   avail=(${avail[@]+"${avail[@]}"} "$(basename "$bf" .brewfile)")
 done
 
-# Write the selection file: a self-documenting header + the available bundles as
-# commented hints + the chosen names (bare, one per line). "$@" = chosen names.
-write_bundles() {
-  {
-    echo '# Opt-in Brewfile bundles for this machine, one name per line. Each maps'
-    echo '# to <repo>/Brewfile.d/<name>.brewfile. Lines starting with # are ignored.'
-    echo '# Edit and re-run install.sh to change what gets installed.'
-    echo '#'
-    echo '# Available bundles:'
-    for b in ${avail[@]+"${avail[@]}"}; do echo "#   $b"; done
-    echo
-    for n in "$@"; do echo "$n"; done
-  } > "$bundles_sel"
-}
-
 if [ -f "$bundles_sel" ]; then
   : # existing selection — use as-is, no prompt
 elif [ "${#avail[@]}" -eq 0 ]; then
   ui_detail "no bundles found in Brewfile.d/*.brewfile — baseline only"
-  write_bundles
+  write_bundles "$bundles_sel" ${avail[@]+"${avail[@]}"} --
 elif [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
   ui_active "select bundles  ·  TAB toggles · ENTER confirms · ESC = none"
   # fzf --multi over the discovered names; --preview cats the bundle so you see
@@ -157,18 +147,18 @@ elif [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
       || true
   )"
   # shellcheck disable=SC2046  # intentional split of the newline-separated picks
-  write_bundles $(printf '%s' "$picked")
+  write_bundles "$bundles_sel" ${avail[@]+"${avail[@]}"} -- $(printf '%s' "$picked")
   ui_detail "saved selection to ~/.config/dotfiles/bundles"
 else
   ui_detail "non-interactive / no fzf — baseline only; edit ~/.config/dotfiles/bundles to opt in"
-  write_bundles
+  write_bundles "$bundles_sel" ${avail[@]+"${avail[@]}"} --
 fi
 
-# Install each selected bundle. Same brew bundle call as the baseline; only the
-# file path convention changed (Brewfile.d/<name>.brewfile).
+# Install each selected bundle. parse_bundles yields the chosen names (blanks and
+# comments already stripped); same brew bundle call as the baseline, only the file
+# path convention differs (Brewfile.d/<name>.brewfile).
 installed_bundles=()
 while IFS= read -r bundle; do
-  case "$bundle" in '' | \#*) continue ;; esac
   bundle_file="$bundles_dir/$bundle.brewfile"
   if [ -f "$bundle_file" ]; then
     ui_active "installing opt-in bundle: $bundle"
@@ -177,7 +167,7 @@ while IFS= read -r bundle; do
   else
     ui_warn "skipping opt-in bundle '$bundle' (no $bundle_file)"
   fi
-done < "$bundles_sel"
+done < <(parse_bundles "$bundles_sel")
 
 if [ "${#installed_bundles[@]}" -eq 0 ]; then
   ui_ok "opt-in bundles: baseline only"
@@ -517,7 +507,7 @@ if command -v claude >/dev/null 2>&1; then
   done < <(printf '%s' "$resolved_mcp" | jq -r 'to_entries[] | "\(.key)\t\(.value | tojson)"')
   ui_ok "MCP servers registered"
 else
-  ui_warn "skipping Claude Code MCP setup (claude CLI not installed; see software_list.md)"
+  ui_warn "skipping Claude Code MCP setup (claude CLI not installed — step 11's install likely failed; re-run install.sh)"
 fi
 
 # --- 13. Ollama model for GitLens' local AI ---------------------------------

@@ -35,7 +35,9 @@ UNTESTED_FUNCTIONS = {
 # macOS defaults, the Dock), so the realistic safety net is shellcheck + the
 # consistency tests + a manual run on a throwaway VM, not a headless harness.
 UNTESTED_SCRIPTS = {
-    "install.sh": "mutates the host (stow/chsh/brew); guarded by shellcheck + consistency tests",
+    "install.sh": "orchestrates host-mutating steps (stow/chsh/brew/firewall/defaults); its one"
+    " piece of pure parsing logic is factored into scripts/bundle_select.sh and tested there."
+    " shellcheck + consistency tests guard the rest",
     "macos.sh": "writes macOS defaults; covered by shellcheck + manual VM runs",
     "dock.sh": "rebuilds the Dock via dockutil; covered by shellcheck + manual VM runs",
 }
