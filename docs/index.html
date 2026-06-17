@@ -15,6 +15,7 @@
       content="A declarative, idempotent macOS dotfiles repo: one command bootstraps the whole machine via Homebrew, GNU Stow, and fish."
     />
     <link rel="stylesheet" href="assets/style.css" />
+    <link rel="stylesheet" href="assets/asciinema-player.css" />
     <script>
       // Set theme before paint to avoid a flash of the wrong palette.
       (function () {
@@ -82,24 +83,18 @@
           <a class="btn btn--ghost" href="https://github.com/nivintw/dotfiles" rel="noopener">Fork on GitHub</a>
         </div>
 
-        <div class="term" aria-hidden="true">
+        <figure class="term term--cast">
           <div class="term__bar">
             <span class="term__dot" style="background: var(--term-red)"></span>
             <span class="term__dot" style="background: var(--term-yellow)"></span>
             <span class="term__dot" style="background: var(--term-green)"></span>
             <span class="term__title">~/dotfiles — new machine</span>
           </div>
-          <div class="term__body">
-            <div class="line"><span class="prompt">❯</span> <span class="cmd">git clone https://github.com/nivintw/dotfiles ~/dotfiles &amp;&amp; ~/dotfiles/install.sh</span></div>
-            <div class="line out"><strong>dotfiles bootstrap</strong></div>
-            <div class="line"><span class="ok">✔</span> <span class="out"><a href="https://brew.sh" rel="noopener">Homebrew</a> packages installed</span></div>
-            <div class="line"><span class="ok">✔</span> <span class="out">opt-in bundles: personal homelab</span></div>
-            <div class="line"><span class="ok">✔</span> <span class="out">dotfiles symlinked (stow, 0 conflicts)</span></div>
-            <div class="line"><span class="ok">✔</span> <span class="out">fish plugins (<a href="https://github.com/jorgebucaran/fisher" rel="noopener">fisher</a>) installed</span></div>
-            <div class="line"><span class="ok">✔</span> <span class="out"><a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a> MCP servers registered</span></div>
-            <div class="line out"><strong>dotfiles bootstrap complete</strong></div>
-          </div>
-        </div>
+          <div class="cast__player"
+               data-cast="casts/install.cast" data-cols="98" data-rows="30"
+               data-autoplay data-loop data-poster="npt:0:04"
+               aria-label="Recorded terminal demo: running install.sh to converge a Mac"></div>
+        </figure>
       </section>
 
       <section class="wrap">
@@ -210,6 +205,7 @@
       </div>
     </footer>
 
+    <script src="assets/asciinema-player.min.js"></script>
     <script src="assets/main.js"></script>
   </body>
 </html>

@@ -104,6 +104,11 @@
       const rows = el.getAttribute("data-rows");
       if (cols) opts.cols = Number(cols);
       if (rows) opts.rows = Number(rows);
+      // Optional hero behaviours (unset on the Commands page → unchanged there).
+      if (el.hasAttribute("data-autoplay")) opts.autoPlay = true;
+      if (el.hasAttribute("data-loop")) opts.loop = true;
+      const poster = el.getAttribute("data-poster");
+      if (poster) opts.poster = poster;
       try {
         window.AsciinemaPlayer.create(el.getAttribute("data-cast"), el, opts);
       } catch (e) {
