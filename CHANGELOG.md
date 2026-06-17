@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.2.0 (2026-06-17)
+
+### ✨ Features
+
+- make 1Password optional and add machine-local overlays
+
 ## v1.1.0 (2026-06-17)
 
 ### ✨ Features
