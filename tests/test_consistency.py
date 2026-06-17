@@ -10,9 +10,14 @@ are executable, and install.sh's managed-files list matches what's actually stow
 
 import os
 import re
+from typing import TYPE_CHECKING
 
+import pytest
 import yaml
 from conftest import REPO
+
+if TYPE_CHECKING:
+    import pathlib
 
 # Tools that must be installed on the machine for the scripts/hooks/tests to work,
 # mapped to the Brewfile package that provides them. The pre-commit hooks for
@@ -62,6 +67,33 @@ def test_local_hook_scripts_exist_and_are_executable() -> None:
         path = REPO / rel
         assert path.is_file(), f"hook references missing script: {rel}"
         assert os.access(path, os.X_OK), f"hook script not executable: {rel}"
+
+
+# An <a>/<\a> open or close tag. Literal `<a` shown in prose is HTML-escaped
+# (&lt;a&gt;) in these hand-written pages, so a raw match is always a real anchor.
+_ANCHOR_TAG = re.compile(r"<\s*(/?)\s*a\b", re.IGNORECASE)
+
+
+@pytest.mark.parametrize("html", sorted((REPO / "docs").glob("*.html")), ids=lambda p: p.name)
+def test_docs_have_no_nested_anchors(html: pathlib.Path) -> None:
+    """No docs page nests an <a> inside another <a>.
+
+    Nested anchors are invalid HTML: the browser silently closes the outer <a> at
+    the inner one, so a card-link whose text contains links gets torn apart — its
+    trailing content spills out of the card. The rendered DOM no longer shows the
+    nesting (the parser already un-nested it), so this is checked on the raw source.
+    """
+    depth = 0
+    bad: list[int] = []
+    for lineno, line in enumerate(html.read_text().splitlines(), start=1):
+        for match in _ANCHOR_TAG.finditer(line):
+            if match.group(1):  # closing </a>
+                depth = max(0, depth - 1)
+            else:  # opening <a>
+                if depth:
+                    bad.append(lineno)
+                depth += 1
+    assert not bad, f"{html.name}: nested <a> at line(s) {bad}"
 
 
 def test_install_managed_files_are_stowed() -> None:
