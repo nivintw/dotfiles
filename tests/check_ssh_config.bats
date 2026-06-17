@@ -70,3 +70,27 @@ Host github.com'
   [ "$status" -eq 1 ]
   [[ "$output" == *"IP literal"* ]]
 }
+
+@test "a ProxyJump to a concrete hostname fails the commit" {
+  check 'Host *
+    ProxyJump bastion.corp.internal'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"machine-specific directive"* ]]
+}
+
+@test "an IPv6 literal fails the commit" {
+  check 'Host *
+    ProxyJump fe80::1'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"IP literal"* ]]
+}
+
+@test "a Match block fails the commit" {
+  check 'Host *
+    AddKeysToAgent yes
+
+Match host prod
+    User deploy'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"machine-specific directive"* ]]
+}

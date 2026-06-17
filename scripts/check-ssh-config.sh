@@ -11,8 +11,9 @@
 #
 # Allowed in the tracked file: comments, blanks, `Include`, global options,
 # `Host *`, and `Host github.com` (universal, non-sensitive). Anything else —
-# another `Host` pattern, a `HostName`/`Hostname`, a `User`, or an IP literal —
-# is a finding.
+# another `Host` pattern; a `HostName`/`User`; a proxy/forward/`Match` directive
+# (`ProxyJump`, `ProxyCommand`, `Match`, `LocalForward`, `RemoteForward`,
+# `DynamicForward`, `RemoteCommand`); or an IPv4/IPv6 literal — is a finding.
 set -euo pipefail
 
 config="home/.ssh/config"
@@ -36,15 +37,18 @@ while IFS= read -r line; do
     continue
   fi
 
-  # Per-host specifics that imply a concrete machine.
-  if printf '%s' "$trimmed" | grep -qiE '^(HostName|User)[[:space:]]'; then
-    violations+=("machine-specific directive: $trimmed")
+  # Bare IP literals (IPv4 or IPv6) anywhere — checked before the directive match
+  # so an IP on any line (e.g. `ProxyJump 10.0.0.1`) is reported as an IP literal.
+  if printf '%s' "$trimmed" | grep -qE '(([0-9]{1,3}\.){3}[0-9]{1,3})|(([0-9a-fA-F]{0,4}:){2,}[0-9a-fA-F]{0,4})'; then
+    violations+=("IP literal: $trimmed")
     continue
   fi
 
-  # Bare IP literals anywhere.
-  if printf '%s' "$trimmed" | grep -qE '([0-9]{1,3}\.){3}[0-9]{1,3}'; then
-    violations+=("IP literal: $trimmed")
+  # Directives that name — or conditionally select — a concrete machine. Covers
+  # jump/proxy hosts and port forwards (whose arg is a concrete host even when it's
+  # a hostname, not an IP) plus `Match` blocks (host/user gated).
+  if printf '%s' "$trimmed" | grep -qiE '^(HostName|User|ProxyJump|ProxyCommand|Match|LocalForward|RemoteForward|DynamicForward|RemoteCommand)[[:space:]]'; then
+    violations+=("machine-specific directive: $trimmed")
     continue
   fi
 done < "$config"
