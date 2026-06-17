@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.0.2 (2026-06-17)
+
+### 🐛🚑️ Fixes
+
+- **ci**: serialize release runs and stamp the live main tip
+
 ## v1.0.1 (2026-06-17)
 
 ### 🐛🚑️ Fixes
