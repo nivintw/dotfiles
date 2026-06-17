@@ -297,6 +297,53 @@ td code { white-space: nowrap; }
 a.pill { color: var(--text); }
 a.pill:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
 
+/* ---- Sub-lede (secondary hero line) ------------------------------------ */
+.hero .lede--sub { font-size: 1.02rem; margin-top: -0.8rem; }
+.hero .lede--sub a { color: var(--accent); white-space: nowrap; }
+
+/* ---- kbd ---------------------------------------------------------------- */
+kbd {
+  display: inline-block;
+  padding: 0.05em 0.45em;
+  font-size: 0.82em;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+}
+
+/* ---- Asciinema casts ---------------------------------------------------- */
+.cast {
+  margin: 2rem 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.cast__player { width: 100%; }
+/* Player chrome already provides the window frame; keep our caption tidy. */
+.cast figcaption {
+  padding: 0.7rem 1.1rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.cast figcaption code { color: var(--text); }
+/* Fallback shown until the player script hydrates (or if it fails to load). */
+.cast__player:empty::before {
+  content: "▶ terminal cast — enable JavaScript to play";
+  display: block;
+  padding: 2.2rem 1.1rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.ap-player { font-size: 14px; }
+
 /* ---- Footer ------------------------------------------------------------- */
 .site-footer { border-top: 1px solid var(--border); padding: 2rem 0; color: var(--muted); font-size: 0.9rem; }
 .site-footer__inner { display: flex; flex-wrap: wrap; gap: 0.6rem 1.5rem; align-items: center; justify-content: space-between; }

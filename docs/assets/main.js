@@ -85,6 +85,33 @@
     pre.appendChild(btn);
   });
 
+  // ---- Asciinema casts -----------------------------------------------------
+  // Players are mounted only on pages that load asciinema-player.min.js (the
+  // Commands page). Each mount carries data-cast (the .cast file) and optional
+  // data-cols/data-rows. If the script didn't load, the CSS :empty fallback
+  // text stays visible — the page degrades gracefully.
+  const mounts = document.querySelectorAll(".cast__player[data-cast]");
+  if (mounts.length && window.AsciinemaPlayer) {
+    mounts.forEach(function (el) {
+      const opts = {
+        theme: "asciinema",
+        fit: "width",
+        controls: true,
+        terminalFontFamily:
+          '"MesloLGS NF", ui-monospace, SFMono-Regular, Menlo, monospace',
+      };
+      const cols = el.getAttribute("data-cols");
+      const rows = el.getAttribute("data-rows");
+      if (cols) opts.cols = Number(cols);
+      if (rows) opts.rows = Number(rows);
+      try {
+        window.AsciinemaPlayer.create(el.getAttribute("data-cast"), el, opts);
+      } catch (e) {
+        console.warn("asciinema player failed for", el.getAttribute("data-cast"), e);
+      }
+    });
+  }
+
   // ---- Footer year ---------------------------------------------------------
   const year = document.querySelector("[data-year]");
   if (year) year.textContent = String(new Date().getFullYear());

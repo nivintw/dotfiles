@@ -1,0 +1,197 @@
+<!--
+
+    SPDX-FileCopyrightText: © 2026 Tyler Nivin
+    SPDX-License-Identifier: MIT
+
+-->
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Commands · dotfiles</title>
+    <meta name="description" content="The custom fish functions this repo adds — fuzzy git checkout, live ripgrep search, a process killer, multi-repo helpers — shown running in recorded terminal casts." />
+    <link rel="stylesheet" href="assets/style.css" />
+    <link rel="stylesheet" href="assets/asciinema-player.css" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          document.documentElement.dataset.theme = t;
+        } catch (e) {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap site-header__inner">
+        <a class="brand" href="index.html" aria-label="dotfiles home">
+          <span class="brand__prompt">~/</span><span class="brand__path">dotfiles</span>
+          <span class="brand__cursor" aria-hidden="true"></span>
+        </a>
+        <button class="icon-btn nav-toggle" data-nav-toggle aria-label="Toggle navigation" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <nav class="nav" data-nav aria-label="Primary">
+          <a href="getting-started.html">Getting Started</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="stack.html">The Stack</a>
+          <a href="commands.html">Commands</a>
+          <a href="quality.html">Quality</a>
+          <a href="security.html">Security</a>
+          <a class="icon-btn" href="https://github.com/nivintw/dotfiles" aria-label="GitHub repository" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5Z"/></svg>
+          </a>
+          <button class="icon-btn" data-theme-toggle aria-label="Toggle light/dark theme">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <div class="wrap page-head">
+        <nav class="crumb" aria-label="Breadcrumb"><a href="index.html">Home</a> <span>/</span> <span>Commands</span></nav>
+        <h1>Commands</h1>
+        <p class="section-lede">Beyond the third-party tools on <a href="stack.html">The Stack</a>, the repo adds a small set of custom <a href="https://fishshell.com/" rel="noopener">fish</a> functions in <a href="https://github.com/nivintw/dotfiles/tree/main/home/.config/fish/functions" rel="noopener"><code>home/.config/fish/functions/</code></a>. The interesting ones are <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a>-driven — fuzzy git checkout, live full-text search, a process picker — so the demos below are <strong>recorded terminal casts</strong>: real runs, scrubbable, no autoplay.</p>
+      </div>
+
+      <section class="wrap">
+        <h2><span class="hash">#</span>Fuzzy git</h2>
+        <p class="section-lede"><a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> pickers over git, each with a commit-log preview pane. Type to filter, <kbd>Enter</kbd> to act.</p>
+
+        <figure class="cast">
+          <div class="cast__player" data-cast="casts/fco.cast" data-cols="92" data-rows="22" aria-label="Recorded terminal demo of the fco command"></div>
+          <figcaption><code>fco</code> — fuzzy-checkout any branch, local or remote (remotes get a tracking branch automatically).</figcaption>
+        </figure>
+
+        <div class="feature">
+          <span class="feature__mark">⎇</span>
+          <div><h3><code>fcor</code> · <code>gcor</code></h3><p>Two recency-oriented siblings of <code>fco</code>: <code>fcor</code> lists local branches by most-recent commit; <code>gcor</code> pulls from the reflog, so it surfaces branches you visited even after their remote was deleted.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">⌥</span>
+          <div><h3><code>gccd</code></h3><p><code>git clone</code> then <code>cd</code> into the new directory in one step — name inferred from the URL, or passed explicitly.</p></div>
+        </div>
+      </section>
+
+      <section class="wrap">
+        <h2><span class="hash">#</span>Search &amp; jump to code</h2>
+        <p class="section-lede"><a href="https://github.com/BurntSushi/ripgrep" rel="noopener">ripgrep</a> into <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> into <code>$EDITOR</code> — pick a match and land on the exact <code>file:line</code>.</p>
+
+        <figure class="cast">
+          <div class="cast__player" data-cast="casts/fif.cast" data-cols="92" data-rows="22" aria-label="Recorded terminal demo of the fif command"></div>
+          <figcaption><code>fif</code> — “find in files”: ripgrep <strong>re-runs on every keystroke</strong> with a preview pane; <kbd>Enter</kbd> opens the hit in your editor.</figcaption>
+        </figure>
+
+        <div class="feature">
+          <span class="feature__mark">⌕</span>
+          <div><h3><code>fsearch</code></h3><p>The one-shot variant: run ripgrep once for a pattern, fuzzy-filter the results, open the pick. Lighter than <code>fif</code> when you already know the term.</p></div>
+        </div>
+      </section>
+
+      <section class="wrap">
+        <h2><span class="hash">#</span>Processes &amp; the shell</h2>
+
+        <div class="feature">
+          <span class="feature__mark">⊗</span>
+          <div><h3><code>fkill</code></h3><p>Multi-select process picker over <code>ps</code> in <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a>: filter, <kbd>Tab</kbd> to mark several, <kbd>Enter</kbd> to kill. Sends <code>SIGTERM</code> by default (<code>fkill 9</code> for <code>SIGKILL</code>), and offers to retry under <code>sudo</code> if a kill is denied. <em>(No cast here on purpose — a real recording would show my live process list.)</em></p></div>
+        </div>
+
+        <figure class="cast">
+          <div class="cast__player" data-cast="casts/wtfis.cast" data-cols="92" data-rows="16" aria-label="Recorded terminal demo of the wtfis command"></div>
+          <figcaption><code>wtfis</code> — “what is this?”: resolves a name to alias / function / builtin / binary, following symlinks. Handy for untangling the <code>ls</code>→<code>eza</code> aliases.</figcaption>
+        </figure>
+
+        <div class="feature">
+          <span class="feature__mark">⌨︎</span>
+          <div><h3><code>pset</code></h3><p>Set an environment variable from a <strong>hidden prompt</strong> — the value never touches the command line or shell history. <code>pset GITHUB_TOKEN</code>, type the value, done.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">⎘</span>
+          <div><h3><code>pubkey</code></h3><p>Print an SSH public key and copy it to the clipboard in one move; lists the available keys if you name one that isn't there.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">⚑</span>
+          <div><h3><code>dnsflush</code></h3><p>Flush the macOS DNS cache and bounce <code>mDNSResponder</code> — the two-command incantation you can never remember.</p></div>
+        </div>
+      </section>
+
+      <section class="wrap">
+        <h2><span class="hash">#</span>Many directories at once</h2>
+        <p class="section-lede">Fan a command out across a tree — both handle paths with spaces/newlines safely.</p>
+
+        <figure class="cast">
+          <div class="cast__player" data-cast="casts/gs-all.cast" data-cols="92" data-rows="20" aria-label="Recorded terminal demo of the gs-all command"></div>
+          <figcaption><code>gs-all</code> — <code>git status</code> across every repo under <code>$PWD</code> at once. <code>gp-all</code> is the <code>git pull --ff-only</code> sibling.</figcaption>
+        </figure>
+
+        <div class="feature">
+          <span class="feature__mark">⊞</span>
+          <div><h3><code>eachdir</code> · <code>forrepos</code></h3><p>The generic engines underneath. <code>eachdir &lt;cmd&gt;</code> runs a command in each immediate subdirectory; <code>forrepos &lt;cmd&gt;</code> runs it at the root of every git repo in the tree (recursively). <code>gs-all</code>/<code>gp-all</code> are just <code>forrepos</code> with a fixed command.</p></div>
+        </div>
+        <div class="note note--warn">
+          <div class="note__title">No dry-run, no confirmation</div>
+          <code>forrepos</code> (and the <code>*-all</code> helpers) run your command in <em>every</em> repo it finds, with no preview. Great for <code>git status</code>; think twice before <code>forrepos git reset --hard</code>.
+        </div>
+      </section>
+
+      <section class="wrap">
+        <h2><span class="hash">#</span>Housekeeping</h2>
+
+        <figure class="cast">
+          <div class="cast__player" data-cast="casts/pyclean.cast" data-cols="92" data-rows="18" aria-label="Recorded terminal demo of the pyclean command"></div>
+          <figcaption><code>pyclean --dry-run</code> — preview the Python caches (<code>__pycache__</code>, <code>.pytest_cache</code>, <code>.mypy_cache</code>, <code>.ruff_cache</code>, <code>*.pyc</code>) it would delete; drop <code>--dry-run</code> to remove them.</figcaption>
+        </figure>
+
+        <div class="feature">
+          <span class="feature__mark">✂︎</span>
+          <div><h3><code>git_prune_local</code></h3><p>Delete local branches already merged into <code>main</code> — and it's careful about it: detects normal, rebase, <em>and</em> squash merges, and keeps a branch whose remote is gone but whose commits aren't in <code>main</code> yet. <code>--dry-run</code> shows the plan first. This is the one function with its own full <a href="quality.html#layer-2--tests">bats matrix</a>, because a bug here deletes work.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">▤</span>
+          <div><h3><code>launch-docs</code></h3><p>Serve this very docs site locally (<code>python -m http.server</code>), pick a free port, and open the browser once it's up. How these pages get previewed before they ship.</p></div>
+        </div>
+      </section>
+
+      <section class="wrap">
+        <h2><span class="hash">#</span>Abbreviations &amp; aliases</h2>
+        <p class="section-lede">The muscle-memory layer, in <a href="https://github.com/nivintw/dotfiles/tree/main/home/.config/fish/conf.d" rel="noopener"><code>conf.d/</code></a>. <a href="https://fishshell.com/docs/current/cmds/abbr.html" rel="noopener">Abbreviations</a> expand inline as you type (you see the real command before it runs); aliases are interactive-only, so scripts still get the real binaries.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Type</th><th>Short</th><th>Expands to</th></tr></thead>
+            <tbody>
+              <tr><td rowspan="6"><strong>abbr</strong></td><td><code>gco</code></td><td><code>git checkout</code></td></tr>
+              <tr><td><code>gst</code></td><td><code>git status</code></td></tr>
+              <tr><td><code>gp</code></td><td><code>git pull</code></td></tr>
+              <tr><td><code>gl</code></td><td><code>git log --oneline --graph --decorate</code></td></tr>
+              <tr><td><code>k</code></td><td><code>kubectl</code></td></tr>
+              <tr><td><code>ka</code></td><td><code>kubectl apply -f</code></td></tr>
+              <tr><td rowspan="4"><strong>alias</strong><br />(<a href="https://eza.rocks/" rel="noopener">eza</a>)</td><td><code>ls</code></td><td><code>eza --group-directories-first</code></td></tr>
+              <tr><td><code>ll</code></td><td><code>eza -l --git --icons=auto …</code></td></tr>
+              <tr><td><code>la</code></td><td><code>eza -la --git --icons=auto …</code></td></tr>
+              <tr><td><code>lt</code></td><td><code>eza --tree --level=2 --icons=auto</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          <div class="note__title">Forking?</div>
+          These are mine — bend them to your own habits. <code>wtfis &lt;name&gt;</code> (above) is the quickest way to see what any short command currently resolves to on your machine.
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap site-footer__inner">
+        <span>© <span data-year>2026</span> Tyler Nivin · MIT licensed</span>
+        <span><a href="index.html">↑ Home</a> · <a href="https://github.com/nivintw/dotfiles" rel="noopener">github.com/nivintw/dotfiles</a></span>
+      </div>
+    </footer>
+
+    <script src="assets/asciinema-player.min.js"></script>
+    <script src="assets/main.js"></script>
+  </body>
+</html>

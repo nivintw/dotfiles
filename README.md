@@ -5,7 +5,12 @@ SPDX-License-Identifier: MIT
 
 # dotfiles
 
-My personal dotfiles.
+My personal macOS setup — the same repo I clone onto every Mac I own: clone, run,
+done. It's also **built to be forked**: the machinery (Stow, the overlays, the
+idempotent bootstrap, the hook suite) is the reusable part; the package list, the
+Dock, and the keys are mine to swap for yours. If you're adopting it, fork it and
+see [**Make it yours**](https://nivintw.github.io/dotfiles/getting-started.html#make-it-yours)
+first.
 
 📖 **[Documentation site →](https://nivintw.github.io/dotfiles/)**
 
@@ -31,10 +36,13 @@ My personal dotfiles.
 
 ## Bootstrap a new machine
 
-No prerequisites — `install.sh` installs Homebrew and uv if they're missing.
+No toolchain to set up first — `install.sh` installs Homebrew and uv if they're
+missing. (Forking? It installs *my* taste — package list, Dock, macOS defaults,
+keys — so review and edit those before you run it; see
+[Make it yours](https://nivintw.github.io/dotfiles/getting-started.html#make-it-yours).)
 
 ```bash
-git clone <this-repo> ~/dotfiles
+git clone https://github.com/nivintw/dotfiles ~/dotfiles
 ~/dotfiles/install.sh
 ```
 
@@ -84,8 +92,10 @@ See [software_list.md](software_list.md) for the few human-only steps left
 
 The tracked files are a generic baseline. Anything machine-specific (a work box,
 a homelab node, personal-only software) lives in **untracked local files outside
-the repo** that the tracked config reads — so the same public repo is cloned
-everywhere and `git pull` never conflicts. No fork, no `work`/`personal` branch.
+the repo** that the tracked config reads — so I run one branch across all my
+machines: `git pull` never conflicts, nothing machine-specific leaks into the
+public repo, and there's no per-machine fork or `work`/`personal` branch. Once
+you've forked, the same pattern serves all of *your* machines too.
 `install.sh` creates each file empty on first run; fill in what a given machine
 needs.
 

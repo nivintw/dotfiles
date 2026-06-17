@@ -38,6 +38,7 @@
           <a href="getting-started.html">Getting Started</a>
           <a href="architecture.html">Architecture</a>
           <a href="stack.html">The Stack</a>
+          <a href="commands.html">Commands</a>
           <a href="quality.html">Quality</a>
           <a href="security.html">Security</a>
           <a class="icon-btn" href="https://github.com/nivintw/dotfiles" aria-label="GitHub repository" rel="noopener">
@@ -54,21 +55,22 @@
       <div class="wrap page-head">
         <nav class="crumb" aria-label="Breadcrumb"><a href="index.html">Home</a> <span>/</span> <span>Getting Started</span></nav>
         <h1>Getting Started</h1>
-        <p class="section-lede">No prerequisites — <code>install.sh</code> installs <a href="https://brew.sh" rel="noopener">Homebrew</a> and <a href="https://docs.astral.sh/uv/" rel="noopener">uv</a> itself if they're missing. Clone, run, done.</p>
+        <p class="section-lede">On my own machines this is the whole story: clone, run, done — no toolchain to set up first, since <code>install.sh</code> installs <a href="https://brew.sh" rel="noopener">Homebrew</a> and <a href="https://docs.astral.sh/uv/" rel="noopener">uv</a> if they're missing. If you're adopting it, there's one step before that: <a href="#make-it-yours">make it yours</a>.</p>
       </div>
 
       <section class="wrap">
-        <pre><code>git clone &lt;this-repo&gt; ~/dotfiles
+        <pre><code>git clone https://github.com/nivintw/dotfiles ~/dotfiles
 ~/dotfiles/install.sh</code></pre>
         <div class="note">
-          <div class="note__title">Idempotent — it converges, it doesn't preserve</div>
-          Safe to re-run at any point. <code>brew bundle</code> adopts already-installed
-          casks in place, <code>stow</code> refuses to clobber existing real files, and
-          MCP/symlink/shell steps all no-op when already done. The exception is the two
-          declarative system steps: <code>macos.sh</code> re-asserts its preferences and
-          <code>dock.sh</code> rebuilds the Dock from its list every run (the Dock step
-          prompts before doing so interactively) — config-as-code converging the machine
-          to the declared state, not preserving local tweaks.
+          <div class="note__title">It's idempotent — re-run it any time</div>
+          <code>install.sh</code> converges the machine to the declared state instead of
+          clobbering it: <code>brew bundle</code> adopts already-installed casks in place,
+          <code>stow</code> refuses to overwrite existing real files, and the
+          MCP/symlink/shell steps no-op once they're done. The two declarative system
+          steps are the deliberate exception — <code>macos.sh</code> re-asserts its
+          preferences and <code>dock.sh</code> rebuilds the Dock from its list every run
+          (the Dock step prompts first when interactive). That's by design: they reset
+          those surfaces to the repo's definition rather than preserving local tweaks.
         </div>
       </section>
 
@@ -80,7 +82,7 @@
             <thead><tr><th>#</th><th>Step</th><th>What happens</th></tr></thead>
             <tbody>
               <tr><td>0</td><td>Toolchain</td><td>Install Homebrew &amp; uv if missing</td></tr>
-              <tr><td>1</td><td><code>brew bundle</code></td><td>All baseline CLI tools, <a href="https://fishshell.com/" rel="noopener">fish</a>, GUI casks, the <a href="https://github.com/romkatv/powerlevel10k" rel="noopener">MesloLGS NF</a> font — then an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select for opt-in bundles (<code>personal</code>, <code>homelab</code>)</td></tr>
+              <tr><td>1</td><td><code>brew bundle</code></td><td>All baseline CLI tools, <a href="https://fishshell.com/" rel="noopener">fish</a>, GUI casks, the <a href="https://github.com/ryanoasis/nerd-fonts" rel="noopener">MesloLGS NF</a> font — then an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select for opt-in bundles (<code>personal</code>, <code>homelab</code>)</td></tr>
               <tr><td>2</td><td>Privileged block</td><td>Touch&nbsp;ID for sudo (<code>sudo_local</code> + <a href="https://github.com/fabianishere/pam_reattach" rel="noopener">pam_reattach</a>), fish as login shell, app firewall&nbsp;+ stealth mode — one sudo prompt</td></tr>
               <tr><td>3</td><td><a href="https://www.gnu.org/software/stow/" rel="noopener">Stow</a></td><td>Symlink <code>home/</code> into <code>$HOME</code></td></tr>
               <tr><td>4</td><td>Overlays</td><td>Seed untracked machine-local overlay files (SSH, git, fish, <code>Brewfile.local</code>) with commented examples</td></tr>
@@ -92,7 +94,7 @@
               <tr><td>10</td><td>git template</td><td><strong>Opt-in</strong>, off by default: only when <code>init.templateDir</code> is set in the untracked <code>~/.gitconfig_local</code> does this populate <a href="https://github.com/j178/prek" rel="noopener">prek</a> hook shims in <code>~/.config/git/template</code> (auto-install hooks on clone)</td></tr>
               <tr><td>11</td><td><a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a></td><td>Native installer (self-updating) → <code>~/.local/bin/claude</code></td></tr>
               <tr><td>12</td><td>MCP servers</td><td>Replay <code>claude_mcp.json</code> into <code>~/.claude.json</code> (secrets via <code>op inject</code>)</td></tr>
-              <tr><td>13</td><td><a href="https://ollama.com/" rel="noopener">Ollama</a></td><td>Start the server &amp; pull <a href="https://ollama.com/library/qwen2.5-coder" rel="noopener"><code>qwen2.5-coder:7b</code></a> for <a href="https://www.gitkraken.com/gitlens" rel="noopener">GitLens</a>' local AI</td></tr>
+              <tr><td>13</td><td><a href="https://ollama.com/" rel="noopener">Ollama</a></td><td>Start the server &amp; pull <a href="https://ollama.com/library/qwen2.5-coder" rel="noopener"><code>qwen2.5-coder:7b</code></a> (~4.7&nbsp;GB) for <a href="https://www.gitkraken.com/gitlens" rel="noopener">GitLens</a>' local AI — skip it by dropping the <code>ollama-app</code> cask</td></tr>
               <tr><td>14</td><td>macOS defaults</td><td><code>macos.sh</code> system tweaks</td></tr>
               <tr><td>15</td><td>Dock</td><td>Declarative Dock layout via <code>dock.sh</code></td></tr>
             </tbody>
@@ -101,6 +103,38 @@
         <div class="note note--warn">
           <div class="note__title">iTerm2</div>
           The iTerm step takes effect on iTerm's next launch — fully quit it first if it's already open.
+        </div>
+        <div class="note">
+          <div class="note__title">Several of these steps are <em>my</em> taste</div>
+          The package list (1), MCP servers (12), the Ollama model (13), the macOS
+          defaults (14), and the Dock (15) encode my preferences and my accounts — that
+          1Password path is my vault, not yours. They're the first things to change when
+          you fork. <a href="#make-it-yours">Make it yours</a> walks the exact files.
+        </div>
+      </section>
+
+      <section class="wrap" id="make-it-yours">
+        <h2><span class="hash">#</span>Make it yours</h2>
+        <p class="section-lede">This is my personal repo, not a configurable framework — so adopting it means <strong>forking and editing</strong>, not flipping options. The good news: the machinery (Stow, the overlays, the idempotent bootstrap, the hook suite) is generic and worth keeping as-is. What you change is the <em>contents</em>. Fork on GitHub, clone your fork, edit the files below, <em>then</em> run <code>install.sh</code>.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Change first</th><th>File</th><th>Why</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Your apps &amp; CLIs</strong></td><td><code>Brewfile</code>, <code>Brewfile.d/*.brewfile</code></td><td>The single most personal file. Swap in the software you actually use; my <code>personal</code>/<code>homelab</code> bundles are examples of the pattern, not a menu for you.</td></tr>
+              <tr><td><strong>The Dock</strong></td><td><code>dock.sh</code></td><td>It <em>rebuilds your Dock</em> from this list on every run. Edit it to your apps, or the first run replaces your Dock with mine.</td></tr>
+              <tr><td><strong>macOS defaults</strong></td><td><code>macos.sh</code></td><td>System tweaks to my taste (key-repeat, Finder, screenshots, …). Read it before running — it re-asserts every run.</td></tr>
+              <tr><td><strong>Git identity</strong></td><td><code>home/.gitconfig</code></td><td>Name, email, and the 1Password SSH signing key are mine. Point them at your own (or move identity into <code>~/.gitconfig_local</code>).</td></tr>
+              <tr><td><strong>Claude MCP servers</strong></td><td><code>claude_mcp.json</code></td><td>My server list, and the secret refs point at <em>my</em> 1Password vault (<code>op://MCP/…</code>). Repoint them at your vault items or remove the servers you don't want.</td></tr>
+              <tr><td><strong>Terminal &amp; SSH</strong></td><td><code>iterm2/</code>, <code>home/.ssh/config</code></td><td>iTerm prefs are my colors/keybinds; the SSH config is a generic baseline (real hosts belong in the untracked overlay). Both optional, but yours to set.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          <div class="note__title">It's yours now — no upstream to track</div>
+          Once forked, there's nothing to "pull from me." Take what's useful, delete what
+          isn't, and let it diverge. The <a href="#per-machine">overlay pattern</a> below is
+          how <em>one</em> repo serves all <em>your</em> machines without per-machine
+          branches — adopt that and you won't need to fork again per box.
         </div>
       </section>
 
@@ -125,9 +159,9 @@
         </div>
       </section>
 
-      <section class="wrap">
+      <section class="wrap" id="per-machine">
         <h2><span class="hash">#</span>Per-machine setup</h2>
-        <p class="section-lede">The same public repo runs on every machine; per-machine specifics live in untracked overlay files the bootstrap seeds. Fill in only what a given box needs — see <a href="architecture.html#overlays">Machine-local overlays</a> for the full pattern.</p>
+        <p class="section-lede">How I run one repo across a laptop, a work box, and a homelab node without a fork or a <code>work</code>/<code>personal</code> branch each: per-machine specifics live in untracked overlay files the bootstrap seeds, and each machine fills in only what it needs. Adopt the same pattern in your fork — see <a href="architecture.html#overlays">Machine-local overlays</a> for the full mechanism.</p>
         <div class="feature">
           <span class="feature__mark">⊕</span>
           <div><h3>Opt-in software bundles</h3><p>The bootstrap's bundle step shows an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select; pick <code>personal</code> and/or <code>homelab</code>. Your choice persists to <code>~/.config/dotfiles/bundles</code> for idempotent re-runs. To enable one later without re-running the installer:</p></div>
