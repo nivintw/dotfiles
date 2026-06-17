@@ -1,6 +1,0 @@
-pyproject.toml
-uv.lock
-CHANGELOG.md
-bump.log
-changed_files.txt
-release_notes.md

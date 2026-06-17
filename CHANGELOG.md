@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: © 2026 Tyler Nivin
+SPDX-License-Identifier: MIT
+-->
+
 ## v1.0.0 (2026-06-17)
 
 ### ✨ Features
