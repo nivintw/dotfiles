@@ -10,12 +10,12 @@ function wtfis --description "Explain what a name resolves to (alias / function 
     set -l missing 0
     for name in $argv
         echo "── $name ──"
-        if not type -a $name 2>/dev/null
+        if not type -a -- $name 2>/dev/null
             echo "  (not found)"
             set missing 1
         end
         # If it resolves to a file, show where a symlink ultimately points.
-        set -l path (command -v $name 2>/dev/null)
+        set -l path (command -v -- $name 2>/dev/null)
         if test -n "$path"; and test -L "$path"
             set -l real (readlink "$path")
             echo "  -> symlink to: $real"

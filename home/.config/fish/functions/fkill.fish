@@ -8,7 +8,7 @@ function fkill --description "Fuzzy-select and kill process(es). Default SIGTERM
     end
 
     # Validate the signal up front: a number (9), or a name (TERM / SIGTERM).
-    if not string match -qr '^([0-9]{1,3}|(SIG)?[A-Z]+[0-9]*)$' -- $signal
+    if not string match -qr '^([0-9]{1,3}|(SIG)?[A-Z]+)$' -- $signal
         echo "fkill: invalid signal '$signal' (use a number like 9 or a name like TERM)" >&2
         return 2
     end
