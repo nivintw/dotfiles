@@ -22,11 +22,13 @@
 #
 # SKIP=taplo,hawkeye-format: the prek hooks for these are `language: system` and expect
 # the Brewfile binaries, which aren't on the ubuntu runner — so prek skips them and they
-# run as their own steps below instead. hawkeye uses its official action (a prebuilt
-# binary, no Rust toolchain); taplo is the pinned upstream binary, matching the local
-# brew version so CI and local format identically. Both run in CHECK mode: CI verifies
-# headers/formatting and fails on drift — it doesn't rewrite (hawkeye writes; `reuse`
-# only verifies, so the two are complementary, not redundant).
+# run as their own steps below instead. Both fetch the pinned upstream binary (hawkeye and
+# taplo each ship prebuilt releases) and match the local brew version, so CI and local
+# check identically. We deliberately do NOT use korandoru/hawkeye's GitHub Action: it's a
+# Docker action that rebuilds its image on every run (~3 min of pure overhead for a check
+# that takes milliseconds) — the binary download is the same check in seconds. Both run in
+# CHECK mode: CI verifies headers/formatting and fails on drift — it doesn't rewrite
+# (hawkeye writes; `reuse` only verifies, so the two are complementary, not redundant).
 #
 # SKIP=no-commit-to-branch: a commit-time guard that blocks direct commits to main.
 # CI runs `prek run --all-files` while checked out *on* main, so the guard would
@@ -76,9 +78,11 @@ jobs:
       # taplo + hawkeye skip prek above (system binaries absent on the runner); run them
       # here instead so their checks are still enforced in CI.
       - name: Check SPDX license headers (hawkeye)
-        uses: korandoru/hawkeye@v6
-        with:
-          mode: check
+        run: |
+          curl -fsSL https://github.com/korandoru/hawkeye/releases/download/v6.5.1/hawkeye-x86_64-unknown-linux-gnu.tar.xz \
+            | tar -xJ --strip-components=1 -C "$RUNNER_TEMP" hawkeye-x86_64-unknown-linux-gnu/hawkeye
+          chmod +x "$RUNNER_TEMP/hawkeye"
+          "$RUNNER_TEMP/hawkeye" check
 
       - name: Check TOML formatting (taplo)
         run: |
