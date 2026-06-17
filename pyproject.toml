@@ -7,7 +7,7 @@
 # The fish-behavior tests are separate and run with bats (see tests/README.md).
 [project]
 name = "dotfiles"
-version = "0.1.0"
+version = "1.0.0"
 requires-python = ">=3.14"
 description = "Tyler Nivin's dotfiles and config repo"
 authors = [{ name = "Tyler Nivin", email = "tyler@nivin.tech" }]
