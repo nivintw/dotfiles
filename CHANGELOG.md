@@ -3,6 +3,25 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.0.1 (2026-06-17)
+
+### 🐛🚑️ Fixes
+
+- **docs**: unnest anchors in the Quality card so it renders intact
+
+### ⚡️ Performance
+
+- **ci**: run hawkeye from its release binary, not the Docker action
+
+### 💚👷 CI & Build
+
+- run hawkeye+taplo in CI, fix release scratch-file leak, header changelog
+
+### 📝💡 Documentation
+
+- redesign README as an inviting front door
+- remove dependency-free claim from site footer
+
 ## v1.0.0 (2026-06-17)
 
 ### ✨ Features
