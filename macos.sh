@@ -30,8 +30,8 @@ osascript -e 'tell application "System Settings" to quit' 2>/dev/null || true
 # Keyboard & text input
 # ---------------------------------------------------------------------------
 # Fast key repeat (KeyRepeat: lower = faster; 2 is very fast). Needs re-login.
-defaults write NSGlobalDomain KeyRepeat -int 2
-defaults write NSGlobalDomain InitialKeyRepeat -int 15
+defaults write NSGlobalDomain KeyRepeat -int 3
+defaults write NSGlobalDomain InitialKeyRepeat -int 18
 # Repeat the key when held instead of showing the accent-character popup
 # (great for coding/vim; turn OFF if you type accented characters often).
 defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
