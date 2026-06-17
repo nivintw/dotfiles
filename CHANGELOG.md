@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.1.0 (2026-06-17)
+
+### ✨ Features
+
+- **fish**: infer pubkey's SSH key from the agent
+
 ## v1.0.4 (2026-06-17)
 
 ### 🐛🚑️ Fixes
