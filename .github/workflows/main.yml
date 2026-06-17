@@ -30,6 +30,18 @@
 #     so the bump commit headline carries "[skip ci]" — GitHub then skips the run
 #     for that push.
 #
+# RACE SAFETY (overlapping merges): two merges in quick succession would otherwise
+# start two release runs that both try to stamp a bump, and the second's
+# createCommitOnBranch fails STALE_DATA (its expected head no longer matches main).
+# Two things prevent that, and must stay together:
+#   - `concurrency` serializes release runs (never cancel an in-flight one), so only
+#     one stamps at a time.
+#   - the release job operates on the LIVE main tip (checkout ref: main, and the
+#     expected head is read fresh from that checkout — NOT the triggering push SHA).
+#     So when a queued run finally starts, it sees the prior run's bump already on
+#     main, finds nothing new to release, and exits cleanly. If a real commit landed
+#     in between, it's swept into that run's release instead of being lost.
+#
 # REQUIRED REPO SETUP (must exist before the first release runs):
 #   - The `nivintw-ci-app` GitHub App: Repository permissions → Contents: Read and
 #     write; installed on this repo; in the `update-main` ruleset bypass list (it is).
@@ -51,6 +63,13 @@ on:
 permissions:
   contents: read
 
+# Serialize release runs so overlapping merges can't race the signed-bump stamping.
+# cancel-in-progress: false — NEVER cancel a run that may be mid-stamp; let the next
+# one queue and run after, against the (by then advanced) main tip. See RACE SAFETY.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # Same gate as the PR pipeline — defined once, in the reusable ci.yml.
   ci:
@@ -69,6 +88,10 @@ jobs:
 
       - uses: actions/checkout@v6
         with:
+          # Check out the LIVE main tip, not the triggering push SHA: if a prior
+          # release run already stamped a bump, this run must see it (and then find
+          # nothing to release) rather than target a stale head. See RACE SAFETY.
+          ref: main
           fetch-depth: 0 # full history + tags: the changelog and the no-tags (first-release) check
           token: ${{ steps.app-token.outputs.token }}
 
@@ -102,11 +125,15 @@ jobs:
                >"$RUNNER_TEMP/release_notes.md" 2>"$RUNNER_TEMP/bump.log"; then
             new="$(cz version --project)"
             git status --porcelain | cut -c4- >"$RUNNER_TEMP/changed_files.txt"
+            # The live main tip we're bumping ON TOP OF (HEAD hasn't moved — cz only
+            # touched working-tree files). createCommitOnBranch stamps against this
+            # exact oid, so a racing push is caught instead of silently overwritten.
             {
               echo "released=true"
               echo "old=$old"
               echo "new=$new"
               echo "tag=v$new"
+              echo "head=$(git rev-parse HEAD)"
             } >>"$GITHUB_OUTPUT"
           elif [ -z "$(git status --porcelain)" ]; then
             echo "Nothing to release — no version-bumping commits since the last tag."
@@ -122,12 +149,13 @@ jobs:
           OLD: ${{ steps.bump.outputs.old }}
           NEW: ${{ steps.bump.outputs.new }}
           TAG: ${{ steps.bump.outputs.tag }}
+          HEAD_OID: ${{ steps.bump.outputs.head }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const fs = require('fs');
             const { owner, repo } = context.repo;
-            const { OLD, NEW, TAG } = process.env;
+            const { OLD, NEW, TAG, HEAD_OID } = process.env;
 
             // The files cz changed (pyproject.toml, uv.lock, CHANGELOG.md, …),
             // listed in the scratch file under $RUNNER_TEMP. The paths themselves are
@@ -140,7 +168,9 @@ jobs:
 
             // createCommitOnBranch makes a GitHub-SIGNED commit (Verified),
             // attributed to the authenticated App, and fast-forwards main to it.
-            // expectedHeadOid guards against a racing push. "[skip ci]" in the
+            // expectedHeadOid is the live main tip we checked out and bumped on top of
+            // (NOT context.sha, the triggering push — that can be stale behind a prior
+            // release's bump). It guards against a racing push. "[skip ci]" in the
             // headline stops this push from re-triggering the pipeline.
             const res = await github.graphql(
               `mutation($input: CreateCommitOnBranchInput!) {
@@ -149,7 +179,7 @@ jobs:
               {
                 input: {
                   branch: { repositoryNameWithOwner: `${owner}/${repo}`, branchName: 'main' },
-                  expectedHeadOid: context.sha,
+                  expectedHeadOid: HEAD_OID,
                   message: { headline: `🔖 bump: ${OLD} → ${NEW} [skip ci]` },
                   fileChanges: { additions },
                 },
