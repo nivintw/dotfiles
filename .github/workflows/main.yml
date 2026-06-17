@@ -95,10 +95,13 @@ jobs:
           # commit/tag (the signed commit is made via the API below).
           # --changelog-to-stdout emits just the new section, for the Release body.
           # cz exits non-zero with nothing changed when there's nothing to release.
+          # Scratch files (notes/log/file-list) go to $RUNNER_TEMP, OUTSIDE the work
+          # tree — otherwise `git status` would list them as untracked and they'd get
+          # swept into changed_files.txt and committed into the bump commit.
           if cz bump --yes --files-only --changelog-to-stdout "${incr[@]}" \
-               >release_notes.md 2>bump.log; then
+               >"$RUNNER_TEMP/release_notes.md" 2>"$RUNNER_TEMP/bump.log"; then
             new="$(cz version --project)"
-            git status --porcelain | cut -c4- >changed_files.txt
+            git status --porcelain | cut -c4- >"$RUNNER_TEMP/changed_files.txt"
             {
               echo "released=true"
               echo "old=$old"
@@ -109,7 +112,7 @@ jobs:
             echo "Nothing to release — no version-bumping commits since the last tag."
             echo "released=false" >>"$GITHUB_OUTPUT"
           else
-            echo "cz bump failed:" >&2; cat bump.log >&2; exit 1
+            echo "cz bump failed:" >&2; cat "$RUNNER_TEMP/bump.log" >&2; exit 1
           fi
 
       - name: Create the signed bump commit + annotated tag as nivintw-ci-app
@@ -126,8 +129,10 @@ jobs:
             const { owner, repo } = context.repo;
             const { OLD, NEW, TAG } = process.env;
 
-            // The files cz changed (pyproject.toml, uv.lock, CHANGELOG.md, …).
-            const paths = fs.readFileSync('changed_files.txt', 'utf8').split('\n').filter(Boolean);
+            // The files cz changed (pyproject.toml, uv.lock, CHANGELOG.md, …),
+            // listed in the scratch file under $RUNNER_TEMP. The paths themselves are
+            // repo-relative, so they're read below relative to the working tree.
+            const paths = fs.readFileSync(`${process.env.RUNNER_TEMP}/changed_files.txt`, 'utf8').split('\n').filter(Boolean);
             const additions = paths.map((path) => ({
               path,
               contents: fs.readFileSync(path).toString('base64'),
@@ -167,4 +172,4 @@ jobs:
         run: |
           gh release create "${{ steps.bump.outputs.tag }}" \
             --title "${{ steps.bump.outputs.tag }}" \
-            --notes-file release_notes.md
+            --notes-file "$RUNNER_TEMP/release_notes.md"
