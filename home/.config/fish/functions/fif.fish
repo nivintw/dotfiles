@@ -33,7 +33,9 @@ function fif --description "Interactive ripgrep through file contents; enter ope
     or return
     test -n "$result"; or return
 
-    set -l file (string split -f1 : -- $result)
-    set -l line (string split -f2 : -- $result)
-    __open_at_line $file $line
+    # rg --column emits FILE:LINE:COL:TEXT. Extract FILE + LINE with a regex
+    # (non-greedy path) so a filename containing ':' isn't truncated by a split.
+    set -l parsed (string match -rg '^(.+?):(\d+):' -- $result)
+    or return
+    __open_at_line $parsed[1] $parsed[2]
 end

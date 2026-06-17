@@ -27,9 +27,13 @@ uv run pytest        # config validity (uv handles the Python env from pyproject
   gone remote, multi-commit squash-merge, gone-but-unmerged (kept), merged
   local-only, unmerged local-only (kept), the current branch (never deleted), and
   a live-upstream branch (kept). Non-destructive — only `--dry-run` is exercised.
-- **`fish_functions.bats`** — guard rails of the small wrapper helpers (usage
-  messages, "not a git repository", missing-key handling). The interactive happy
-  paths (fzf/rg/git pickers) aren't driven headless.
+- **`fish_functions.bats`** — guard rails of the small wrapper helpers: usage
+  messages, "not a git repository" (the fuzzy-checkout family), invalid-signal
+  rejection (`fkill`), and the `pyclean --dry-run` no-delete path. The interactive
+  happy paths (fzf/rg/git pickers) aren't driven headless.
+- **`check_ssh_config.bats`** — the `no-concrete-ssh-hosts` guard, both ways: a
+  generic config passes, while a planted concrete `Host`, `HostName`, `User`, or
+  IP literal fails the commit.
 
 The bats tests shell out to fish to source and exercise the functions, so no fish
 test framework is needed.
@@ -46,9 +50,31 @@ Brewfile doesn't declare.
   (plistlib).
 - **`test_secret_hygiene.py`** — `claude_mcp.json` carries no literal token and the
   GitHub MCP auth header stays an `op://` reference (the repo-specific invariant
-  gitleaks doesn't know).
+  gitleaks doesn't know). Also self-tests the detector — it must match synthetic
+  token shapes and must ignore the `op://` form — so the absence checks can't rot
+  into green-by-default.
 - **`test_manifests.py`** — Brewfile lines use known directives; `uv_tools.txt`
   lines are well-formed (`--with` flags paired).
 - **`test_consistency.py`** — tools the scripts/hooks use are in the Brewfile,
   local hook scripts exist and are executable, and `install.sh`'s managed-files
   list matches what's actually stowed under `home/`.
+- **`test_coverage.py`** — inventory coverage (see below).
+
+## Coverage — what it means here
+
+`coverage.py` is the wrong instrument for this repo: it would only measure these
+Python helpers, which are thin glue, and say nothing about the fish/bash/config
+that *is* the dotfiles. So the metric isn't line coverage — it's **inventory
+coverage**: every shippable artifact either has a behavior test or sits on an
+explicit, documented allowlist.
+
+`test_coverage.py` enforces it. Every fish function and shell script must be named
+in a bats test, or appear in the `UNTESTED_*` allowlist with a reason (the repo's
+"known gaps" ledger — e.g. interactive-only pickers, thin wrappers, host-mutating
+bootstrap). Add a function with no test and no entry, and the build goes red.
+Stale or now-tested allowlist entries fail too, so the ledger stays honest.
+
+This layers on top of the checks that already sweep *every* file: `fish -n`
+parses each function, `shellcheck` lints each script, and `test_data_files.py`
+parses each config. Inventory coverage answers the orthogonal question — does
+each thing that can break have *something* watching it?

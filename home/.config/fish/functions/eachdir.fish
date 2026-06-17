@@ -7,9 +7,11 @@ function eachdir --description "Run a (simple) command in each immediate subdire
         return 2
     end
 
-    for dir in (find . -mindepth 1 -maxdepth 1 -type d | sort)
+    # NUL-delimited (-print0 / sort -z / split0) so paths with spaces or
+    # newlines survive intact instead of being split into bogus iterations.
+    for dir in (find . -mindepth 1 -maxdepth 1 -type d -print0 | sort -z | string split0)
         echo "── "(string replace -r '^\./' '' -- $dir)" ──"
-        pushd $dir >/dev/null
+        pushd $dir >/dev/null; or continue
         $argv
         popd >/dev/null
     end

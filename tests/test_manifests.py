@@ -29,11 +29,17 @@ def _meaningful_lines(path: Path) -> Iterator[tuple[int, str]]:
             yield n, line
 
 
+def _brewfiles() -> list[Path]:
+    """The baseline Brewfile plus every opt-in bundle under Brewfile.d/."""
+    return [REPO / "Brewfile", *sorted((REPO / "Brewfile.d").glob("*"))]
+
+
 def test_brewfile_lines_have_known_directives() -> None:
-    """Every meaningful Brewfile line starts with a known bundle directive."""
+    """Every meaningful line in the Brewfile and its opt-in bundles is a known directive."""
     bad = [
-        (n, line)
-        for n, line in _meaningful_lines(REPO / "Brewfile")
+        (path.name, n, line)
+        for path in _brewfiles()
+        for n, line in _meaningful_lines(path)
         if line.split(" ", 1)[0] not in BREW_DIRECTIVES
     ]
     assert not bad, f"Brewfile lines with unknown directive: {bad}"

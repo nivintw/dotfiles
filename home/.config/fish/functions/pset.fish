@@ -7,6 +7,10 @@ function pset --description "Set an exported env var from a hidden prompt (keeps
         echo "usage: pset VARNAME" >&2
         return 2
     end
+    if not string match -qr '^[A-Za-z_][A-Za-z0-9_]*$' -- $name
+        echo "pset: invalid variable name '$name'" >&2
+        return 2
+    end
 
     # read -s: silent (no echo), and because the value is typed at a prompt it
     # never appears on the command line, so it isn't recorded in history.

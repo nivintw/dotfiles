@@ -87,3 +87,50 @@ fishrun() {
   [ "$status" -eq 2 ]
   [[ "$output" == *"usage: launch-docs"* ]]
 }
+
+# The fuzzy git-checkout helpers all bail before touching fzf when run outside a
+# git repo. Same guard, three functions — lock each one down.
+@test "fco outside a git repo errors and returns 1" {
+  cd "$NONREPO"
+  fishrun fco
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Not a git repository"* ]]
+}
+
+@test "fcor outside a git repo errors and returns 1" {
+  cd "$NONREPO"
+  fishrun fcor
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Not a git repository"* ]]
+}
+
+@test "gcor outside a git repo errors and returns 1" {
+  cd "$NONREPO"
+  fishrun gcor
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Not a git repository"* ]]
+}
+
+@test "gccd with no args prints usage and returns 2" {
+  fishrun gccd
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"usage: gccd"* ]]
+}
+
+@test "fkill with an invalid signal is rejected before touching fzf, returns 2" {
+  fishrun fkill not-a-signal
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"invalid signal"* ]]
+}
+
+@test "pyclean --dry-run lists caches without deleting them" {
+  tmp="$(mktemp -d)"
+  mkdir -p "$tmp/__pycache__"
+  touch "$tmp/__pycache__/foo.cpython-314.pyc"
+  cd "$tmp"
+  fishrun pyclean -n
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"dry run"* ]]
+  [ -d "$tmp/__pycache__" ]  # the cache dir must survive a dry run
+  rm -rf "$tmp"
+}

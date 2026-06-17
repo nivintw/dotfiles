@@ -111,12 +111,14 @@ prek install             # install the git hook</code></pre>
           <table>
             <thead><tr><th>Suite</th><th>File</th><th>Asserts</th></tr></thead>
             <tbody>
-              <tr><td rowspan="2"><strong>bats</strong><br />(fish behavior)</td><td><code>git_prune_local.bats</code></td><td>The full branch-state matrix — merged, squash-merged, gone-remote, current-branch — where a bug deletes work</td></tr>
+              <tr><td rowspan="3"><strong>bats</strong><br />(fish behavior)</td><td><code>git_prune_local.bats</code></td><td>The full branch-state matrix — merged, squash-merged, gone-remote, current-branch — where a bug deletes work</td></tr>
               <tr><td><code>fish_functions.bats</code></td><td>Usage / guard paths of the wrapper helpers</td></tr>
-              <tr><td rowspan="4"><strong>pytest</strong><br />(config validity)</td><td><code>test_data_files.py</code></td><td>Every <code>*.toml</code> parses; JSON/JSONC/plist load</td></tr>
+              <tr><td><code>check_ssh_config.bats</code></td><td>The SSH-host guard both ways — generic passes, a planted host/IP/user fails</td></tr>
+              <tr><td rowspan="5"><strong>pytest</strong><br />(config validity)</td><td><code>test_data_files.py</code></td><td>Every <code>*.toml</code> parses; JSON/JSONC/plist load</td></tr>
               <tr><td><code>test_secret_hygiene.py</code></td><td>No literal token in <code>claude_mcp.json</code>; GitHub auth stays an <code>op://</code> reference</td></tr>
               <tr><td><code>test_manifests.py</code></td><td>Brewfile directives &amp; <code>uv_tools.txt</code> lines are well-formed</td></tr>
               <tr><td><code>test_consistency.py</code></td><td>Tools used by hooks are in the Brewfile; managed files are stowed</td></tr>
+              <tr><td><code>test_coverage.py</code></td><td>Inventory coverage — every function &amp; script is tested or on a documented allowlist</td></tr>
             </tbody>
           </table>
         </div>
@@ -129,7 +131,7 @@ uv run pytest      # config validity &amp; cross-file consistency</code></pre>
         <p>The bootstrap mutates the system, needs sudo/Touch&nbsp;ID, and drives GUI apps — so full automation isn't worth it. CI does the cheap, high-value parts; the honest end-to-end test is a manual run on a throwaway macOS VM (run it <em>twice</em> — the second run is the real idempotency check).</p>
         <div class="note">
           <div class="note__title">CI — one fast job</div>
-          A <code>ubuntu-latest</code> <code>lint</code> job runs the <strong>same prek hooks</strong> (not a parallel set of actions), plus <code>bats tests/</code> and <code>uv run pytest</code>. It pre-installs the few <code>language: system</code> tools (fish, taplo, hawkeye); everything else self-bootstraps. Kept green-fast so it runs on every push.
+          A single <code>ubuntu-latest</code> job runs the <strong>same prek hooks</strong> (not a parallel set of actions), plus <code>bats tests/</code> and <code>uv run pytest</code>. It pre-installs the few <code>language: system</code> tools it needs (fish, bats, ripgrep); taplo and hawkeye are skipped in CI, and everything else self-bootstraps. Kept green-fast so it runs on every push.
         </div>
       </section>
 

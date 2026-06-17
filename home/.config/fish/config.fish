@@ -12,7 +12,9 @@ else
     # Tide is already configured via Fisher
 end
 
-zoxide init fish | source
+# Guard each init on its tool being present so a machine without zoxide/direnv
+# (e.g. a fresh clone, mid-bootstrap) doesn't spew "command not found" per shell.
+command -q zoxide; and zoxide init fish | source
 
 if status is-interactive
     # Commands to run in interactive sessions can go here
@@ -21,5 +23,7 @@ end
 
 # -------------- Configure direnv for Python virtual environments --------------
 # https://direnv.net/docs/hook.html
-direnv hook fish | source
-set -g direnv_fish_mode eval_on_arrow
+if command -q direnv
+    direnv hook fish | source
+    set -g direnv_fish_mode eval_on_arrow
+end

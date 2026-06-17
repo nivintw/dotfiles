@@ -54,6 +54,32 @@ command -v uv >/dev/null 2>&1 || { echo "uv install failed." >&2; exit 1; }
 log "Installing Homebrew packages (brew bundle)"
 brew bundle install --file="$DOTFILES/Brewfile"
 
+# Opt-in bundles (tracked, public): each name in ~/.config/dotfiles/brewfiles
+# (untracked, one per line) pulls in the matching Brewfile.d/<name>. Absent/empty
+# list = baseline only — which is exactly what a machine that shouldn't get the
+# personal apps leaves it as. See "Machine-local overlays" in the README.
+brew_bundle_list="$HOME/.config/dotfiles/brewfiles"
+if [ -f "$brew_bundle_list" ]; then
+  while IFS= read -r bundle; do
+    case "$bundle" in '' | \#*) continue ;; esac
+    bundle_file="$DOTFILES/Brewfile.d/$bundle"
+    if [ -f "$bundle_file" ]; then
+      log "Installing opt-in Brewfile bundle: $bundle"
+      brew bundle install --file="$bundle_file"
+    else
+      log "  skipping opt-in bundle '$bundle' (no $bundle_file)"
+    fi
+  done < "$brew_bundle_list"
+fi
+
+# Machine-PRIVATE additions (untracked, never in the public repo): work-only
+# software, etc. The Homebrew analogue of ~/.gitconfig_local and ~/.ssh/config.local.
+brew_local="$HOME/.config/dotfiles/Brewfile.local"
+if [ -f "$brew_local" ]; then
+  log "Installing machine-local Brewfile additions (Brewfile.local)"
+  brew bundle install --file="$brew_local"
+fi
+
 # --- 2. Privileged setup — one sudo session ---------------------------------
 # Everything that needs root is grouped here so a single authentication covers
 # it all: sudo caches its timestamp (~5 min) and these steps run back-to-back.
@@ -124,17 +150,57 @@ for f in "${managed_files[@]}"; do
   fi
 done
 
+# Preflight: stow aborts mid-run on the FIRST conflicting file, so do a dry run
+# (-n) first to surface ALL conflicts up front. The dry run plans without touching
+# the filesystem and applies stow's own ignore rules (.stow-local-ignore: .DS_Store,
+# the control file, README/LICENSE, etc.), so it never false-positives on files
+# stow wouldn't link anyway. This repo expects to own its paths in a clean $HOME;
+# the managed_files above are the known auto-generated exceptions, already cleared.
+log "Checking for stow conflicts (dry run)"
+if ! stow_plan="$(stow -n -v --dir="$DOTFILES" --target="$HOME" home 2>&1)"; then
+  echo "ERROR: these files already exist in \$HOME and would be replaced by this repo's versions, so aborting." >&2
+  echo "Back them up and/or merge their contents into the repo, then re-run install.sh:" >&2
+  printf '%s\n' "$stow_plan" | grep -E 'cannot stow' >&2 || printf '%s\n' "$stow_plan" >&2
+  exit 1
+fi
+
 log "Symlinking dotfiles with stow"
 stow --dir="$DOTFILES" --target="$HOME" home
 
-# --- 4. Local SSH host overrides --------------------------------------------
-# ~/.ssh/config Include-s this untracked file for machine-local host entries
-# (homelab/bastion/work). Create it empty so the Include never dangles.
+# --- 4. Machine-local overlay files -----------------------------------------
+# Untracked files the tracked config Include-s/sources for per-machine specifics
+# (work vs personal vs homelab). Created empty so the includes never dangle; put
+# machine-specific entries in them, never in the public repo. See README.
 if [ ! -f "$HOME/.ssh/config.local" ]; then
-  log "Creating ~/.ssh/config.local (untracked, for local host entries)"
+  log "Creating ~/.ssh/config.local (untracked SSH host overrides)"
   mkdir -p "$HOME/.ssh"
   touch "$HOME/.ssh/config.local"
   chmod 600 "$HOME/.ssh/config.local"
+fi
+# git Include-s this (home/.gitconfig [include]); git ignores a missing include,
+# but create it so it's discoverable. Good home for a per-dir work identity:
+#   [includeIf "gitdir:~/work/"]\n     path = ~/.gitconfig.work
+if [ ! -f "$HOME/.gitconfig_local" ]; then
+  log "Creating ~/.gitconfig_local (untracked git overrides)"
+  touch "$HOME/.gitconfig_local"
+fi
+# fish sources this (conf.d/zzz-local.fish); kept outside the stowed tree.
+if [ ! -f "$HOME/.config/dotfiles/local.fish" ]; then
+  log "Creating ~/.config/dotfiles/local.fish (untracked fish overrides)"
+  mkdir -p "$HOME/.config/dotfiles"
+  touch "$HOME/.config/dotfiles/local.fish"
+fi
+# brew reads this opt-in list (one Brewfile.d/<name> bundle name per line); see step 1.
+if [ ! -f "$HOME/.config/dotfiles/brewfiles" ]; then
+  log "Creating ~/.config/dotfiles/brewfiles (untracked opt-in Brewfile bundle list)"
+  mkdir -p "$HOME/.config/dotfiles"
+  touch "$HOME/.config/dotfiles/brewfiles"
+fi
+# brew loads this for machine-private additions (work-only software); see step 1.
+if [ ! -f "$HOME/.config/dotfiles/Brewfile.local" ]; then
+  log "Creating ~/.config/dotfiles/Brewfile.local (untracked Brewfile additions)"
+  mkdir -p "$HOME/.config/dotfiles"
+  touch "$HOME/.config/dotfiles/Brewfile.local"
 fi
 
 # --- 5. Fish plugins (fisher) -----------------------------------------------
@@ -179,11 +245,17 @@ defaults write com.googlecode.iterm2 LoadPrefsFromCustomFolder -bool true
 # --- 9. Python CLI tools (uv) -----------------------------------------------
 # Each non-comment line of uv_tools.txt is an argument list for uv tool install.
 log "Installing uv tools"
-while IFS= read -r tool; do
-  case "$tool" in '' | \#*) continue ;; esac
-  # shellcheck disable=SC2086  # intentional split: line holds tool + --with args
-  uv tool install $tool
-done < "$DOTFILES/uv_tools.txt"
+# set -f (noglob) for the loop: lines are split on IFS intentionally, but a
+# token like reuse[charset-normalizer] would otherwise glob-expand against the
+# caller's CWD. The subshell keeps noglob from leaking into the rest of install.
+(
+  set -f
+  while IFS= read -r tool; do
+    case "$tool" in '' | \#*) continue ;; esac
+    # shellcheck disable=SC2086  # intentional split: line holds tool + --with args
+    uv tool install $tool
+  done < "$DOTFILES/uv_tools.txt"
+)
 
 # uv drops tool shims into ~/.local/bin. Put it on PATH now so the later
 # `command -v` checks (prek, claude) find them even when uv was already present
@@ -320,7 +392,8 @@ log "Applying macOS system defaults (macos.sh)"
 bash "$DOTFILES/macos.sh"
 
 # --- 15. Dock layout --------------------------------------------------------
-# Declarative Dock via dockutil. Edit dock.sh to choose which apps are pinned.
+# Declarative Dock via dockutil. NOTE: this removes every current Dock item and
+# rebuilds from dock.sh's list. Edit dock.sh (or comment out this step) first.
 log "Applying Dock layout (dock.sh)"
 bash "$DOTFILES/dock.sh"
 

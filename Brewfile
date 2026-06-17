@@ -44,6 +44,7 @@ brew "zoxide"           # Smarter cd that learns your habits
 
 # --- Terminal & remote sessions --------------------------------------------
 brew "asciinema"        # Record and share terminal sessions
+brew "agg"              # Convert asciinema recordings (asciicasts) to animated GIFs
 brew "mosh"             # Remote terminal application (roaming, low-latency)
 brew "tmux"             # Terminal multiplexer
 
@@ -130,22 +131,14 @@ cask "rancher"               # Rancher Desktop (container runtime)
 cask "tflint"                # Terraform linter (from terraform-linters/tap)
 
 # --- Productivity & notes --------------------------------------------------
-cask "anki"                  # Spaced-repetition flashcards
-cask "microsoft-office"      # Office 365 (Word/Excel/PowerPoint/Outlook/OneNote + OneDrive). Bundles "Defender Shim"; conflicts with a standalone onedrive cask, so don't add one.
 cask "obsidian"              # Second-brain / notes
 
 # --- System utilities ------------------------------------------------------
 cask "appcleaner"            # Thorough app uninstaller (catches leftover support files)
-cask "resilio-sync"          # Peer-to-peer file sync
 
-# --- Media & gaming --------------------------------------------------------
-cask "discord"               # Discord
-cask "openemu"               # Retro game console emulator
-cask "steam"                 # Steam game client
-
-# --- Hardware & 3D printing ------------------------------------------------
-cask "creality-print"        # Slicer for Creality FDM 3D printers
-cask "raspberry-pi-imager"   # Flash Raspberry Pi OS images to SD cards
+# Software not wanted on every machine (gaming, 3D printing, plus Office/Anki/
+# sync that are personal or work-managed on a work box) lives in the opt-in
+# bundle Brewfile.d/personal — see "Machine-local overlays" in the README.
 
 # ===========================================================================
 # VS Code extensions (installed via `code --install-extension` by brew bundle)

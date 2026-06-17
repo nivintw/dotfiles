@@ -152,6 +152,8 @@
   "explorer.openEditors.minVisible": 6,
   "explorer.openEditors.sortOrder": "alphabetical",
   "files.associations": {
+    "Brewfile": "ruby",
+    "**/Brewfile.d/*": "ruby",
     "**/ansible/**/hosts": "ini",
     "**/ansible/**/inventory": "ini",
     "**/defaults/**/*.yml": "jinja-yaml",

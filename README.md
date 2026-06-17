@@ -47,10 +47,18 @@ idempotent — safe to re-run.
 The iTerm2 step takes effect on iTerm's next launch — fully quit it first if
 it's already open.
 
+`install.sh` bootstraps Homebrew, uv, fisher, and the Claude Code CLI by running
+each tool's **official upstream install script**, piped from its canonical URL.
+These run as your user — never under `sudo` (the script fences the few privileged
+steps separately) — but they are third-party code fetched at runtime: if you
+don't trust those sources, review them before running.
+
 `brew bundle` adopts casks whose app is already in `/Applications` (installed by
 hand) in place, not redownloaded or clobbered — no "install fails, adopt later"
-dance. Likewise `stow` refuses to clobber existing real files; if it reports
-conflicts, back up and remove those files, then re-run.
+dance. `stow` refuses to clobber existing real files, so `install.sh` **preflights
+for conflicts**: it assumes an otherwise clean `$HOME` for the paths it owns, and
+if it finds pre-existing real files there it lists them all and aborts up front,
+so you can back them up or merge their contents into the repo before re-running.
 
 See [software_list.md](software_list.md) for the few human-only steps left
 (Claude Code CLI, VS Code sign-in, 1Password browser extensions).
@@ -63,3 +71,53 @@ See [software_list.md](software_list.md) for the few human-only steps left
   `$HOME` — same file) and commit.
 - **See what's installed but not tracked** (prune candidates):
   `brew bundle cleanup --file=~/dotfiles/Brewfile`
+
+## Machine-local overlays
+
+The tracked files are a generic baseline. Anything machine-specific (a work box,
+a homelab node, personal-only software) lives in **untracked local files outside
+the repo** that the tracked config reads — so the same public repo is cloned
+everywhere and `git pull` never conflicts. No fork, no `work`/`personal` branch.
+`install.sh` creates each file empty on first run; fill in what a given machine
+needs.
+
+| Tool | Tracked baseline | Local overlay (untracked) | Wiring |
+|------|------------------|---------------------------|--------|
+| **SSH** | `home/.ssh/config` (generic) | `~/.ssh/config.local` | `Include`d by the tracked config |
+| **git** | `home/.gitconfig` | `~/.gitconfig_local` | `[include]` in the tracked config |
+| **fish** | `home/.config/fish/**` | `~/.config/dotfiles/local.fish` | sourced by `conf.d/zzz-local.fish` |
+| **Homebrew** | `Brewfile` + tracked `Brewfile.d/<name>` | `~/.config/dotfiles/Brewfile.local` (+ opt-in list) | loaded by `install.sh` |
+
+**Per-directory git identity** — the cleanest way to use a work email/signing key
+only in work repos, set in `~/.gitconfig_local`:
+
+```gitconfig
+[includeIf "gitdir:~/work/"]
+    path = ~/.gitconfig.work   # work email, signing key, etc. — untracked
+```
+
+**Homebrew — baseline, opt-in bundles, and private additions.** Three layers:
+
+- `Brewfile` — the **baseline**, installed on every machine.
+- `Brewfile.d/<name>` — **tracked** opt-in bundles (same Ruby DSL as `Brewfile`,
+  no extension). Public and version-controlled; a machine installs one only by
+  listing its name in `~/.config/dotfiles/brewfiles` (one per line). A machine
+  that lists nothing gets just the baseline.
+- `~/.config/dotfiles/Brewfile.local` — **untracked**, machine-private additions
+  (e.g. work-only software you don't want in the public repo). Auto-loaded by
+  `install.sh` if present — the Homebrew analogue of `~/.gitconfig_local`.
+
+```bash
+# This repo ships Brewfile.d/personal (Discord, Steam, OpenEmu, 3D-printing,
+# Raspberry Pi imager, plus Office/Anki/Resilio that are personal or
+# work-managed). To install it on a personal machine:
+echo personal >> ~/.config/dotfiles/brewfiles
+brew bundle install --file=~/dotfiles/Brewfile.d/personal   # or re-run install.sh
+
+# Work-only software the public repo shouldn't carry → the private file:
+printf 'cask "company-vpn"\n' >> ~/.config/dotfiles/Brewfile.local
+```
+
+Add a tracked bundle by dropping a new `Brewfile.d/<name>` with the standard
+two-line SPDX header (REUSE checks it's present; hawkeye leaves it alone — no
+`licenserc.toml` entry needed) and listing its name on machines that want it.

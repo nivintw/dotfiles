@@ -7,7 +7,7 @@
 #
 # Concrete hosts (homelab IPs, bastions, work boxes, per-host users) belong in
 # the untracked ~/.ssh/config.local, not in the repo. This fails the commit if a
-# real host entry sneaks back into home/.ssh/config. See docs/repo-review-*.md S2.
+# real host entry sneaks back into home/.ssh/config.
 #
 # Allowed in the tracked file: comments, blanks, `Include`, global options,
 # `Host *`, and `Host github.com` (universal, non-sensitive). Anything else —

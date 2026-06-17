@@ -35,7 +35,7 @@ apps=(
   # "/Applications/Discord.app"
 )
 
-log "Rebuilding the Dock"
+log "Rebuilding the Dock (removes ALL current Dock items, then re-pins the list below)"
 dockutil --no-restart --remove all >/dev/null
 
 for app in "${apps[@]}"; do

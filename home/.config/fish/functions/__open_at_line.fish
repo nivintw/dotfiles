@@ -5,8 +5,10 @@ function __open_at_line --description "Internal helper: open file:line in the us
     set -l file $argv[1]
     set -l line $argv[2]
 
-    set -l editor $EDITOR
-    if test -z "$editor"
+    # $EDITOR may carry flags (e.g. "code --wait"); split into a command + args
+    # list so the switch dispatches on the program name, not the whole string.
+    set -l editor (string split ' ' -- $EDITOR)
+    if test -z "$editor[1]"
         if command -q code
             set editor code
         else if command -q nvim
@@ -18,7 +20,7 @@ function __open_at_line --description "Internal helper: open file:line in the us
         end
     end
 
-    switch (basename $editor)
+    switch (basename $editor[1])
         case code code-insiders
             $editor --goto "$file:$line"
         case vim nvim vi
