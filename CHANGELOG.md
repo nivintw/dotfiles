@@ -3,6 +3,25 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.0.4 (2026-06-17)
+
+### 🐛🚑️ Fixes
+
+- **claude**: match nested .env paths in the Read deny rule
+- **fish**: validate fkill signals case-insensitively against kill -l
+
+### ♻️ Refactorings
+
+- **install**: factor bundle selection into a tested lib
+
+### ✅🤡🧪 Tests
+
+- **typos**: assert the two typos configs keep shared rules in sync
+
+### 📝💡 Documentation
+
+- slim software_list.md to human-only steps
+
 ## v1.0.3 (2026-06-17)
 
 ### 🐛🚑️ Fixes
