@@ -1,7 +1,16 @@
 # SPDX-FileCopyrightText: © 2026 Tyler Nivin
 # SPDX-License-Identifier: MIT
 
-# CI — runs the same prek hooks + tests as local, on a free ubuntu-latest runner.
+# CI — the shared lint/format/test job, runs the same prek hooks + tests as local
+# on a free ubuntu-latest runner.
+#
+# This is a REUSABLE workflow (on: workflow_call). It holds the quality gate only;
+# the triggers live in the callers:
+#   - pr.yml    (on: pull_request)        → this job. The open-PR pipeline.
+#   - main.yml  (on: push to main)        → this job, THEN a release stage that
+#                                            bumps the version + cuts a release.
+# Keeping it reusable means the gate is defined once and both pipelines run the
+# exact same checks.
 #
 # Most hooks self-bootstrap their pinned env (shellcheck, typos, gitleaks, ruff,
 # rumdl, validate-pyproject, uv-lock, the pre-commit-hooks builtins), so the only
@@ -32,7 +41,8 @@
 
 name: ci
 
-on: [push, pull_request]
+on:
+  workflow_call:
 
 permissions:
   contents: read

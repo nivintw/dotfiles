@@ -1,0 +1,165 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Main pipeline: on every push to main, run the SAME quality gate as PRs, then —
+# only here — a release stage. This is the GitHub Actions analogue of a Jenkins
+# `when { branch 'main' }` stage: a separate job (`release`) gated by `needs: ci`,
+# so it runs only after the gate passes and only on main (this workflow's trigger).
+#
+# RELEASE FLOW (commitizen decides everything; the API just stamps its decision):
+#   1. `cz bump --files-only` computes the next version from the conventional-commit
+#      history (first release with no tags → forced MAJOR → v1.0.0) and writes it
+#      into pyproject.toml + uv.lock + CHANGELOG.md, WITHOUT committing or tagging.
+#   2. The workflow creates a GitHub-SIGNED commit of those files via the GraphQL
+#      createCommitOnBranch mutation, authenticated as the `nivintw-ci-app` GitHub
+#      App → the commit is Verified and attributed to nivintw-ci-app[bot].
+#   3. An annotated tag v<version> is created pointing at that commit.
+#   4. A GitHub Release is cut, body = the changelog section cz generated.
+# The bump skips cleanly when a push has nothing releasable (docs/chore-only).
+#
+# WHY THIS SHAPE (vs. a plain `cz bump` + git push):
+#   - Auth: pushing to main must come from a ruleset BYPASS actor. The default
+#     GITHUB_TOKEN can't bypass a ruleset (it isn't a selectable actor); the
+#     `nivintw-ci-app` App is — it's in the `update-main` ruleset's bypass list.
+#   - Signatures: the `protect-main` ruleset requires verified-signed commits and
+#     is NEVER bypassed, so the bot's commit must be signed too. A locally-created
+#     `git commit` can only be signed by a key on the runner (tied to a user, not
+#     an App). createCommitOnBranch makes GitHub sign it server-side as the App —
+#     so no signing key is stored anywhere.
+#   - No loop: unlike GITHUB_TOKEN, an App token's push DOES re-trigger workflows,
+#     so the bump commit headline carries "[skip ci]" — GitHub then skips the run
+#     for that push.
+#
+# REQUIRED REPO SETUP (must exist before the first release runs):
+#   - The `nivintw-ci-app` GitHub App: Repository permissions → Contents: Read and
+#     write; installed on this repo; in the `update-main` ruleset bypass list (it is).
+#   - Two repository secrets from that App:
+#       CI_APP_ID           — the App's "App ID"
+#       CI_APP_PRIVATE_KEY  — a generated private key (.pem contents)
+
+name: main
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # Same gate as the PR pipeline — defined once, in the reusable ci.yml.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint a token for the nivintw-ci-app App (the ruleset bypass actor)
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags: the changelog and the no-tags (first-release) check
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install commitizen (+ gitmoji plugin)
+        run: |
+          uv tool install commitizen --with cz-conventional-gitmoji
+          echo "$HOME/.local/bin" >>"$GITHUB_PATH"
+
+      - name: Compute the release (commitizen — files only, no commit/tag)
+        id: bump
+        run: |
+          set -euo pipefail
+          old="$(cz version --project)"
+          # First release (no tags yet) cuts v1.0.0; after that the increment is
+          # inferred from the conventional-commit types since the last tag.
+          incr=()
+          if [ -z "$(git tag)" ]; then incr=(--increment MAJOR); fi
+          # --files-only writes pyproject + uv.lock + CHANGELOG.md but does NOT
+          # commit/tag (the signed commit is made via the API below).
+          # --changelog-to-stdout emits just the new section, for the Release body.
+          # cz exits non-zero with nothing changed when there's nothing to release.
+          if cz bump --yes --files-only --changelog-to-stdout "${incr[@]}" \
+               >release_notes.md 2>bump.log; then
+            new="$(cz version --project)"
+            git status --porcelain | cut -c4- >changed_files.txt
+            {
+              echo "released=true"
+              echo "old=$old"
+              echo "new=$new"
+              echo "tag=v$new"
+            } >>"$GITHUB_OUTPUT"
+          elif [ -z "$(git status --porcelain)" ]; then
+            echo "Nothing to release — no version-bumping commits since the last tag."
+            echo "released=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "cz bump failed:" >&2; cat bump.log >&2; exit 1
+          fi
+
+      - name: Create the signed bump commit + annotated tag as nivintw-ci-app
+        if: steps.bump.outputs.released == 'true'
+        uses: actions/github-script@v7
+        env:
+          OLD: ${{ steps.bump.outputs.old }}
+          NEW: ${{ steps.bump.outputs.new }}
+          TAG: ${{ steps.bump.outputs.tag }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const { OLD, NEW, TAG } = process.env;
+
+            // The files cz changed (pyproject.toml, uv.lock, CHANGELOG.md, …).
+            const paths = fs.readFileSync('changed_files.txt', 'utf8').split('\n').filter(Boolean);
+            const additions = paths.map((path) => ({
+              path,
+              contents: fs.readFileSync(path).toString('base64'),
+            }));
+
+            // createCommitOnBranch makes a GitHub-SIGNED commit (Verified),
+            // attributed to the authenticated App, and fast-forwards main to it.
+            // expectedHeadOid guards against a racing push. "[skip ci]" in the
+            // headline stops this push from re-triggering the pipeline.
+            const res = await github.graphql(
+              `mutation($input: CreateCommitOnBranchInput!) {
+                 createCommitOnBranch(input: $input) { commit { oid } }
+               }`,
+              {
+                input: {
+                  branch: { repositoryNameWithOwner: `${owner}/${repo}`, branchName: 'main' },
+                  expectedHeadOid: context.sha,
+                  message: { headline: `🔖 bump: ${OLD} → ${NEW} [skip ci]` },
+                  fileChanges: { additions },
+                },
+              },
+            );
+            const oid = res.createCommitOnBranch.commit.oid;
+            core.info(`signed bump commit: ${oid}`);
+
+            // Annotated tag → ref, pointing at the signed commit.
+            const tag = await github.rest.git.createTag({
+              owner, repo, tag: TAG, message: TAG, object: oid, type: 'commit',
+            });
+            await github.rest.git.createRef({ owner, repo, ref: `refs/tags/${TAG}`, sha: tag.data.sha });
+            core.info(`annotated tag ${TAG} → ${oid}`);
+
+      - name: Publish the GitHub Release
+        if: steps.bump.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh release create "${{ steps.bump.outputs.tag }}" \
+            --title "${{ steps.bump.outputs.tag }}" \
+            --notes-file release_notes.md
