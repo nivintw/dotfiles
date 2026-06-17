@@ -7,10 +7,12 @@ function wtfis --description "Explain what a name resolves to (alias / function 
         return 2
     end
 
+    set -l missing 0
     for name in $argv
         echo "── $name ──"
         if not type -a $name 2>/dev/null
             echo "  (not found)"
+            set missing 1
         end
         # If it resolves to a file, show where a symlink ultimately points.
         set -l path (command -v $name 2>/dev/null)
@@ -20,4 +22,6 @@ function wtfis --description "Explain what a name resolves to (alias / function 
         end
         echo
     end
+    # Non-zero when any name didn't resolve, so wtfis is usable in conditionals.
+    return $missing
 end

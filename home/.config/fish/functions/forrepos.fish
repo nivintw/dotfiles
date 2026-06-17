@@ -1,12 +1,17 @@
 # SPDX-FileCopyrightText: © 2026 Tyler Nivin
 # SPDX-License-Identifier: MIT
 
-function forrepos --description "Run a (simple) command at the root of every git repo under the current tree"
+function forrepos --description "Run a command at the root of EVERY git repo under \$PWD (fans out; no dry-run — careful with destructive commands)"
     if test -z "$argv[1]"
         echo "usage: forrepos <command...>" >&2
         return 2
     end
 
+    # CAUTION: this runs $argv at the root of every git repo found under the
+    # current directory, with no confirmation and no dry-run. A destructive
+    # command (e.g. `git reset --hard`) is multiplied across all of them. Run it
+    # from a directory whose repo set you know.
+    #
     # Find each repo by its .git entry, run at the repo root. Match both a .git
     # directory (normal clone) and a .git file (worktrees / submodules). -prune
     # stops the search from descending into a repo's own internals.
