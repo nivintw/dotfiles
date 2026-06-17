@@ -17,7 +17,7 @@
       "Bash(brew info *)"
     ],
     "deny": [
-      "Read(*.env)",
+      "Read(**/*.env)",
       "Read(**/*.pem)",
       "Bash(git clean*)"
     ],
