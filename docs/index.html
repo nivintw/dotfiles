@@ -103,7 +103,7 @@
           <span class="feature__mark">01</span>
           <div>
             <h3>Idempotent by default</h3>
-            <p><code>install.sh</code> is safe to re-run: it adopts already-present state instead of clobbering it, and never re-does work it's already done.</p>
+            <p><code>install.sh</code> is safe to re-run: it converges the machine to the declared state — adopting already-present packages and symlinks instead of clobbering them. The declarative <code>macos.sh</code> and <code>dock.sh</code> steps are the deliberate exception: they re-assert system prefs and rebuild the Dock each run (the Dock step prompts first when interactive).</p>
           </div>
         </div>
         <div class="feature">
@@ -181,7 +181,9 @@
           <div class="note__title">Idempotent</div>
           Re-run it any time. <code>brew bundle</code> adopts already-installed casks in
           place, <code>stow</code> refuses to clobber real files, and every step skips
-          work it has already done.
+          work it has already done — except the declarative <code>macos.sh</code> and
+          <code>dock.sh</code> steps, which re-assert system prefs and rebuild the Dock
+          by design (the Dock step prompts first when interactive).
         </div>
       </section>
     </main>

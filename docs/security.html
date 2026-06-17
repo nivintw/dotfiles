@@ -78,7 +78,7 @@
         <p>The tracked <code>~/.ssh/config</code> holds only a generic <code>Host *</code> block, the <code>Include</code>, and <code>Host github.com</code>. Real hosts, IPs, and usernames live in the untracked <code>~/.ssh/config.local</code>.</p>
         <div class="feature">
           <span class="feature__mark">🛡️</span>
-          <div><h3>Enforced, not just intended</h3><p>A custom <strong><code>no-concrete-ssh-hosts</code></strong> hook fails the commit if a concrete host/IP/user sneaks back into the tracked config — tested both ways (passes generic, fails on a planted host).</p></div>
+          <div><h3>Checked on every commit</h3><p>A custom <strong><code>no-concrete-ssh-hosts</code></strong> hook fails the commit when a concrete host slips into the tracked config — a non-generic <code>Host</code>, a <code>HostName</code>/<code>User</code>, a <code>ProxyJump</code>/<code>ProxyCommand</code>/<code>Match</code>/forward directive, or an IPv4/IPv6 literal. A backstop for the common shapes, not a guarantee against every hand-crafted line; tested both ways (passes generic, fails on a planted host).</p></div>
         </div>
       </section>
 
@@ -99,13 +99,6 @@
         </div>
       </section>
 
-      <section class="wrap">
-        <h2><span class="hash">#</span>An accepted tradeoff, named</h2>
-        <div class="note note--warn">
-          <div class="note__title">Auto-installed clone hooks</div>
-          <code>init.templateDir</code> makes a freshly cloned repo auto-install its pre-commit hooks — convenient, but a malicious <code>.pre-commit-config.yaml</code> in an untrusted clone would run on first commit. Accepted deliberately, because only trusted repos are cloned on these machines. Security choices here are <em>documented</em>, not silent.
-        </div>
-      </section>
     </main>
 
     <footer class="site-footer">
