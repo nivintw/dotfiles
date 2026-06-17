@@ -41,8 +41,16 @@ git clone <this-repo> ~/dotfiles
 `install.sh` runs, in order: install Homebrew + uv if missing → `brew bundle`
 (CLI tools, fish, GUI casks, the MesloLGS NF font) → set fish as the default
 login shell → `stow` symlinks → fisher plugins → point iTerm2 at `iterm2/` →
-uv tools → register Claude Code MCP servers (`claude_mcp.json`). It's
-idempotent — safe to re-run.
+uv tools → register Claude Code MCP servers (`claude_mcp.json`) → apply macOS
+system defaults (`macos.sh`) → rebuild the Dock (`dock.sh`).
+
+It's idempotent — safe to re-run — in the **config-as-code** sense: it
+*converges* the machine to the declared state rather than preserving local
+tweaks. Packages and symlinks are adopted, not clobbered; but the two
+declarative system steps **re-assert** themselves every run — `macos.sh`
+re-applies its system preferences and `dock.sh` **rebuilds the Dock** from its
+list (replacing your current one). The Dock rebuild prompts for confirmation
+when run interactively; everything else runs unattended.
 
 The iTerm2 step takes effect on iTerm's next launch — fully quit it first if
 it's already open.

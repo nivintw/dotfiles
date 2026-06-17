@@ -61,10 +61,14 @@
         <pre><code>git clone &lt;this-repo&gt; ~/dotfiles
 ~/dotfiles/install.sh</code></pre>
         <div class="note">
-          <div class="note__title">Idempotent</div>
+          <div class="note__title">Idempotent — it converges, it doesn't preserve</div>
           Safe to re-run at any point. <code>brew bundle</code> adopts already-installed
           casks in place, <code>stow</code> refuses to clobber existing real files, and
-          MCP/symlink/shell steps all no-op when already done.
+          MCP/symlink/shell steps all no-op when already done. The exception is the two
+          declarative system steps: <code>macos.sh</code> re-asserts its preferences and
+          <code>dock.sh</code> rebuilds the Dock from its list every run (the Dock step
+          prompts before doing so interactively) — config-as-code converging the machine
+          to the declared state, not preserving local tweaks.
         </div>
       </section>
 
@@ -85,7 +89,7 @@
               <tr><td>7</td><td><a href="https://atuin.sh/" rel="noopener">atuin</a></td><td>Backfill existing shell history into atuin's DB</td></tr>
               <tr><td>8</td><td><a href="https://iterm2.com/" rel="noopener">iTerm2</a></td><td>Point iTerm at the tracked <code>iterm2/</code> prefs folder</td></tr>
               <tr><td>9</td><td>uv tools</td><td>Install the Python CLIs in <code>uv_tools.txt</code></td></tr>
-              <tr><td>10</td><td>git template</td><td><a href="https://github.com/j178/prek" rel="noopener">prek</a> hook shims in <code>~/.config/git/template</code> (auto-install on clone)</td></tr>
+              <tr><td>10</td><td>git template</td><td><strong>Opt-in</strong>, off by default: only when <code>init.templateDir</code> is set in the untracked <code>~/.gitconfig_local</code> does this populate <a href="https://github.com/j178/prek" rel="noopener">prek</a> hook shims in <code>~/.config/git/template</code> (auto-install hooks on clone)</td></tr>
               <tr><td>11</td><td><a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a></td><td>Native installer (self-updating) → <code>~/.local/bin/claude</code></td></tr>
               <tr><td>12</td><td>MCP servers</td><td>Replay <code>claude_mcp.json</code> into <code>~/.claude.json</code> (secrets via <code>op inject</code>)</td></tr>
               <tr><td>13</td><td><a href="https://ollama.com/" rel="noopener">Ollama</a></td><td>Start the server &amp; pull <a href="https://ollama.com/library/qwen2.5-coder" rel="noopener"><code>qwen2.5-coder:7b</code></a> for <a href="https://www.gitkraken.com/gitlens" rel="noopener">GitLens</a>' local AI</td></tr>

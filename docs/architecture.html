@@ -158,7 +158,7 @@
         </div>
         <div class="feature">
           <span class="feature__mark">↻</span>
-          <div><h3>Re-run is the test</h3><p>The real idempotency check is running <code>install.sh</code> a second time: exit&nbsp;0, and no step reports re-doing work — no duplicate shells entry, no stow conflict, no duplicate MCP server.</p></div>
+          <div><h3>Re-run is the test</h3><p>The real idempotency check is running <code>install.sh</code> a second time: exit&nbsp;0, and no step reports re-doing work — no duplicate shells entry, no stow conflict, no duplicate MCP server. (The declarative <code>macos.sh</code> and <code>dock.sh</code> steps re-assert state by design — they converge rather than no-op.)</p></div>
         </div>
       </section>
     </main>
