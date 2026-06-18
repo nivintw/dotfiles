@@ -3,6 +3,21 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.9.0 (2026-06-18)
+
+### ✨ Features
+
+- **install**: Warm sudo through the bundle and add a verification summary
+
+### ♻️ Refactorings
+
+- **brew**: Move The Unarchiver out of the baseline into the personal bundle
+
+### 💚👷 CI & Build
+
+- **playwright**: Install only the Chromium headless shell, not the full browser
+- **playwright**: Key the browser cache on the Playwright version, not uv.lock
+
 ## v1.8.0 (2026-06-18)
 
 ### ✨ Features
