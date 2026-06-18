@@ -145,3 +145,21 @@ prune() {
   [[ "$output" == *"Skipping branch (has live upstream): live"* ]]
   [[ "$output" != *"Would delete"*"live"* ]]
 }
+
+# The dry-run tests above cover the decision; this one exercises the real delete
+# path — that a merged+gone branch is actually removed and the exit status is 0.
+@test "a merged + gone-remote branch is actually deleted (real run)" {
+  git checkout -q -b feature
+  git commit -q --allow-empty -m "feature work"
+  git push -q -u origin feature
+  git checkout -q main
+  git merge -q --no-ff feature -m "merge feature"
+  git push -q origin main
+  git push -q origin --delete feature
+
+  run fish -c "source '$FUNC'; git_prune_local"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Deleting merged branch: feature"* ]]
+  run git branch --list feature
+  [ -z "$output" ] # the branch is really gone
+}

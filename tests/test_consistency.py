@@ -13,6 +13,7 @@ import re
 import tomllib
 from typing import TYPE_CHECKING
 
+import json5
 import pytest
 import yaml
 from conftest import REPO
@@ -138,3 +139,29 @@ def test_install_managed_files_are_stowed() -> None:
     for rel in rels:
         source = REPO / "home" / rel
         assert source.exists(), f"install.sh manages $HOME/{rel} but home/{rel} isn't tracked"
+
+
+def test_claude_settings_hooks_point_at_executable_scripts() -> None:
+    """Each hook wired in the project .claude/settings.json references a real, executable script.
+
+    The analogue of test_local_hook_scripts_exist_and_are_executable, for the Claude
+    Code hooks: if a hook script is renamed or its path in settings drifts, the hook
+    silently stops firing — this turns that into a red build. The hooks are project-
+    scoped, so they live in the repo-root .claude/settings.json (not the stowed
+    home/.claude/settings.json, which only carries global prefs).
+    """
+    settings = json5.loads((REPO / ".claude" / "settings.json").read_text())
+    commands = [
+        hook["command"]
+        for group in settings.get("hooks", {}).values()
+        for entry in group
+        for hook in entry.get("hooks", [])
+        if hook.get("type") == "command"
+    ]
+    assert commands, "expected hook commands wired in home/.claude/settings.json"
+    for cmd in commands:
+        match = re.search(r"\.claude/hooks/[\w.+-]+\.sh", cmd)
+        assert match, f"hook command doesn't reference a .claude/hooks script: {cmd}"
+        path = REPO / match.group(0)
+        assert path.is_file(), f"settings.json hook references missing script: {match.group(0)}"
+        assert os.access(path, os.X_OK), f"hook script not executable: {match.group(0)}"

@@ -29,18 +29,35 @@ UNTESTED_FUNCTIONS = {
     "fif": "interactive fzf+rg picker; its only non-interactive branch is the rg-missing dep guard",
     "gp-all": "thin wrapper that delegates to the tested forrepos",
     "gs-all": "thin wrapper that delegates to the tested forrepos",
+    "_pubkey_emit": "internal helper of pubkey; its empty-key guard is exercised by"
+    " pubkey's bats tests",
 }
 
 # Shell scripts without a behavior test. These mutate the host (stow, chsh, brew,
 # macOS defaults, the Dock), so the realistic safety net is shellcheck + the
 # consistency tests + a manual run on a throwaway VM, not a headless harness.
 UNTESTED_SCRIPTS = {
-    "install.sh": "orchestrates host-mutating steps (stow/chsh/brew/firewall/defaults); its one"
-    " piece of pure parsing logic is factored into scripts/bundle_select.sh and tested there."
-    " shellcheck + consistency tests guard the rest",
+    "install.sh": "orchestrates host-mutating steps (stow/chsh/brew/firewall/defaults). The"
+    " bundle round-trip logic is factored into scripts/bundle_select.sh and tested there; the"
+    " interactive bundle SELECTION around it (legacy migration, discovery, non-interactive"
+    " fallback) is not yet extracted and rides on shellcheck + manual VM runs; the rest is"
+    " host-mutating glue guarded by shellcheck + the consistency tests",
     "macos.sh": "writes macOS defaults; covered by shellcheck + manual VM runs",
     "dock.sh": "rebuilds the Dock via dockutil; covered by shellcheck + manual VM runs",
 }
+
+
+def _fish_function_names() -> set[str]:
+    """Every function DEFINED across the autoload files, not just one per file.
+
+    Inventory by `function <name>` declaration rather than file stem, so a second
+    helper added to an existing file (e.g. `_pubkey_emit` in pubkey.fish) can't slip
+    past the coverage gate invisibly.
+    """
+    names: set[str] = set()
+    for p in tracked("home/.config/fish/functions/*.fish"):
+        names |= set(re.findall(r"^function\s+(\S+)", p.read_text(), re.MULTILINE))
+    return names
 
 
 def _bats_text() -> str:
@@ -54,7 +71,7 @@ def _referenced(name: str, haystack: str) -> bool:
 
 def test_every_fish_function_is_tested_or_allowlisted() -> None:
     """Each fish function is named in a bats test or sits on the documented allowlist."""
-    functions = {p.stem for p in tracked("home/.config/fish/functions/*.fish")}
+    functions = _fish_function_names()
     assert functions, "found no fish functions to check"
 
     bats = _bats_text()
@@ -82,7 +99,7 @@ def test_every_shell_script_is_tested_or_allowlisted() -> None:
 
 def test_allowlists_have_no_stale_entries() -> None:
     """Every allowlisted name must still exist — no rot when files are renamed."""
-    functions = {p.stem for p in tracked("home/.config/fish/functions/*.fish")}
+    functions = _fish_function_names()
     scripts = {p.name for p in tracked("*.sh", "scripts/*.sh")}
 
     stale_funcs = set(UNTESTED_FUNCTIONS) - functions
