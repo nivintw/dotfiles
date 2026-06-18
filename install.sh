@@ -73,8 +73,8 @@ $list
 
 With no --bundle/--no-bundles flag on an interactive terminal, install.sh opens
 an fzf multi-select pre-seeded with the current selection, ready to amend.
-Non-interactively it reuses ~/.config/dotfiles/bundles, or installs the baseline
-only when that file is absent.
+Without a usable fzf picker (non-interactive, or fzf missing) it reuses
+~/.config/dotfiles/bundles, or installs the baseline only when that file is absent.
 EOF
 }
 
@@ -90,6 +90,16 @@ require_known_bundle() {
   exit 2
 }
 
+# Append NAME to requested_bundles unless it's already there, so a repeated
+# --bundle flag persists one line per bundle, not a duplicate.
+add_requested_bundle() {
+  local want="$1" b
+  for b in ${requested_bundles[@]+"${requested_bundles[@]}"}; do
+    [ "$b" = "$want" ] && return 0
+  done
+  requested_bundles=(${requested_bundles[@]+"${requested_bundles[@]}"} "$want")
+}
+
 # Parse CLI args. --bundle/--no-bundles set an authoritative selection that
 # bypasses the picker; bundles_from_flags records that a flag was given, so an
 # explicit empty selection (--no-bundles) stays distinct from "no flag → prompt".
@@ -103,12 +113,12 @@ while [ "$#" -gt 0 ]; do
       shift
       [ "$#" -gt 0 ] || { ui_err "--bundle requires a NAME"; exit 2; }
       require_known_bundle "$1"
-      requested_bundles=(${requested_bundles[@]+"${requested_bundles[@]}"} "$1")
+      add_requested_bundle "$1"
       bundles_from_flags=1; shift ;;
     --bundle=*)
       _name="${1#--bundle=}"
       require_known_bundle "$_name"
-      requested_bundles=(${requested_bundles[@]+"${requested_bundles[@]}"} "$_name")
+      add_requested_bundle "$_name"
       bundles_from_flags=1; shift ;;
     --) shift; break ;;
     -* | *) ui_err "unexpected argument: $1"; echo >&2; usage >&2; exit 2 ;;
@@ -168,10 +178,12 @@ ui_ok "Homebrew packages installed"
 
 # Opt-in bundles (tracked, public): each Brewfile.d/<name>.brewfile is an overlay
 # of software not wanted on every machine. The per-machine selection lives in
-# ~/.config/dotfiles/bundles (untracked, one bundle name per line). Precedence:
+# ~/.config/dotfiles/bundles (untracked, one bundle name per line). Precedence,
+# matching the if/elif chain below in order:
 #   - --bundle/--no-bundles flags  -> authoritative, validated, persisted, no prompt (scriptable)
+#   - else no bundles available    -> baseline only (nothing to pick)
 #   - else TTY + fzf               -> interactive picker, pre-seeded with the current selection
-#   - else existing selection file -> reuse verbatim (idempotent non-TTY / CI re-runs)
+#   - else existing selection file -> reuse as-is, no picker (idempotent non-TTY / CI re-runs)
 #   - else                         -> baseline only, seed a commented template
 # Absent/empty selection = baseline only, exactly what a machine that shouldn't get
 # the personal apps leaves it as. See "Machine-local overlays" in the README.
@@ -213,11 +225,16 @@ elif [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
       current=(${current[@]+"${current[@]}"} "$_b")
     done < <(parse_bundles "$bundles_sel")
   fi
+  # The pre-seed positions are 1-based over the SAME "$avail" order the printf
+  # below feeds fzf — keep these two expansions identically ordered or the binds
+  # would pre-select the wrong rows.
   preseed="$(fzf_preselect_bind ${avail[@]+"${avail[@]}"} -- ${current[@]+"${current[@]}"})"
   fzf_seed=()
   [ -n "$preseed" ] && fzf_seed=(--bind "$preseed")
-  # ESC/ctrl-c exit non-zero (130); `|| fzf_rc=$?` keeps `set -e` from aborting.
-  # --preview cats the bundle so you see its casks/brews before opting in.
+  # ESC/ctrl-c/error all exit non-zero; `|| fzf_rc=$?` keeps `set -e` from
+  # aborting, and any non-zero is treated as a cancel below (leaves the existing
+  # selection untouched — the safe default). --preview cats the bundle so you
+  # see its casks/brews before opting in.
   fzf_rc=0
   picked="$(
     printf '%s\n' ${avail[@]+"${avail[@]}"} \
