@@ -121,7 +121,7 @@
             <thead><tr><th>Tool</th><th>Tracked baseline</th><th>Untracked overlay</th><th>Wiring</th></tr></thead>
             <tbody>
               <tr><td>SSH</td><td><code>home/.ssh/config</code></td><td><code>~/.ssh/config.local</code></td><td><code>Include</code>d by the tracked config</td></tr>
-              <tr><td>git</td><td><code>home/.gitconfig</code></td><td><code>~/.gitconfig_local</code></td><td><code>[include]</code> in the tracked config</td></tr>
+              <tr><td>git</td><td><code>home/.gitconfig</code></td><td><code>~/.gitconfig_local</code></td><td><code>[include]</code>d <strong>last</strong> by the tracked config (overlay wins for every key, incl. identity); a pre-existing <code>~/.gitconfig</code> is backed up + folded in</td></tr>
               <tr><td>fish</td><td><code>home/.config/fish/**</code></td><td><code>~/.config/dotfiles/local.fish</code></td><td>sourced by <code>conf.d/zzz-local.fish</code></td></tr>
               <tr><td>Homebrew</td><td><code>Brewfile</code> + <code>Brewfile.d/*.brewfile</code></td><td><code>~/.config/dotfiles/Brewfile.local</code></td><td>loaded by <code>install.sh</code></td></tr>
               <tr><td>Claude memory</td><td><code>home/.claude/CLAUDE.md</code></td><td><code>~/.config/dotfiles/CLAUDE.local.md</code></td><td><code>@</code>-imported by the tracked <code>CLAUDE.md</code></td></tr>

@@ -83,7 +83,7 @@ given machine needs.
 | Tool | Tracked baseline | Local overlay (untracked) | Wiring |
 | --- | --- | --- | --- |
 | **SSH** | `home/.ssh/config` | `~/.ssh/config.local` | `Include`d by the tracked config |
-| **git** | `home/.gitconfig` | `~/.gitconfig_local` | `[include]` in the tracked config |
+| **git** | `home/.gitconfig` | `~/.gitconfig_local` | `[include]`d **last** by the tracked config (overlay wins for every key, incl. identity) |
 | **fish** | `home/.config/fish/**` | `~/.config/dotfiles/local.fish` | sourced by `conf.d/zzz-local.fish` |
 | **Homebrew** | `Brewfile` + `Brewfile.d/*` | `~/.config/dotfiles/Brewfile.local` | auto-loaded by `install.sh` |
 | **Claude memory** | `home/.claude/CLAUDE.md` | `~/.config/dotfiles/CLAUDE.local.md` | `@`-imported by the tracked `CLAUDE.md` |
@@ -96,6 +96,13 @@ signing, the `op://` MCP token, the desktop app). On a machine without it, the i
 degrades gracefully: 1Password is an opt-in `1password` bundle (so it's simply not
 installed), `install.sh` disables commit signing in `~/.gitconfig_local`, and the
 GitHub MCP server falls back to a `GITHUB_PERSONAL_ACCESS_TOKEN` from the environment.
+
+**Git identity lives in the overlay.** The tracked `home/.gitconfig` ships **no**
+`[user]` block — set your `name`/`email`/`signingkey` in `~/.gitconfig_local`
+(`install.sh` seeds it with a commented stanza). On a fresh machine that already
+has a real `~/.gitconfig`, `install.sh` **backs it up** to `~/.gitconfig.pre-stow.bak`
+and folds its contents into `~/.gitconfig_local` before stowing — so nothing is
+stomped and your existing settings keep applying (and override the baseline).
 
 **Per-directory git identity** — the clean way to use a work email and signing key
 only inside work repos:

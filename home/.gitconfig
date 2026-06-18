@@ -6,10 +6,9 @@
 	# ~/.config/git/ignore automatically when it's unset (that's where the
 	# global ignore now lives — see home/.config/git/ignore).
 	pager = delta
-[user]
-	name = Tyler Nivin
-	email = tyler.nivin@gmail.com
-	signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK+gQ3ljvXAaFK2HsCuwsH6f6mzmMdjfHta8OA0h4Jp/
+	# No [user] identity here on purpose: name/email/signingkey are machine-local,
+	# not public defaults, so they live in ~/.gitconfig_local (Include-d at the end
+	# of this file). install.sh seeds that file with a commented identity stanza.
 [init]
 	defaultBranch = main
 	; Ship our own git template so every fresh clone gets a post-checkout hook that
@@ -65,9 +64,6 @@
 	autocorrect = prompt   # ask before running an unambiguous mistyped subcommand
 [transfer]
 	fsckObjects = true     # validate object integrity on fetch (supply-chain hygiene)
-[include]
-	# Per-machine overrides (work vs personal vs homelab) outside the tracked file.
-	path = ~/.gitconfig_local
 # URL shorthands: `git clone gh:owner/repo` etc.
 [url "git@github.com:"]
 	insteadOf = gh:
@@ -91,3 +87,9 @@
 	show-stashes = stash list --format='%gd: %s'
 	# AST-aware structural diff via difftastic.
 	dft = difftool -t difftastic
+[include]
+	# Per-machine overrides (work vs personal vs homelab) outside the tracked file —
+	# git identity, work includeIf rules, signing tweaks. KEPT LAST so the overlay
+	# wins over every key above it. install.sh backs up and folds any pre-existing
+	# ~/.gitconfig into this file on a fresh machine, and seeds it otherwise.
+	path = ~/.gitconfig_local

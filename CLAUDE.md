@@ -39,6 +39,13 @@ bats tests/            # fish/shell behavior (needs bats-core + fish, both in th
   `install.sh` run folds whatever they changed into this machine's overlay — not the
   repo. Change shared defaults by editing `claude_settings.json` and re-running
   install. Merge logic + caveats live in `scripts/claude_settings_merge.sh`.
+- **`.gitconfig` overlays via git's native `[include]`, not a generated merge.** The
+  tracked `home/.gitconfig` is stowed and `[include]`s `~/.gitconfig_local` **last**,
+  so the overlay wins for every key. It ships **no `[user]` identity** — that lives in
+  the overlay. A pre-existing real `~/.gitconfig` is backed up to `*.pre-stow.bak` and
+  its contents folded into `~/.gitconfig_local` before stow (so a fresh install never
+  stomps it). Logic in `scripts/gitconfig_migrate.sh`. Don't add a jq-style merge here
+  — git layers config itself; only `settings.json` needs the generated merge.
 - **Python is not a package** (`[tool.uv] package = false`). pyproject.toml exists
   only to give the test suite a managed env. Manage deps with `uv`.
 - **SPDX headers are required** — reuse/hawkeye enforce them; new files need a

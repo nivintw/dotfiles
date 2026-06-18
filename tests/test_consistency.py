@@ -141,6 +141,38 @@ def test_install_managed_files_are_stowed() -> None:
         assert source.exists(), f"install.sh manages $HOME/{rel} but home/{rel} isn't tracked"
 
 
+def test_tracked_gitconfig_carries_no_personal_identity() -> None:
+    """The public home/.gitconfig ships no [user] identity.
+
+    Name, email, and signing key are machine-local: they live in the untracked
+    ~/.gitconfig_local overlay (Include-d last) and install.sh migrates a
+    pre-existing ~/.gitconfig into it. Re-introducing a [user] block here would
+    impose one person's identity (and leak an email) as the public default on every
+    machine that adopts these dotfiles.
+    """
+    text = (REPO / "home" / ".gitconfig").read_text()
+    assert not re.search(r"(?m)^\s*\[user\]", text), (
+        "home/.gitconfig has a [user] section; move identity to ~/.gitconfig_local"
+    )
+    for key in ("name", "email", "signingkey"):
+        assert not re.search(rf"(?m)^\s*{key}\s*=", text), (
+            f"home/.gitconfig sets user.{key}; identity belongs in ~/.gitconfig_local"
+        )
+
+
+def test_gitconfig_overlay_include_is_last() -> None:
+    """The ~/.gitconfig_local include is the final section in home/.gitconfig.
+
+    The overlay only wins for keys declared before any later tracked section, so the
+    machine-local include must come last for it to override every baseline key.
+    """
+    sections = re.findall(r"(?m)^\s*\[([^\]]+)\]", (REPO / "home" / ".gitconfig").read_text())
+    assert sections, "no sections found in home/.gitconfig"
+    assert sections[-1].strip() == "include", (
+        f"home/.gitconfig must end with the [include] of the overlay, got [{sections[-1]}]"
+    )
+
+
 def test_claude_settings_hooks_point_at_executable_scripts() -> None:
     """Each hook wired in the project .claude/settings.json references a real, executable script.
 
