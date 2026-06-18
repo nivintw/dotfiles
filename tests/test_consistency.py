@@ -147,8 +147,9 @@ def test_claude_settings_hooks_point_at_executable_scripts() -> None:
     The analogue of test_local_hook_scripts_exist_and_are_executable, for the Claude
     Code hooks: if a hook script is renamed or its path in settings drifts, the hook
     silently stops firing — this turns that into a red build. The hooks are project-
-    scoped, so they live in the repo-root .claude/settings.json (not the stowed
-    home/.claude/settings.json, which only carries global prefs).
+    scoped, so they live in the repo-root .claude/settings.json (distinct from the
+    user-scope claude_settings.json baseline that install.sh merges into
+    ~/.claude/settings.json).
     """
     settings = json5.loads((REPO / ".claude" / "settings.json").read_text())
     commands = [
@@ -158,7 +159,7 @@ def test_claude_settings_hooks_point_at_executable_scripts() -> None:
         for hook in entry.get("hooks", [])
         if hook.get("type") == "command"
     ]
-    assert commands, "expected hook commands wired in home/.claude/settings.json"
+    assert commands, "expected hook commands wired in .claude/settings.json"
     for cmd in commands:
         match = re.search(r"\.claude/hooks/[\w.+-]+\.sh", cmd)
         assert match, f"hook command doesn't reference a .claude/hooks script: {cmd}"
