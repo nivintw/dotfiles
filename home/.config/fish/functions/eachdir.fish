@@ -13,6 +13,8 @@ function eachdir --description "Run a (simple) command in each immediate subdire
         echo "── "(string replace -r '^\./' '' -- $dir)" ──"
         pushd $dir >/dev/null; or continue
         $argv
-        popd >/dev/null
+        # If $argv touched the dir stack, a bare popd could resume from the wrong
+        # directory; bail out rather than iterate from an unknown CWD.
+        popd >/dev/null; or break
     end
 end

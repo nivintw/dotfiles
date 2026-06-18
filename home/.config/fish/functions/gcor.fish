@@ -20,5 +20,5 @@ function gcor --description "Checkout a recently-visited branch (from the reflog
     )
     or return
     test -n "$branch"; or return
-    git checkout $branch
+    git checkout $branch; or return
 end
