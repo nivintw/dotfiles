@@ -4,7 +4,7 @@
 
 #
 # Tests for the Claude Code settings merge helpers (scripts/claude_settings_merge.sh)
-# that install.sh sources to generate ~/.claude/settings.json from the tracked
+# that the installer sources to generate ~/.claude/settings.json from the tracked
 # claude_settings.json baseline plus an untracked machine-local overlay.
 #
 # The risk these guard: merge and diff are duals — diff must extract exactly the
@@ -136,4 +136,28 @@ assert_roundtrip() {
   a="$(printf '%s' "$merged" | norm)"
   b="$(printf '%s' "$BASE" | norm)"
   [ "$a" = "$b" ]
+}
+
+# claude_settings_is_object is the gate the installer uses on the baseline, the
+# live settings file, and the overlay before trusting any of them. It must reject
+# every input that would otherwise let the merge discard the baseline or crash jq:
+# empty/whitespace (which `jq empty` wrongly accepts, then `--argjson ""` aborts
+# the install run under set -e) and valid-but-non-object JSON (which would sail
+# through `jq empty` and make merge() return the non-object, wiping the baseline).
+@test "claude_settings_is_object accepts only JSON objects" {
+  run claude_settings_is_object '{}';            [ "$status" -eq 0 ]
+  run claude_settings_is_object '{"a":1}';       [ "$status" -eq 0 ]
+}
+
+@test "claude_settings_is_object rejects empty, whitespace, and invalid input" {
+  run claude_settings_is_object '';     [ "$status" -ne 0 ]
+  run claude_settings_is_object '   ';  [ "$status" -ne 0 ]
+  run claude_settings_is_object '{bad'; [ "$status" -ne 0 ]
+}
+
+@test "claude_settings_is_object rejects valid-but-non-object JSON" {
+  run claude_settings_is_object '[1,2,3]'; [ "$status" -ne 0 ]
+  run claude_settings_is_object '42';      [ "$status" -ne 0 ]
+  run claude_settings_is_object 'null';    [ "$status" -ne 0 ]
+  run claude_settings_is_object '"hi"';    [ "$status" -ne 0 ]
 }

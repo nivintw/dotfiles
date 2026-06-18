@@ -833,13 +833,18 @@ fi
 # the live file and moves it into this machine's overlay automatically.
 #
 # Migration: a machine from a previous (stow) install has ~/.claude/settings.json
-# as a SYMLINK into the repo. `cat` reads through it (the migration read); we then
-# `rm -f` the symlink and write a real file in its place. Lossless on the primary
-# machine because claude_settings.json starts as a verbatim copy of the old file.
+# as a symlink into the repo. After this change the symlink's target is gone, so
+# it's a dangling link — either way it's replaced with a real file here. Lossless
+# on the primary machine because claude_settings.json starts as a verbatim copy of
+# the old file, so baseline + (empty) overlay reproduce the prior contents.
 #
-# Safety mirrors the MCP step: validate every JSON input with `jq empty` before
-# use; a malformed baseline skips the step (never wipe settings), a malformed
-# overlay is rebuilt from the live delta rather than silently dropping accruals.
+# Safety: validate that every JSON input is an OBJECT (not merely valid JSON)
+# before trusting it. `jq empty` is not enough — it passes empty/whitespace input
+# (which then crashes `--argjson`) and valid-but-non-object JSON (an array/scalar
+# would sail through and make the merge discard the entire baseline). A bad
+# baseline skips the step (never wipe settings); a bad live file or overlay
+# degrades to {} / the live delta with a warning. Both files are written via a
+# temp file + atomic mv, so a failed write can never leave you with no settings.
 if command -v jq >/dev/null 2>&1; then
   ui_step "Claude Code user settings (claude_settings.json)"
   # shellcheck source=scripts/claude_settings_merge.sh
@@ -848,47 +853,52 @@ if command -v jq >/dev/null 2>&1; then
   claude_overlay="$HOME/.config/dotfiles/claude_settings.local.json"
   claude_settings="$HOME/.claude/settings.json"
 
-  if ! jq empty "$claude_baseline" >/dev/null 2>&1; then
-    ui_warn "claude_settings.json is not valid JSON — skipping settings generation (fix it and re-run)"
+  if ! jq -e 'type == "object"' "$claude_baseline" >/dev/null 2>&1; then
+    ui_warn "claude_settings.json is not a JSON object — skipping settings generation (fix it and re-run)"
   else
     baseline_json="$(cat "$claude_baseline")"
 
-    # CURRENT: the live settings (cat follows a leftover symlink — the migration
-    # read). Missing/invalid -> treat as {} so a corrupt live file can't poison the
-    # overlay; the merge still restores the baseline.
+    # CURRENT: the live settings. Missing/empty/corrupt/non-object -> treat as {}
+    # so it can't poison the overlay or discard the baseline; the merge restores
+    # the baseline. (A dangling migration symlink reads as absent here.)
     current_json='{}'
     if [ -e "$claude_settings" ]; then
       current_raw="$(cat "$claude_settings" 2>/dev/null || true)"
-      if printf '%s' "$current_raw" | jq empty >/dev/null 2>&1; then
+      if claude_settings_is_object "$current_raw"; then
         current_json="$current_raw"
       else
-        ui_warn "existing ~/.claude/settings.json isn't valid JSON — ignoring it (regenerating from baseline + overlay)"
+        ui_warn "existing ~/.claude/settings.json isn't a JSON object — ignoring it (regenerating from baseline + overlay)"
       fi
     fi
 
-    # DELTA: keys/values in CURRENT not already implied by the baseline.
+    # Compute BOTH outputs before writing either, so a mid-step failure can't
+    # leave the overlay and the generated file out of sync. DELTA = keys/values in
+    # CURRENT not already implied by the baseline; fold it into the overlay
+    # (accrues machine-local prefs across runs). A non-object overlay must not
+    # silently wipe accruals — warn and rebuild from the live delta only.
     delta_json="$(claude_settings_diff "$baseline_json" "$current_json")"
-
-    # Fold DELTA into the overlay (accrues machine-local prefs across runs). A
-    # malformed overlay must not silently wipe accruals — warn and rebuild it from
-    # the live delta only.
     overlay_json="$delta_json"
-    if [ -f "$claude_overlay" ]; then
-      if jq empty "$claude_overlay" >/dev/null 2>&1; then
+    if [ -e "$claude_overlay" ]; then
+      if claude_settings_is_object "$(cat "$claude_overlay" 2>/dev/null || true)"; then
         overlay_json="$(claude_settings_merge "$(cat "$claude_overlay")" "$delta_json")"
       else
-        ui_warn "ignoring $claude_overlay (not valid JSON) — rebuilding it from the live delta; fix it and re-run"
+        ui_warn "ignoring $claude_overlay (not a JSON object) — rebuilding it from the live delta; fix it and re-run"
       fi
     fi
-    mkdir -p "$(dirname "$claude_overlay")"
-    printf '%s\n' "$overlay_json" > "$claude_overlay"
-
-    # baseline ⊕ overlay -> a REAL file (rm -f drops a leftover symlink first).
     merged_json="$(claude_settings_merge "$baseline_json" "$overlay_json")"
-    mkdir -p "$(dirname "$claude_settings")"
-    rm -f "$claude_settings"
-    printf '%s\n' "$merged_json" > "$claude_settings"
-    ui_ok "Claude settings written (baseline + machine-local overlay)"
+
+    # Write both via temp file + atomic mv (mv replaces a leftover symlink too, so
+    # there is never a window with no settings file).
+    mkdir -p "$(dirname "$claude_overlay")" "$(dirname "$claude_settings")"
+    overlay_tmp="$claude_overlay.tmp.$$"
+    printf '%s\n' "$overlay_json" > "$overlay_tmp" && mv -f "$overlay_tmp" "$claude_overlay"
+    if [ -d "$claude_settings" ]; then
+      ui_warn "refusing to write: ~/.claude/settings.json is a directory (remove it and re-run)"
+    else
+      settings_tmp="$claude_settings.tmp.$$"
+      printf '%s\n' "$merged_json" > "$settings_tmp" && mv -f "$settings_tmp" "$claude_settings"
+      ui_ok "Claude settings written (baseline + machine-local overlay)"
+    fi
   fi
 else
   ui_warn "skipping Claude Code settings (jq not installed — see Brewfile; re-run install.sh)"

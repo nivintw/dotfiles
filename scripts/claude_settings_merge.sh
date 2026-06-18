@@ -29,6 +29,17 @@
 #   - Reverting an overlaid scalar to its exact baseline value via the live file
 #     does not auto-prune it from the overlay (the diff sees no change). Remove it
 #     from the overlay (or change the baseline) to revert.
+#   - A live value of JSON null reads as "no change" (null also serves as diff's
+#     no-delta sentinel), so it can't override a baseline scalar.
+#   - Emptying an array or sub-object in the live file (e.g. clearing a deny list)
+#     reads as no change — the same add-only nature as the array-union rule.
+#   - hooks.<event> blocks dedup by deep equality, so a block whose inner array is
+#     reordered counts as new and could merge in twice. Claude Code serializes
+#     hooks stably, so this is a latent edge, not an observed one.
+#
+# Inputs MUST be JSON objects. Callers validate with claude_settings_is_object
+# before merge/diff — a non-object (array, scalar, null) would fall through the
+# `else $over`/`$cur` branches and let merge() discard the baseline wholesale.
 
 # jq library: merge($base; $over) and diff($base; $cur).
 #   merge: both objects -> recurse; both arrays -> union ($base + ($over-$base));
@@ -71,4 +82,14 @@ claude_settings_merge() {
 claude_settings_diff() {
   jq -n --argjson base "$1" --argjson cur "$2" \
     "$_CLAUDE_SETTINGS_JQ"' diff($base; $cur) // {}'
+}
+
+# claude_settings_is_object JSON_STRING -> exit 0 iff the argument is a JSON
+# object. Rejects empty/whitespace input, invalid JSON, and valid-but-non-object
+# JSON (arrays, scalars, null) — the inputs that must NOT be trusted as a
+# baseline/overlay/live settings document. `jq empty` is insufficient: it accepts
+# all of those, after which merge()/diff() would discard the baseline or crash on
+# `--argjson ""`.
+claude_settings_is_object() {
+  printf '%s' "$1" | jq -e 'type == "object"' >/dev/null 2>&1
 }
