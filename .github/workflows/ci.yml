@@ -99,12 +99,25 @@ jobs:
       - name: Fish behavior tests (bats)
         run: PATH="$PWD/.venv/bin:$PATH" bats tests/
 
+      # Key the browser cache on the Playwright version, NOT uv.lock: the bundled
+      # Chromium build is pinned 1:1 to the Playwright release, while uv.lock churns
+      # on every dependency change AND every release bump (cz writes the project
+      # version into it). Keying on uv.lock therefore busted this cache on basically
+      # every merge, re-downloading Chromium each time. The version is read from the
+      # synced env (uv sync ran above), so it reflects exactly what pytest will drive.
+      - name: Resolve Playwright version (stable cache key)
+        id: pw
+        run: echo "version=$(uv run playwright --version | awk '{print $2}')" >>"$GITHUB_OUTPUT"
+
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ hashFiles('uv.lock') }}
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
 
+      # On a cache hit the browser is already present and this skips the download;
+      # --with-deps still runs apt for the system libraries, which live in /usr/lib
+      # on the fresh runner and so can't be cached.
       - name: Install Playwright Chromium (for the docs-site tests)
         run: uv run playwright install --with-deps chromium
 
