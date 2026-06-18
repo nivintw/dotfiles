@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.8.0 (2026-06-18)
+
+### ✨ Features
+
+- **git**: Adopt an existing ~/.gitconfig instead of stomping it on install
+
 ## v1.7.0 (2026-06-18)
 
 ### ✨ Features
