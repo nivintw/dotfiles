@@ -386,10 +386,16 @@ sudo -k
 ui_ok "privileged setup complete"
 
 # --- 3. Symlink dotfiles into $HOME -----------------------------------------
-# Stow refuses to overwrite existing real files. Remove known managed files that
+# Stow refuses to overwrite existing real files. Clear known managed files that
 # tools may generate as real files on first run so stow can replace them with
-# symlinks. Only real files are removed (never existing symlinks), so this stays
+# symlinks. Only real files are touched (never existing symlinks), so this stays
 # idempotent; stow recreates each as a symlink below.
+#
+# A real file byte-identical to the repo's version is just removed — the symlink
+# will point at the same content, so nothing is lost. One that DIFFERS is moved to
+# <file>.pre-stow.bak instead of being destroyed: it may hold edits you (or a tool
+# like VS Code Settings Sync) made and haven't merged into the repo yet. Better to
+# preserve them next to the file and warn than to silently delete divergent config.
 ui_step "dotfiles symlinks (stow)"
 managed_files=(
   "$HOME/Library/Application Support/Code/User/settings.json"  # VS Code / Settings Sync
@@ -397,9 +403,27 @@ managed_files=(
   "$HOME/.config/topgrade.toml"                                # topgrade --edit-config seeds a default
 )
 for f in "${managed_files[@]}"; do
-  if [ -f "$f" ] && [ ! -L "$f" ]; then
+  [ -f "$f" ] && [ ! -L "$f" ] || continue
+  # The stow source mirrors $HOME under home/, so strip $HOME to find the repo copy.
+  repo_src="$DOTFILES/home/${f#"$HOME"/}"
+  # If the repo doesn't actually ship this path, stow won't symlink it — so leave
+  # the user's real file untouched rather than moving it aside to no purpose. Guards
+  # a future managed_files entry that has no home/ counterpart.
+  if [ ! -e "$repo_src" ]; then
+    ui_warn "no repo copy for $f (skipping; not a stow-managed path)"
+    continue
+  fi
+  if cmp -s "$f" "$repo_src"; then
     ui_active "removing existing real file so stow can symlink it: $f"
     rm "$f"
+  else
+    # Don't clobber a backup from an earlier run — number it so each divergent
+    # version is preserved rather than overwriting the last.
+    backup="$f.pre-stow.bak"
+    n=1
+    while [ -e "$backup" ]; do backup="$f.pre-stow.bak.$n"; n=$((n + 1)); done
+    ui_warn "backing up modified $f -> $backup (differs from the repo version)"
+    mv "$f" "$backup"
   fi
 done
 
@@ -703,11 +727,18 @@ fi
 if command -v claude >/dev/null 2>&1; then
   ui_step "Claude Code MCP servers (claude_mcp.json)"
 
-  # Baseline ⊕ machine-local overlay (overlay wins on key conflicts).
+  # Baseline ⊕ machine-local overlay (overlay wins on key conflicts). Validate the
+  # overlay with `jq empty` BEFORE merging: a malformed overlay would make the merge
+  # `jq` produce no output, leaving merged_mcp empty and silently dropping EVERY
+  # server (baseline included). Instead, warn and fall back to the baseline only, so
+  # one typo in the untracked overlay can't wipe out the tracked servers.
   mcp_local="$HOME/.config/dotfiles/claude_mcp.local.json"
-  if [ -f "$mcp_local" ]; then
+  if [ -f "$mcp_local" ] && jq empty "$mcp_local" >/dev/null 2>&1; then
     merged_mcp="$(jq -s '.[0] * .[1]' "$DOTFILES/claude_mcp.json" "$mcp_local")"
   else
+    if [ -f "$mcp_local" ]; then
+      ui_warn "ignoring $mcp_local (not valid JSON) — registering baseline servers only; fix it and re-run"
+    fi
     merged_mcp="$(cat "$DOTFILES/claude_mcp.json")"
   fi
 
@@ -800,8 +831,15 @@ fi
 # set by hand. Comment it out (or edit macos.sh) if you'd rather run it manually.
 ui_step "macOS system defaults (macos.sh)"
 ui_detail "applies the system preferences declared in macos.sh (overrides manual tweaks)"
-bash "$DOTFILES/macos.sh"
-ui_ok "macOS defaults applied"
+# macos.sh runs under its own `set -e` and sources the untracked macos.local.sh; a
+# bad line there (or any failure outside the dwrite wrapper) exits non-zero. Don't
+# let that abort the whole bootstrap before the Dock step below — warn and carry on,
+# matching dwrite's own "warn and continue" stance for managed-Mac write failures.
+if bash "$DOTFILES/macos.sh"; then
+  ui_ok "macOS defaults applied"
+else
+  ui_warn "macos.sh exited non-zero — continuing (check ~/.config/dotfiles/macos.local.sh; some defaults may not have applied)"
+fi
 
 # --- 15. Dock layout --------------------------------------------------------
 # Declarative Dock via dockutil: removes every current Dock item and rebuilds
