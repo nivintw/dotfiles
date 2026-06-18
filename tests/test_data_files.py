@@ -41,6 +41,11 @@ def test_claude_mcp_is_strict_json() -> None:
     json.loads((REPO / "claude_mcp.json").read_text())
 
 
+def test_claude_settings_is_strict_json() -> None:
+    """claude_settings.json baseline is strict JSON — jq merges it at install time."""
+    json.loads((REPO / "claude_settings.json").read_text())
+
+
 @pytest.mark.parametrize("path", JSONC_FILES, ids=lambda p: str(p.relative_to(REPO)))
 def test_settings_json_parses_as_jsonc(path: Path) -> None:
     """Every tracked settings.json parses as JSONC (comments + trailing commas)."""

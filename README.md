@@ -86,7 +86,8 @@ given machine needs.
 | **git** | `home/.gitconfig` | `~/.gitconfig_local` | `[include]` in the tracked config |
 | **fish** | `home/.config/fish/**` | `~/.config/dotfiles/local.fish` | sourced by `conf.d/zzz-local.fish` |
 | **Homebrew** | `Brewfile` + `Brewfile.d/*` | `~/.config/dotfiles/Brewfile.local` | auto-loaded by `install.sh` |
-| **Claude Code** | `home/.claude/CLAUDE.md` | `~/.config/dotfiles/CLAUDE.local.md` | `@`-imported by the tracked `CLAUDE.md` |
+| **Claude memory** | `home/.claude/CLAUDE.md` | `~/.config/dotfiles/CLAUDE.local.md` | `@`-imported by the tracked `CLAUDE.md` |
+| **Claude settings** | `claude_settings.json` | `~/.config/dotfiles/claude_settings.local.json` | deep-merged by `install.sh` (arrays union); written to a real `~/.claude/settings.json` |
 | **Claude MCP** | `claude_mcp.json` | `~/.config/dotfiles/claude_mcp.local.json` | deep-merged by `install.sh` |
 | **macOS defaults** | `macos.sh` | `~/.config/dotfiles/macos.local.sh` | sourced by `macos.sh` |
 

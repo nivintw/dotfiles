@@ -105,6 +105,10 @@
         </div>
         <div class="feature">
           <span class="feature__mark">≠</span>
+          <div><h3>~/.claude/settings.json</h3><p>Generated, not symlinked: Claude Code's <code>/config</code> and <code>/plugin</code> write live state through it, so the tracked <code>claude_settings.json</code> baseline is deep-merged with a machine-local overlay and written as a real file. See <a href="#overlays">Machine-local overlays</a> below.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">≠</span>
           <div><h3>Machine-local overlays</h3><p>A family of untracked files outside the repo (<code>~/.ssh/config.local</code>, <code>~/.gitconfig_local</code>, and more) that the tracked config <code>Include</code>s or sources — seeded with commented examples, never symlinked. See <a href="#overlays">Machine-local overlays</a> below.</p></div>
         </div>
       </section>
@@ -120,7 +124,8 @@
               <tr><td>git</td><td><code>home/.gitconfig</code></td><td><code>~/.gitconfig_local</code></td><td><code>[include]</code> in the tracked config</td></tr>
               <tr><td>fish</td><td><code>home/.config/fish/**</code></td><td><code>~/.config/dotfiles/local.fish</code></td><td>sourced by <code>conf.d/zzz-local.fish</code></td></tr>
               <tr><td>Homebrew</td><td><code>Brewfile</code> + <code>Brewfile.d/*.brewfile</code></td><td><code>~/.config/dotfiles/Brewfile.local</code></td><td>loaded by <code>install.sh</code></td></tr>
-              <tr><td>Claude Code</td><td><code>home/.claude/CLAUDE.md</code></td><td><code>~/.config/dotfiles/CLAUDE.local.md</code></td><td><code>@</code>-imported by the tracked <code>CLAUDE.md</code></td></tr>
+              <tr><td>Claude memory</td><td><code>home/.claude/CLAUDE.md</code></td><td><code>~/.config/dotfiles/CLAUDE.local.md</code></td><td><code>@</code>-imported by the tracked <code>CLAUDE.md</code></td></tr>
+              <tr><td>Claude settings</td><td><code>claude_settings.json</code></td><td><code>~/.config/dotfiles/claude_settings.local.json</code></td><td>deep-merged by <code>install.sh</code> (arrays union) into a real <code>~/.claude/settings.json</code></td></tr>
               <tr><td>Claude MCP</td><td><code>claude_mcp.json</code></td><td><code>~/.config/dotfiles/claude_mcp.local.json</code></td><td>deep-merged by <code>install.sh</code></td></tr>
               <tr><td>macOS defaults</td><td><code>macos.sh</code></td><td><code>~/.config/dotfiles/macos.local.sh</code></td><td>sourced by <code>macos.sh</code></td></tr>
             </tbody>
