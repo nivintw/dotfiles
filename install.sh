@@ -237,8 +237,17 @@ fi
 # both ship OFF on macOS. Done here to stay within the single sudo session rather
 # than at the very end of the run.
 ui_active "enabling the macOS application firewall + stealth mode"
-sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on >/dev/null
-sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode on >/dev/null
+# socketfilterfw is the least version-stable call here: on recent macOS
+# --setglobalstate can print a deprecation and no-op while still exiting 0. So
+# don't trust the exit code (and don't let it abort the bootstrap) — apply, then
+# verify the actual state and warn if it didn't take.
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on >/dev/null 2>&1 || true
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode on >/dev/null 2>&1 || true
+if sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null | grep -qi enabled; then
+  ui_ok "application firewall enabled"
+else
+  ui_warn "could not confirm the firewall is on (macOS may have changed socketfilterfw); enable it in System Settings → Network → Firewall"
+fi
 
 # Done with root. Drop the ticket so nothing downstream (the fisher/Claude
 # curl|bash installers included) runs with a warm sudo timestamp.
