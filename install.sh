@@ -241,7 +241,7 @@ elif [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
   ui_active "select bundles  ·  TAB toggles · ENTER confirms · ESC cancels"
   # Pre-seed the picker with the current selection (if any) so a re-run shows
   # today's choices already toggled, ready to amend. fzf_preselect_bind maps the
-  # saved names to their 1-based menu positions and emits a `start:` select bind.
+  # saved names to their 1-based menu positions and emits a `load:` select bind.
   current=()
   if [ -f "$bundles_sel" ]; then
     while IFS= read -r _b; do
