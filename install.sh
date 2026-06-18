@@ -36,7 +36,11 @@ ui_banner() { printf '\n%s%s%s\n' "$C_BOLD" "$1" "$C_RESET"; }
 ui_step()   { printf '\n%s%s==>%s %s\n' "$C_BOLD" "$C_BLUE" "$C_RESET" "$1"; }
 ui_ok()     { printf '%s%s%s %s\n'     "$C_GREEN"  "$G_OK"     "$C_RESET" "$1"; }
 ui_active() { printf '%s%s%s %s\n'     "$C_BLUE"   "$G_ACTIVE" "$C_RESET" "$1"; }
-ui_warn()   { printf '%s%s%s %s\n'     "$C_YELLOW" "$G_WARN"   "$C_RESET" "$1"; }
+# Every ui_warn is also remembered (WARNINGS) so the closing summary can replay
+# everything that needed attention — you never have to scroll back through a long,
+# noisy install (e.g. a transient brew download failure) to find what went wrong.
+WARNINGS=()
+ui_warn()   { WARNINGS=(${WARNINGS[@]+"${WARNINGS[@]}"} "$1"); printf '%s%s%s %s\n' "$C_YELLOW" "$G_WARN" "$C_RESET" "$1"; }
 ui_err()    { printf '%s%s%s %s\n' >&2 "$C_RED"    "$G_ERR"    "$C_RESET" "$1"; }
 ui_detail() { printf '   %s%s%s\n' "$C_DIM" "$1" "$C_RESET"; }
 
@@ -151,17 +155,70 @@ if [ "$(uname)" != "Darwin" ]; then
   exit 1
 fi
 
-# --- sudo, acquired just-in-time --------------------------------------------
-# A few steps need root (Touch-ID PAM, /etc/shells + chsh, firewall). We do NOT
-# stamp sudo up front and keep it warm: the curl|bash bootstraps (Homebrew, uv,
-# fisher, Claude Code) would then run with a live, passwordless sudo timestamp
-# available — needless blast radius if an upstream installer were compromised or
-# MITM'd. Instead ALL privileged steps are grouped into one block (step 2)
-# fenced by `need_sudo` ... `sudo -k`, run right after brew bundle. Homebrew/uv
-# above and fisher/Claude below therefore never see a warm ticket; and because
-# the grouped steps run back-to-back within sudo's ~5-min timestamp, you still
-# authenticate only once.
+# --- sudo: enabled early, kept warm for the privileged span only ------------
+# Root is needed for Touch-ID PAM, /etc/shells + chsh, the firewall, and the rare
+# cask that ships a .pkg (microsoft-office is the only one in this repo). The old
+# design acquired sudo only AFTER brew bundle, so each privileged cask fell back to
+# a TYPED PASSWORD (Touch ID wasn't wired up yet) and re-prompted whenever sudo's
+# ~5-min ticket lapsed across slow multi-GB downloads — a string of password
+# prompts that don't even say which package wants them (macOS names the calling
+# app, iTerm, not the cask).
+#
+# Now: enable Touch ID for sudo FIRST (so any prompt is a fingerprint, not a typed
+# password), acquire sudo once, and keep it warm with a background refresher for
+# exactly the bundle + privileged block. start_sudo_keepalive/stop_sudo_keepalive
+# bound that window: it's dropped (sudo -k) BEFORE any curl|bash installer runs —
+# Homebrew/uv already ran above, fisher/Claude run later — so no third-party
+# bootstrap ever executes with a live, passwordless ticket. The EXIT trap is the
+# safety net: it kills the refresher and drops the ticket even if the run aborts.
 need_sudo() { sudo -v; }
+
+SUDO_KEEPALIVE_PID=""
+start_sudo_keepalive() {
+  need_sudo
+  # Refresh the timestamp every 50s (< the 5-min default) until this script exits.
+  # The kill -0 self-check makes the child exit if the parent dies, as a backstop
+  # to the EXIT trap.
+  ( while true; do sudo -n true 2>/dev/null; sleep 50; kill -0 "$$" 2>/dev/null || exit 0; done ) &
+  SUDO_KEEPALIVE_PID=$!
+}
+stop_sudo_keepalive() {
+  if [ -n "$SUDO_KEEPALIVE_PID" ]; then
+    kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true
+    SUDO_KEEPALIVE_PID=""
+  fi
+  sudo -k
+}
+trap 'if [ -n "${SUDO_KEEPALIVE_PID:-}" ]; then kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true; fi; sudo -k 2>/dev/null || true' EXIT
+
+# Enable (and keep current) Touch ID for sudo via /etc/pam.d/sudo_local — NOT
+# /etc/pam.d/sudo, which macOS rewrites on OS updates. pam_reattach (Brewfile) makes
+# it work inside tmux/screen and must precede pam_tid; it only exists AFTER brew
+# bundle, so this is called twice: once before the bundle (pam_tid only — enough for
+# the terminal running the installer) and again after (adds the pam_reattach line).
+# Idempotent: the file is only rewritten when its contents would change.
+#
+# The "Touch ID is on but it still asks for my password" failure (enabled here, but
+# no fingerprint enrolled, so pam_tid SILENTLY falls back to a password) is caught
+# and reported once, deterministically, by the closing verification summary —
+# scripts/verify_install.sh check #5, via bioutil -c. Not nagged here so the
+# message isn't emitted twice (this runs twice per install).
+enable_touch_id_sudo() {
+  if [ ! -f /etc/pam.d/sudo ] || ! grep -q 'sudo_local' /etc/pam.d/sudo; then
+    ui_warn "Touch ID for sudo unavailable (/etc/pam.d/sudo has no sudo_local include — likely MDM-managed); sudo will prompt for your password"
+    return 0
+  fi
+  pam_reattach="$(brew --prefix 2>/dev/null)/lib/pam/pam_reattach.so"
+  desired="auth       sufficient     pam_tid.so"
+  if [ -f "$pam_reattach" ]; then
+    desired="auth       optional       $pam_reattach
+auth       sufficient     pam_tid.so"
+  fi
+  if [ "$(sudo cat /etc/pam.d/sudo_local 2>/dev/null)" != "$desired" ]; then
+    printf '%s\n' "$desired" | sudo tee /etc/pam.d/sudo_local >/dev/null
+    ui_ok "Touch ID for sudo enabled (/etc/pam.d/sudo_local)"
+  fi
+}
 
 # --- 0. Bootstrap toolchain (Homebrew + uv) ---------------------------------
 # Everything else (fish, stow, the rest) comes from brew bundle below.
@@ -185,10 +242,27 @@ fi
 command -v uv >/dev/null 2>&1 || { ui_err "uv install failed."; exit 1; }
 
 # --- 1. Homebrew formulae + casks -------------------------------------------
+# Acquire sudo ONCE and keep it warm for the bundle + privileged block, instead of
+# the old string of typed-password prompts scattered through brew bundle. Enabling
+# Touch ID up front means every prompt after the first is a fingerprint tap — so a
+# re-run authenticates with a single tap, and even a brand-new Mac costs just one
+# typed password (to write the PAM file) and taps thereafter. The Homebrew/uv
+# installers above already ran WITHOUT a warm ticket; the keepalive is stopped
+# before the fisher/Claude installers below (see step 2).
+ui_step "Privileged setup — sudo (kept warm through the bundle)"
+start_sudo_keepalive
+enable_touch_id_sudo  # pam_tid now; the pam_reattach (tmux) line is added in step 2
+
 # brew bundle adopts already-present casks in place rather than clobbering them.
+# Non-fatal: a transient single-package failure shouldn't abort the whole bootstrap
+# (the rest is idempotent and re-runnable). The closing summary runs `brew bundle
+# check` and lists precisely what's still missing, so you don't scroll back.
 ui_step "Homebrew packages (brew bundle)"
-brew bundle install --file="$DOTFILES/Brewfile"
-ui_ok "Homebrew packages installed"
+if brew bundle install --file="$DOTFILES/Brewfile"; then
+  ui_ok "Homebrew packages installed"
+else
+  ui_warn "some baseline Homebrew packages failed to install (see output above) — the summary lists what's still missing; re-run install.sh to retry"
+fi
 
 # Opt-in bundles (tracked, public): each Brewfile.d/<name>.brewfile is an overlay
 # of software not wanted on every machine. The per-machine selection lives in
@@ -293,7 +367,10 @@ while IFS= read -r bundle; do
   bundle_file="$bundles_dir/$bundle.brewfile"
   if [ -f "$bundle_file" ]; then
     ui_active "installing opt-in bundle: $bundle"
-    brew bundle install --file="$bundle_file"
+    # Non-fatal (as with the baseline above): the summary's brew bundle check
+    # surfaces anything that didn't land.
+    brew bundle install --file="$bundle_file" \
+      || ui_warn "opt-in bundle '$bundle' had install failures (see output above) — the summary lists what's missing"
     installed_bundles=(${installed_bundles[@]+"${installed_bundles[@]}"} "$bundle")
   else
     ui_warn "skipping opt-in bundle '$bundle' (no $bundle_file)"
@@ -311,40 +388,23 @@ fi
 brew_local="$HOME/.config/dotfiles/Brewfile.local"
 if [ -f "$brew_local" ]; then
   ui_step "Machine-private Brewfile additions (Brewfile.local)"
-  brew bundle install --file="$brew_local"
-  ui_ok "machine-private additions installed"
-fi
-
-# --- 2. Privileged setup — one sudo session ---------------------------------
-# Everything that needs root is grouped here so a single authentication covers
-# it all: sudo caches its timestamp (~5 min) and these steps run back-to-back.
-# Nothing long-running or curl|bash sits between need_sudo and the sudo -k at the
-# end of the block — that's what keeps the Homebrew/uv bootstraps above and the
-# fisher/Claude installers below from ever running with a warm ticket.
-ui_step "Privileged setup (single sudo session)"
-need_sudo
-
-# Touch ID for sudo via /etc/pam.d/sudo_local — NOT /etc/pam.d/sudo, which macOS
-# overwrites on OS updates. pam_reattach (from the Brewfile) makes it work inside
-# tmux/screen panes too; its line must precede pam_tid. macOS 14+ already has
-# `auth include sudo_local` near the top of /etc/pam.d/sudo. On a fresh Mac this
-# isn't wired up yet, so the need_sudo above is a password prompt the first time;
-# every step in this block then reuses that one ticket.
-if [ -f /etc/pam.d/sudo ] && grep -q 'sudo_local' /etc/pam.d/sudo; then
-  if ! sudo grep -qs 'pam_tid.so' /etc/pam.d/sudo_local 2>/dev/null; then
-    pam_reattach="$(brew --prefix)/lib/pam/pam_reattach.so"
-    ui_active "enabling Touch ID for sudo (/etc/pam.d/sudo_local)"
-    sudo tee /etc/pam.d/sudo_local >/dev/null <<EOF
-auth       optional       $pam_reattach
-auth       sufficient     pam_tid.so
-EOF
-    ui_ok "Touch ID for sudo enabled"
+  if brew bundle install --file="$brew_local"; then
+    ui_ok "machine-private additions installed"
   else
-    ui_ok "Touch ID for sudo already enabled"
+    ui_warn "some Brewfile.local packages failed to install (see output above) — the summary lists what's missing"
   fi
-else
-  ui_warn "skipping Touch ID for sudo (/etc/pam.d/sudo has no sudo_local include)"
 fi
+
+# --- 2. Privileged setup — fish shell, firewall, finalize Touch ID ----------
+# sudo is already warm from step 1's keepalive, so these run with no new prompt.
+# We drop the ticket (stop_sudo_keepalive) at the end of the block — before the
+# fisher/Claude curl|bash installers — so no third-party bootstrap runs warm.
+ui_step "Privileged setup (fish shell, firewall)"
+
+# Finalize Touch ID for sudo: re-run now that brew bundle has installed pam_reattach,
+# so the sudo_local file gains the tmux/screen line (pam_tid alone was written in
+# step 1). Idempotent — rewrites only if the contents differ.
+enable_touch_id_sudo
 
 # Make fish the default login shell. fish is brew-installed (see Brewfile); a
 # brew upgrade can disturb an already-open fish session until it's restarted —
@@ -380,9 +440,9 @@ else
   ui_warn "could not confirm the firewall is on (macOS may have changed socketfilterfw); enable it in System Settings → Network → Firewall"
 fi
 
-# Done with root. Drop the ticket so nothing downstream (the fisher/Claude
-# curl|bash installers included) runs with a warm sudo timestamp.
-sudo -k
+# Done with root. Stop the keepalive and drop the ticket so nothing downstream
+# (the fisher/Claude curl|bash installers included) runs with a warm sudo timestamp.
+stop_sudo_keepalive
 ui_ok "privileged setup complete"
 
 # --- 3. Symlink dotfiles into $HOME -----------------------------------------
@@ -1003,5 +1063,40 @@ ui_step "Dock layout (dock.sh)"
 bash "$DOTFILES/dock.sh"
 ui_ok "Dock layout applied"
 
+# --- 17. Verification & summary ---------------------------------------------
+# Deterministic post-install check (scripts/verify_install.sh — also runnable
+# standalone any time): re-derive the intended end state and report it, then replay
+# every warning collected during the run. Two sections — what's verified, and what
+# needs attention (failed checks ∪ run-time warnings) — so a long, noisy install
+# (e.g. a transient brew failure) ends in one clear readout you never scroll past.
+# Reads only; needs no sudo. Always exits 0 — this summarizes, it doesn't gate.
 ui_banner "dotfiles bootstrap complete"
+
+# shellcheck source=scripts/verify_install.sh
+. "$DOTFILES/scripts/verify_install.sh"
+verified=()
+problems=()
+while IFS=$'\t' read -r status msg; do
+  case "$status" in
+    OK)  verified=(${verified[@]+"${verified[@]}"} "$msg") ;;
+    BAD) problems=(${problems[@]+"${problems[@]}"} "$msg") ;;
+  esac
+done < <(verify_install "$DOTFILES")
+
+ui_step "Verified"
+for line in ${verified[@]+"${verified[@]}"}; do ui_ok "$line"; done
+
+# Needs attention = failed checks + every ui_warn emitted during this run. Failed
+# checks are NEW (only found now); the run-time warnings are a replay so you don't
+# have to scroll back. De-dup isn't needed: the two sets describe different things.
+attention=(${problems[@]+"${problems[@]}"} ${WARNINGS[@]+"${WARNINGS[@]}"})
+ui_step "Needs attention"
+if [ "${#attention[@]}" -eq 0 ]; then
+  ui_ok "nothing — everything checks out"
+else
+  for line in ${attention[@]+"${attention[@]}"}; do ui_warn "$line"; done
+  ui_detail "re-run ~/dotfiles/install.sh to retry, or 'bash ~/dotfiles/scripts/verify_install.sh' to re-check."
+fi
+
+printf '\n'
 ui_detail "Restart your shell (or run 'exec fish') to pick everything up."

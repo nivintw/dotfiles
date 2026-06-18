@@ -10,7 +10,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Security · dotfiles</title>
-    <meta name="description" content="The security model: 1Password references instead of secrets, a single fenced sudo session, SSH-host hygiene, secret scanning, and a hardened firewall." />
+    <meta name="description" content="The security model: 1Password references instead of secrets, a single sudo authentication kept off the curl|bash installers, SSH-host hygiene, secret scanning, and a hardened firewall." />
     <link rel="stylesheet" href="assets/style.css" />
     <script>
       (function () {
@@ -67,11 +67,11 @@
       </section>
 
       <section class="wrap">
-        <h2><span class="hash">#</span>One fenced sudo session</h2>
-        <p>Every privileged step — Touch&nbsp;ID PAM, <code>/etc/shells</code> + <code>chsh</code>, the firewall — is grouped into a single block right after <code>brew bundle</code>, so you authenticate <strong>once</strong>.</p>
+        <h2><span class="hash">#</span>One sudo authentication, fenced off the bootstrappers</h2>
+        <p>Touch&nbsp;ID for sudo is enabled <em>first</em>, then sudo is acquired once and kept warm with a background refresher across just <code>brew bundle</code> and the privileged steps — Touch&nbsp;ID PAM, <code>/etc/shells</code> + <code>chsh</code>, the firewall. You authenticate <strong>once</strong> (a fingerprint tap on a re-run) instead of re-typing your password for every cask that ships a privileged <code>.pkg</code>.</p>
         <div class="note">
-          <div class="note__title">Why it's fenced</div>
-          The block is bracketed by <code>sudo -v</code> … <code>sudo -k</code>. Nothing long-running or <code>curl | bash</code> sits inside it — so the <a href="https://brew.sh" rel="noopener">Homebrew</a>, <a href="https://docs.astral.sh/uv/" rel="noopener">uv</a>, <a href="https://github.com/jorgebucaran/fisher" rel="noopener">fisher</a>, and <a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a> installers <strong>never run with a warm sudo ticket</strong>. If an upstream installer were compromised or MITM'd, it can't silently escalate.
+          <div class="note__title">What the fence still guarantees</div>
+          The warm window is bracketed by <code>start_sudo_keepalive</code> … <code>stop_sudo_keepalive</code> (<code>sudo -k</code>), dropped <strong>before any <code>curl | bash</code> installer runs</strong>. <a href="https://brew.sh" rel="noopener">Homebrew</a> and <a href="https://docs.astral.sh/uv/" rel="noopener">uv</a> bootstrap before it's warmed; <a href="https://github.com/jorgebucaran/fisher" rel="noopener">fisher</a> and <a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a> after it's dropped — so those upstream installers <strong>never run with a warm sudo ticket</strong>, and a compromised or MITM'd one can't silently escalate. An <code>EXIT</code> trap drops the ticket even if the run aborts. The deliberate tradeoff: <code>brew bundle</code>'s own cask installers <em>do</em> run inside the window — which is what buys the single authentication — and Homebrew verifies cask/bottle checksums before running them.
         </div>
       </section>
 
