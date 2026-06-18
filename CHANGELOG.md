@@ -3,6 +3,17 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.6.0 (2026-06-18)
+
+### ✨ Features
+
+- **install**: Add --keep-bundles flag and rebuild the Dock unconditionally
+
+### 📝💡 Documentation
+
+- **install**: Decouple Dock-section comment from dock.sh's app list
+- **casts**: Re-sync install cast with the unconditional Dock rebuild
+
 ## v1.5.0 (2026-06-18)
 
 ### ✨ Features
