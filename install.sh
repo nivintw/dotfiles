@@ -453,6 +453,27 @@ if [ -d "$tmpl_hooks" ]; then
   fi
 fi
 
+# A pre-existing real ~/.gitconfig (manual git setup, or a machine adopting this
+# repo) would make the stow preflight below abort. Rather than fail or stomp it,
+# back it up and fold its contents into ~/.gitconfig_local — the overlay the
+# baseline Include-s LAST, so the user's settings survive and override ours. This
+# is a one-time migration: afterwards ~/.gitconfig is our symlink and it's a no-op.
+# shellcheck source=scripts/gitconfig_migrate.sh
+. "$DOTFILES/scripts/gitconfig_migrate.sh"
+# `if ! var="$(...)"` so a non-zero return actually aborts — a bare assignment from
+# a command substitution would swallow the helper's exit status and march on.
+if ! gitconfig_action="$(gitconfig_migrate "$HOME/.gitconfig" "$HOME/.gitconfig_local" "$DOTFILES/home/.gitconfig")"; then
+  ui_err "couldn't safely adopt your existing ~/.gitconfig (see the error above)."
+  ui_detail "Your config was left in place or backed up to ~/.gitconfig.pre-stow.bak — resolve it, then re-run install.sh."
+  exit 1
+fi
+if [ -n "$gitconfig_action" ]; then
+  case "$gitconfig_action" in
+    backed\ up*) ui_warn "$gitconfig_action" ;;
+    *) ui_active "$gitconfig_action" ;;
+  esac
+fi
+
 # Preflight: stow aborts mid-run on the FIRST conflicting file, so do a dry run
 # (-n) first to surface ALL conflicts up front. The dry run plans without touching
 # the filesystem and applies stow's own ignore rules (.stow-local-ignore: .DS_Store,
@@ -504,8 +525,17 @@ chmod 600 "$HOME/.ssh/config.local"
 # git Include-s this (home/.gitconfig [include]); git ignores a missing include,
 # but seed it so it's discoverable. Good home for a per-dir work identity.
 seed_if_absent "$HOME/.gitconfig_local" <<'EOF'
-# Machine-local git config (untracked). Included by ~/.gitconfig.
-# Good home for a per-directory work identity:
+# Machine-local git config (untracked). Included LAST by ~/.gitconfig, so anything
+# here overrides the tracked baseline.
+#
+# Set your git identity here — it is intentionally NOT in the public repo. Without
+# it `git commit` fails with "Please tell me who you are":
+#   [user]
+#       name = Your Name
+#       email = you@example.com
+#       signingkey = ssh-ed25519 AAAA...   # your SSH signing key (if you sign)
+#
+# Good home for a per-directory work identity, too:
 #   [includeIf "gitdir:~/work/"]
 #       path = ~/.gitconfig.work   # work email, signing key, etc. — untracked
 #
