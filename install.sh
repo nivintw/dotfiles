@@ -40,6 +40,81 @@ ui_warn()   { printf '%s%s%s %s\n'     "$C_YELLOW" "$G_WARN"   "$C_RESET" "$1"; 
 ui_err()    { printf '%s%s%s %s\n' >&2 "$C_RED"    "$G_ERR"    "$C_RESET" "$1"; }
 ui_detail() { printf '   %s%s%s\n' "$C_DIM" "$1" "$C_RESET"; }
 
+# --- Opt-in bundle discovery + CLI args -------------------------------------
+# Discover the available opt-in bundles (Brewfile.d/<name>.brewfile, basename
+# minus the suffix) up front because both --help (lists them) and --bundle
+# (validates against them) run before the macOS guard below. bash 3.2 has no
+# nullglob, so a non-matching glob stays literal — guard each candidate with -e.
+# Every possibly-empty array expansion uses ${arr[@]+"${arr[@]}"} so `set -u`
+# doesn't error on an unset array.
+bundles_dir="$DOTFILES/Brewfile.d"
+avail=()
+for bf in "$bundles_dir"/*.brewfile; do
+  [ -e "$bf" ] || continue
+  avail=(${avail[@]+"${avail[@]}"} "$(basename "$bf" .brewfile)")
+done
+
+usage() {
+  local list='  (none found)'
+  [ "${#avail[@]}" -gt 0 ] && list="$(printf '  %s\n' ${avail[@]+"${avail[@]}"})"
+  cat <<EOF
+dotfiles bootstrap — converge this Mac to the state declared in the repo.
+
+Usage: install.sh [options]
+
+Options:
+  --bundle NAME    Opt into Brewfile bundle NAME and persist the choice.
+                   Repeatable; bypasses the interactive picker (scriptable).
+  --no-bundles     Opt into no bundles (baseline only); bypass the picker.
+  -h, --help       Show this help and exit.
+
+Opt-in Brewfile bundles (Brewfile.d/<name>.brewfile):
+$list
+
+With no --bundle/--no-bundles flag on an interactive terminal, install.sh opens
+an fzf multi-select pre-seeded with the current selection, ready to amend.
+Non-interactively it reuses ~/.config/dotfiles/bundles, or installs the baseline
+only when that file is absent.
+EOF
+}
+
+# Fail fast (before any install work) if a requested bundle name isn't one of the
+# discovered ones, so a typo can't silently persist a bogus selection file.
+require_known_bundle() {
+  local want="$1" a
+  for a in ${avail[@]+"${avail[@]}"}; do
+    [ "$a" = "$want" ] && return 0
+  done
+  ui_err "unknown bundle: '$want'"
+  ui_detail "available: ${avail[*]:-(none)}"
+  exit 2
+}
+
+# Parse CLI args. --bundle/--no-bundles set an authoritative selection that
+# bypasses the picker; bundles_from_flags records that a flag was given, so an
+# explicit empty selection (--no-bundles) stays distinct from "no flag → prompt".
+requested_bundles=()
+bundles_from_flags=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h | --help) usage; exit 0 ;;
+    --no-bundles) bundles_from_flags=1; shift ;;
+    --bundle)
+      shift
+      [ "$#" -gt 0 ] || { ui_err "--bundle requires a NAME"; exit 2; }
+      require_known_bundle "$1"
+      requested_bundles=(${requested_bundles[@]+"${requested_bundles[@]}"} "$1")
+      bundles_from_flags=1; shift ;;
+    --bundle=*)
+      _name="${1#--bundle=}"
+      require_known_bundle "$_name"
+      requested_bundles=(${requested_bundles[@]+"${requested_bundles[@]}"} "$_name")
+      bundles_from_flags=1; shift ;;
+    --) shift; break ;;
+    -* | *) ui_err "unexpected argument: $1"; echo >&2; usage >&2; exit 2 ;;
+  esac
+done
+
 ui_banner "dotfiles bootstrap"
 
 # --- macOS only -------------------------------------------------------------
@@ -93,19 +168,20 @@ ui_ok "Homebrew packages installed"
 
 # Opt-in bundles (tracked, public): each Brewfile.d/<name>.brewfile is an overlay
 # of software not wanted on every machine. The per-machine selection lives in
-# ~/.config/dotfiles/bundles (untracked, one bundle name per line). Selection model:
-#   - file exists             -> use it verbatim, no prompt (idempotent re-runs / CI)
-#   - missing + TTY + fzf      -> interactive fzf --multi picker, persist the result
-#   - missing, non-TTY/no fzf  -> seed a commented template, baseline only this run
+# ~/.config/dotfiles/bundles (untracked, one bundle name per line). Precedence:
+#   - --bundle/--no-bundles flags  -> authoritative, validated, persisted, no prompt (scriptable)
+#   - else TTY + fzf               -> interactive picker, pre-seeded with the current selection
+#   - else existing selection file -> reuse verbatim (idempotent non-TTY / CI re-runs)
+#   - else                         -> baseline only, seed a commented template
 # Absent/empty selection = baseline only, exactly what a machine that shouldn't get
 # the personal apps leaves it as. See "Machine-local overlays" in the README.
 ui_step "Opt-in Brewfile bundles"
-# write_bundles / parse_bundles — the selection-file writer and its inverse parser,
-# factored into a sourceable lib so the round-trip is unit-tested (tests/bundle_select.bats)
-# without running this bootstrap. Sourcing has no side effects.
+# write_bundles / parse_bundles / fzf_preselect_bind — the selection-file writer,
+# its inverse parser, and the picker pre-seed helper, factored into a sourceable
+# lib so they're unit-tested (tests/bundle_select.bats) without running this
+# bootstrap. Sourcing has no side effects. (avail/bundles_dir are set up top.)
 # shellcheck source=scripts/bundle_select.sh
 . "$DOTFILES/scripts/bundle_select.sh"
-bundles_dir="$DOTFILES/Brewfile.d"
 bundles_sel="$HOME/.config/dotfiles/bundles"
 mkdir -p "$HOME/.config/dotfiles"
 
@@ -116,41 +192,56 @@ if [ ! -f "$bundles_sel" ] && [ -f "$bundles_legacy" ]; then
   ui_detail "migrated selection from legacy ~/.config/dotfiles/brewfiles"
 fi
 
-# Discover available bundles (basename minus the .brewfile suffix). bash 3.2 has
-# no nullglob, so a non-matching glob stays literal — guard each candidate with -e.
-# Every possibly-empty array expansion uses ${arr[@]+"${arr[@]}"} so `set -u`
-# doesn't error on an unset array.
-avail=()
-for bf in "$bundles_dir"/*.brewfile; do
-  [ -e "$bf" ] || continue
-  avail=(${avail[@]+"${avail[@]}"} "$(basename "$bf" .brewfile)")
-done
-
-if [ -f "$bundles_sel" ]; then
-  : # existing selection — use as-is, no prompt
+if [ "$bundles_from_flags" -eq 1 ]; then
+  write_bundles "$bundles_sel" ${avail[@]+"${avail[@]}"} -- ${requested_bundles[@]+"${requested_bundles[@]}"}
+  if [ "${#requested_bundles[@]}" -eq 0 ]; then
+    ui_detail "bundles from flags: baseline only (--no-bundles) — saved to ~/.config/dotfiles/bundles"
+  else
+    ui_detail "bundles from flags: ${requested_bundles[*]} — saved to ~/.config/dotfiles/bundles"
+  fi
 elif [ "${#avail[@]}" -eq 0 ]; then
   ui_detail "no bundles found in Brewfile.d/*.brewfile — baseline only"
-  write_bundles "$bundles_sel" ${avail[@]+"${avail[@]}"} --
+  write_bundles "$bundles_sel" --
 elif [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
-  ui_active "select bundles  ·  TAB toggles · ENTER confirms · ESC = none"
-  # fzf --multi over the discovered names; --preview cats the bundle so you see
-  # its casks/brews before opting in. ESC exits 130, which under `set -e` would
-  # abort the whole bootstrap — swallow it with `|| true`; an empty pick is the
-  # correct "baseline only" outcome.
+  ui_active "select bundles  ·  TAB toggles · ENTER confirms · ESC cancels"
+  # Pre-seed the picker with the current selection (if any) so a re-run shows
+  # today's choices already toggled, ready to amend. fzf_preselect_bind maps the
+  # saved names to their 1-based menu positions and emits a `start:` select bind.
+  current=()
+  if [ -f "$bundles_sel" ]; then
+    while IFS= read -r _b; do
+      current=(${current[@]+"${current[@]}"} "$_b")
+    done < <(parse_bundles "$bundles_sel")
+  fi
+  preseed="$(fzf_preselect_bind ${avail[@]+"${avail[@]}"} -- ${current[@]+"${current[@]}"})"
+  fzf_seed=()
+  [ -n "$preseed" ] && fzf_seed=(--bind "$preseed")
+  # ESC/ctrl-c exit non-zero (130); `|| fzf_rc=$?` keeps `set -e` from aborting.
+  # --preview cats the bundle so you see its casks/brews before opting in.
+  fzf_rc=0
   picked="$(
     printf '%s\n' ${avail[@]+"${avail[@]}"} \
       | fzf --multi --height=40% --reverse --border \
             --prompt='bundles> ' \
-            --header='opt-in Brewfile bundles (none = baseline only)' \
+            --header='opt-in bundles · ENTER confirms · ESC cancels (--no-bundles to clear)' \
             --preview="cat '$bundles_dir'/{}.brewfile" \
             --preview-window=right,60% \
-      || true
-  )"
-  # shellcheck disable=SC2046  # intentional split of the newline-separated picks
-  write_bundles "$bundles_sel" ${avail[@]+"${avail[@]}"} -- $(printf '%s' "$picked")
-  ui_detail "saved selection to ~/.config/dotfiles/bundles"
+            ${fzf_seed[@]+"${fzf_seed[@]}"}
+  )" || fzf_rc=$?
+  # A cancel (non-zero) leaves an existing selection untouched; on a fresh machine
+  # with nothing saved yet it falls through to a baseline-only file so the install
+  # loop below has a well-defined file to read. ENTER (rc 0) always rewrites.
+  if [ "$fzf_rc" -ne 0 ] && [ -f "$bundles_sel" ]; then
+    ui_detail "selection unchanged"
+  else
+    # shellcheck disable=SC2046  # intentional split of the newline-separated picks
+    write_bundles "$bundles_sel" ${avail[@]+"${avail[@]}"} -- $(printf '%s' "$picked")
+    ui_detail "saved selection to ~/.config/dotfiles/bundles"
+  fi
+elif [ -f "$bundles_sel" ]; then
+  ui_detail "non-interactive — using existing ~/.config/dotfiles/bundles"
 else
-  ui_detail "non-interactive / no fzf — baseline only; edit ~/.config/dotfiles/bundles to opt in"
+  ui_detail "non-interactive / no fzf — baseline only; pass --bundle NAME or edit ~/.config/dotfiles/bundles to opt in"
   write_bundles "$bundles_sel" ${avail[@]+"${avail[@]}"} --
 fi
 

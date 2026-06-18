@@ -61,7 +61,7 @@ _converges_ the machine to the declared state rather than clobbering what's ther
 
 - **`home/`** — mirrors `$HOME`, symlinked into place with [GNU Stow](https://www.gnu.org/software/stow/).
 - **`Brewfile`** — formulae + casks, installed with `brew bundle`.
-- **`Brewfile.d/*.brewfile`** — tracked, opt-in bundles (e.g. `personal`, `homelab`, `1password`), picked from an `fzf` multi-select on first run.
+- **`Brewfile.d/*.brewfile`** — tracked, opt-in bundles (e.g. `personal`, `homelab`, `1password`), picked from an `fzf` multi-select (re-runs pre-seed your current pick; `--bundle`/`--no-bundles` skip it for scripts).
 - **`uv_tools.txt`** — Python tools, one `uv tool install` arg-list per line.
 - **`claude_mcp.json`** — Claude Code MCP servers; the GitHub token is a 1Password reference resolved at install time — or, on a machine without 1Password, a `GITHUB_PERSONAL_ACCESS_TOKEN` read from the environment — so no token is ever committed.
 - **`iterm2/`** — iTerm2 preferences (pointed at directly, not stowed).

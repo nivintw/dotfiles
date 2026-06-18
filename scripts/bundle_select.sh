@@ -48,3 +48,33 @@ parse_bundles() {
     printf '%s\n' "$line"
   done < "$1"
 }
+
+# fzf_preselect_bind AVAIL... -- CHOSEN...
+#   Emit an fzf `--bind` expression that pre-selects the CHOSEN names, given the
+#   AVAIL names are fed to fzf in this order (positions are 1-based). Prints
+#   nothing when there is nothing to pre-select. CHOSEN names absent from AVAIL
+#   are skipped, so a stale selection can never wedge the picker. Unit-tested
+#   alongside write/parse: the position math is derived from the same menu order
+#   install.sh feeds fzf, and the test pins it so the two can't drift apart.
+fzf_preselect_bind() {
+  local avail=()
+  while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do
+    avail=(${avail[@]+"${avail[@]}"} "$1"); shift
+  done
+  [ "${1:-}" = "--" ] && shift   # drop the separator; remaining "$@" = chosen names
+  local actions='' name a idx
+  for name in "$@"; do
+    idx=1
+    for a in ${avail[@]+"${avail[@]}"}; do
+      if [ "$a" = "$name" ]; then
+        actions="${actions}pos($idx)+select+"
+        break
+      fi
+      idx=$((idx + 1))
+    done
+  done
+  # Always return 0: an empty result is the normal "nothing to pre-select" case,
+  # and the caller assigns this in a command substitution under `set -e`.
+  [ -n "$actions" ] && printf 'start:%s' "${actions%+}"
+  return 0
+}
