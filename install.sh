@@ -806,7 +806,7 @@ ui_ok "macOS defaults applied"
 # --- 15. Dock layout --------------------------------------------------------
 # Declarative Dock via dockutil: removes every current Dock item and rebuilds
 # from dock.sh's list. That's the config-as-code contract — like every other
-# step here, it converges unconditionally (only Safari + Mail are pinned, so the
+# step here, it converges unconditionally (the pinned set is small, so the
 # replacement is cheap). Run dock.sh yourself any time to re-apply.
 ui_step "Dock layout (dock.sh)"
 bash "$DOTFILES/dock.sh"
