@@ -3,6 +3,21 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.4.1 (2026-06-18)
+
+### 🐛🚑️ Fixes
+
+- **install**: Verify firewall state instead of trusting socketfilterfw exit code
+- **fish**: Surface silent failures, fix launch-docs portability, drop dead code
+
+### ✅🤡🧪 Tests
+
+- Per-function coverage inventory, hook-wiring check, and real-delete tests
+
+### 📝💡 Documentation
+
+- **brewfile**: Fix stale atuin conf.d cross-reference
+
 ## v1.4.0 (2026-06-18)
 
 ### ✨ Features
