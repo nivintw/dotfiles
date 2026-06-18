@@ -38,10 +38,11 @@ UNTESTED_FUNCTIONS = {
 # consistency tests + a manual run on a throwaway VM, not a headless harness.
 UNTESTED_SCRIPTS = {
     "install.sh": "orchestrates host-mutating steps (stow/chsh/brew/firewall/defaults). The"
-    " bundle round-trip logic is factored into scripts/bundle_select.sh and tested there; the"
-    " interactive bundle SELECTION around it (legacy migration, discovery, non-interactive"
-    " fallback) is not yet extracted and rides on shellcheck + manual VM runs; the rest is"
-    " host-mutating glue guarded by shellcheck + the consistency tests",
+    " bundle round-trip and fzf pre-seed logic is factored into scripts/bundle_select.sh and"
+    " tested there; the CLI arg parsing (--help/--bundle/--no-bundles) and the interactive"
+    " SELECTION wiring around it (legacy migration, discovery, non-interactive fallback) are"
+    " not yet extracted and ride on shellcheck + manual VM runs; the rest is host-mutating"
+    " glue guarded by shellcheck + the consistency tests",
     "macos.sh": "writes macOS defaults; covered by shellcheck + manual VM runs",
     "dock.sh": "rebuilds the Dock via dockutil; covered by shellcheck + manual VM runs",
 }

@@ -164,7 +164,7 @@
         <p class="section-lede">How I run one repo across a laptop, a work box, and a homelab node without a fork or a <code>work</code>/<code>personal</code> branch each: per-machine specifics live in untracked overlay files the bootstrap seeds, and each machine fills in only what it needs. Adopt the same pattern in your fork — see <a href="architecture.html#overlays">Machine-local overlays</a> for the full mechanism.</p>
         <div class="feature">
           <span class="feature__mark">⊕</span>
-          <div><h3>Opt-in software bundles</h3><p>The bootstrap's bundle step shows an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select; pick <code>personal</code> and/or <code>homelab</code>. Your choice persists to <code>~/.config/dotfiles/bundles</code> for idempotent re-runs. To enable one later without re-running the installer:</p></div>
+          <div><h3>Opt-in software bundles</h3><p>The bootstrap's bundle step shows an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select; pick <code>personal</code> and/or <code>homelab</code>. A re-run pre-seeds the picker with your current choice, ready to amend, and persists the result to <code>~/.config/dotfiles/bundles</code>. For a scripted, non-interactive run, pass <code>install.sh --bundle personal</code> (repeatable) or <code>--no-bundles</code> to skip the picker entirely. To enable one later without re-running the installer:</p></div>
         </div>
         <pre><code>echo personal &gt;&gt; ~/.config/dotfiles/bundles
 brew bundle install --file=~/dotfiles/Brewfile.d/personal.brewfile</code></pre>

@@ -74,3 +74,21 @@ EOF
   [ "${#lines[@]}" -eq 1 ]
   [ "${lines[0]}" = "my bundle" ]
 }
+
+@test "fzf_preselect_bind maps chosen names to 1-based menu positions" {
+  run fzf_preselect_bind personal homelab work -- personal work
+  [ "$status" -eq 0 ]
+  [ "$output" = "start:pos(1)+select+pos(3)+select" ]
+}
+
+@test "fzf_preselect_bind emits nothing when nothing is chosen" {
+  run fzf_preselect_bind personal homelab --
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "fzf_preselect_bind skips chosen names absent from the menu" {
+  run fzf_preselect_bind personal homelab -- ghost personal
+  [ "$status" -eq 0 ]
+  [ "$output" = "start:pos(1)+select" ]
+}
