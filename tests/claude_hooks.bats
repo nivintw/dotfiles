@@ -93,6 +93,18 @@ feed() { # $1 = script path, $2 = JSON payload
   [ "$status" -eq 0 ]
 }
 
+@test "lint skips a file outside the project root (exit 0)" {
+  # A violation that WOULD flag if linted, but placed outside CLAUDE_PROJECT_DIR
+  # (the case for Claude's auto-memory under ~/.claude) — the project-scoped guard
+  # must skip it rather than apply this repo's linters to non-project content.
+  outside="$(mktemp -d)"
+  printf 'import os\n' > "$outside/bad.py" # F401 — flagged if it were checked
+  run bash -c "printf '%s' '{\"tool_input\":{\"file_path\":\"$outside/bad.py\"}}' | CLAUDE_PROJECT_DIR='$WORK' '$LINT'"
+  rm -rf "$outside"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "lint skips a check whose tool is missing (no phantom finding)" {
   # Restrict PATH to just the essentials (bash/cat/jq) so the linters are absent:
   # a missing ruff must be skipped with a warning, not reported as a lint finding.
