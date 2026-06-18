@@ -115,11 +115,15 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
 
-      # On a cache hit the browser is already present and this skips the download;
-      # --with-deps still runs apt for the system libraries, which live in /usr/lib
-      # on the fresh runner and so can't be cached.
-      - name: Install Playwright Chromium (for the docs-site tests)
-        run: uv run playwright install --with-deps chromium
+      # `--only-shell chromium` fetches just the Chromium headless shell, not the full
+      # browser: the docs-site tests run headless with no channel, which uses the shell
+      # anyway (the heavier "new headless mode" is opt-in via channel "chromium"). The
+      # `chromium` arg is required — a bare `--only-shell` means "all browsers" and also
+      # pulls Firefox + WebKit. On a cache hit this skips the download; --with-deps
+      # still runs apt for the system libs, which live in /usr/lib on the fresh runner
+      # and so can't be cached.
+      - name: Install Playwright headless shell (for the docs-site tests)
+        run: uv run playwright install --with-deps --only-shell chromium
 
       - name: Config-validity + docs-site tests (pytest)
         run: uv run pytest
