@@ -35,7 +35,7 @@ tap "terraform-linters/tap"   # Source for the tflint cask below
 # ===========================================================================
 
 # --- Shell & navigation ----------------------------------------------------
-brew "atuin"            # SQLite shell history w/ search (rebinds Ctrl+R; see conf.d/atuin.fish)
+brew "atuin"            # SQLite shell history w/ search (rebinds Ctrl+R; see conf.d/zz-atuin.fish)
 brew "bash"             # Modern Bash 5.x (Apple ships 3.2); also a dep of direnv
 brew "direnv"           # Load/unload environment variables based on $PWD
 brew "fish"             # The shell. A brew upgrade can disturb an open session until restart.
