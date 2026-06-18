@@ -91,8 +91,13 @@ jobs:
           chmod +x "$RUNNER_TEMP/taplo"
           "$RUNNER_TEMP/taplo" fmt --check --diff
 
+      # The .claude/hooks bats tests invoke the lint hook, which calls `ruff` off
+      # PATH — locally direnv's .envrc activates .venv to provide it, so do the same
+      # here: materialize the project env and put its bin on PATH for this step.
+      - name: Sync the project env (ruff/ty on PATH for the hook tests)
+        run: uv sync
       - name: Fish behavior tests (bats)
-        run: bats tests/
+        run: PATH="$PWD/.venv/bin:$PATH" bats tests/
 
       - name: Cache Playwright browsers
         uses: actions/cache@v5
