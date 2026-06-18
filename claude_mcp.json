@@ -11,5 +11,15 @@
     "headers": {
       "Authorization": "Bearer {{ op://MCP/github-claude-pat/credential }}"
     }
+  },
+  "context7": {
+    "type": "stdio",
+    "command": "npx",
+    "args": ["-y", "@upstash/context7-mcp"]
+  },
+  "playwright": {
+    "type": "stdio",
+    "command": "npx",
+    "args": ["-y", "@playwright/mcp@latest"]
   }
 }
