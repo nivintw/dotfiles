@@ -66,6 +66,8 @@ Options:
   --bundle NAME    Opt into Brewfile bundle NAME and persist the choice.
                    Repeatable; bypasses the interactive picker (scriptable).
   --no-bundles     Opt into no bundles (baseline only); bypass the picker.
+  --keep-bundles   Keep the saved selection as-is; skip the picker without
+                   rewriting it. Can't be combined with --bundle/--no-bundles.
   -h, --help       Show this help and exit.
 
 Opt-in Brewfile bundles (Brewfile.d/<name>.brewfile):
@@ -73,6 +75,7 @@ $list
 
 With no --bundle/--no-bundles flag on an interactive terminal, install.sh opens
 an fzf multi-select pre-seeded with the current selection, ready to amend.
+--keep-bundles skips that picker and reuses the saved selection unchanged.
 Without a usable fzf picker (non-interactive, or fzf missing) it reuses
 ~/.config/dotfiles/bundles, or installs the baseline only when that file is absent.
 EOF
@@ -103,12 +106,16 @@ add_requested_bundle() {
 # Parse CLI args. --bundle/--no-bundles set an authoritative selection that
 # bypasses the picker; bundles_from_flags records that a flag was given, so an
 # explicit empty selection (--no-bundles) stays distinct from "no flag → prompt".
+# --keep-bundles is the opposite: skip the picker but leave the saved selection
+# untouched (keep_bundles), so it can't be combined with the two that rewrite it.
 requested_bundles=()
 bundles_from_flags=0
+keep_bundles=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h | --help) usage; exit 0 ;;
     --no-bundles) bundles_from_flags=1; shift ;;
+    --keep-bundles) keep_bundles=1; shift ;;
     --bundle)
       shift
       [ "$#" -gt 0 ] || { ui_err "--bundle requires a NAME"; exit 2; }
@@ -124,6 +131,13 @@ while [ "$#" -gt 0 ]; do
     -* | *) ui_err "unexpected argument: $1"; echo >&2; usage >&2; exit 2 ;;
   esac
 done
+
+# --keep-bundles preserves the saved selection; --bundle/--no-bundles rewrite it.
+# Asking for both is contradictory — reject it rather than silently pick one.
+if [ "$keep_bundles" -eq 1 ] && [ "$bundles_from_flags" -eq 1 ]; then
+  ui_err "--keep-bundles can't be combined with --bundle/--no-bundles"
+  exit 2
+fi
 
 ui_banner "dotfiles bootstrap"
 
@@ -180,6 +194,7 @@ ui_ok "Homebrew packages installed"
 # of software not wanted on every machine. The per-machine selection lives in
 # ~/.config/dotfiles/bundles (untracked, one bundle name per line). Precedence,
 # matching the if/elif chain below in order:
+#   - --keep-bundles flag          -> reuse the saved selection as-is, no picker, no rewrite
 #   - --bundle/--no-bundles flags  -> authoritative, validated, persisted, no prompt (scriptable)
 #   - else no bundles available    -> baseline only (nothing to pick)
 #   - else TTY + fzf               -> interactive picker, pre-seeded with the current selection
@@ -204,7 +219,15 @@ if [ ! -f "$bundles_sel" ] && [ -f "$bundles_legacy" ]; then
   ui_detail "migrated selection from legacy ~/.config/dotfiles/brewfiles"
 fi
 
-if [ "$bundles_from_flags" -eq 1 ]; then
+if [ "$keep_bundles" -eq 1 ]; then
+  # Skip the picker and leave the saved selection untouched. A missing file
+  # parses to nothing downstream, i.e. baseline only — so no write is needed.
+  if [ -f "$bundles_sel" ]; then
+    ui_detail "keeping saved selection (--keep-bundles) — ~/.config/dotfiles/bundles"
+  else
+    ui_detail "--keep-bundles: no saved selection — baseline only"
+  fi
+elif [ "$bundles_from_flags" -eq 1 ]; then
   write_bundles "$bundles_sel" ${avail[@]+"${avail[@]}"} -- ${requested_bundles[@]+"${requested_bundles[@]}"}
   if [ "${#requested_bundles[@]}" -eq 0 ]; then
     ui_detail "bundles from flags: baseline only (--no-bundles) — saved to ~/.config/dotfiles/bundles"
@@ -782,22 +805,12 @@ ui_ok "macOS defaults applied"
 
 # --- 15. Dock layout --------------------------------------------------------
 # Declarative Dock via dockutil: removes every current Dock item and rebuilds
-# from dock.sh's list. That's the config-as-code contract, but it's the one step
-# that visibly discards local state, so confirm before doing it interactively.
-# Non-interactive (CI/automation) converges silently; bare Enter proceeds.
+# from dock.sh's list. That's the config-as-code contract — like every other
+# step here, it converges unconditionally (only Safari + Mail are pinned, so the
+# replacement is cheap). Run dock.sh yourself any time to re-apply.
 ui_step "Dock layout (dock.sh)"
-if [ -t 0 ]; then
-  ui_warn "dock.sh REPLACES your current Dock with its declared layout."
-  printf '   Rebuild the Dock now? [Y/n] '
-  read -r dock_reply || dock_reply=n   # EOF (Ctrl-D) -> treat as "no", don't abort under set -e
-  case "$dock_reply" in
-    [Nn]*) ui_warn "skipped Dock layout — run ~/dotfiles/dock.sh yourself to apply it" ;;
-    *)     bash "$DOTFILES/dock.sh"; ui_ok "Dock layout applied" ;;
-  esac
-else
-  bash "$DOTFILES/dock.sh"
-  ui_ok "Dock layout applied"
-fi
+bash "$DOTFILES/dock.sh"
+ui_ok "Dock layout applied"
 
 ui_banner "dotfiles bootstrap complete"
 ui_detail "Restart your shell (or run 'exec fish') to pick everything up."

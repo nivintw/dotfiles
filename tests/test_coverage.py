@@ -39,7 +39,8 @@ UNTESTED_FUNCTIONS = {
 UNTESTED_SCRIPTS = {
     "install.sh": "orchestrates host-mutating steps (stow/chsh/brew/firewall/defaults). The"
     " bundle round-trip and fzf pre-seed logic is factored into scripts/bundle_select.sh and"
-    " tested there; the CLI arg parsing (--help/--bundle/--no-bundles) and the interactive"
+    " tested there; the CLI arg parsing (--help/--bundle/--no-bundles/--keep-bundles) and the"
+    " interactive"
     " SELECTION wiring around it (legacy migration, discovery, non-interactive fallback) are"
     " not yet extracted and ride on shellcheck + manual VM runs; the rest is host-mutating"
     " glue guarded by shellcheck + the consistency tests",

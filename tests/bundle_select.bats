@@ -43,6 +43,14 @@ teardown() {
   [ -z "$output" ]
 }
 
+@test "parse_bundles on a missing file yields nothing without erroring" {
+  # --keep-bundles on a machine that never saved a pick reaches the install loop
+  # with no selection file; parsing it must read as "baseline only", not abort.
+  run parse_bundles "$TMP/does-not-exist"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "the written file documents the available bundles as comments" {
   write_bundles "$SEL" personal homelab -- personal
   # Every available bundle appears as a commented hint...
