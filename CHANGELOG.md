@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.6.1 (2026-06-18)
+
+### 🐛🚑️ Fixes
+
+- **install**: Pre-select saved bundles on the fzf load event
+
 ## v1.6.0 (2026-06-18)
 
 ### ✨ Features
