@@ -3,6 +3,28 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.4.0 (2026-06-18)
+
+### ✨ Features
+
+- **claude**: Add project hooks, reviewer agent, check skill, and MCP servers
+
+### 🐛🚑️ Fixes
+
+- **claude**: Harden lint and typecheck hooks against missing tools and git failures
+
+### 💚👷 CI & Build
+
+- Put the project venv on PATH so the hook bats tests find ruff
+
+### 📝💡 Documentation
+
+- Add project CLAUDE.md
+
+### 🧹 chore
+
+- **claude**: Enable installed plugins in global settings
+
 ## v1.3.0 (2026-06-17)
 
 ### ✨ Features
