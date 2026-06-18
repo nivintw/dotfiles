@@ -12,9 +12,19 @@ function launch-docs --description "Serve the dotfiles docs/ site locally (pytho
         set port $p
     end
 
-    set -l docs "$HOME/dotfiles/docs"
-    if not test -d "$docs"
-        echo "launch-docs: docs site not found at $docs" >&2
+    # Resolve docs/ without hardcoding ~/dotfiles: honor $DOTFILES, then a docs/ in
+    # the current repo (so it works from any worktree you're cd'd into), then the
+    # conventional checkout.
+    set -l toplevel (git rev-parse --show-toplevel 2>/dev/null)
+    set -l docs
+    for cand in "$DOTFILES/docs" "$toplevel/docs" "$HOME/dotfiles/docs"
+        if test -d "$cand"
+            set docs "$cand"
+            break
+        end
+    end
+    if test -z "$docs"
+        echo "launch-docs: docs site not found (set \$DOTFILES or run from the dotfiles repo)" >&2
         return 1
     end
 

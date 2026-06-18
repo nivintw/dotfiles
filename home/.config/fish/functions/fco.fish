@@ -20,5 +20,5 @@ function fco --description "Fuzzy-checkout a git branch (local or remote)"
     )
     or return
     test -n "$branch"; or return
-    git checkout $branch
+    git checkout $branch; or return
 end

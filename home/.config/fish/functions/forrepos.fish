@@ -22,6 +22,8 @@ function forrepos --description "Run a command at the root of EVERY git repo und
         echo "── "(string replace -r '^\./' '' -- $repo)" ──"
         pushd $repo >/dev/null; or continue
         $argv
-        popd >/dev/null
+        # If $argv touched the dir stack, a bare popd could resume from the wrong
+        # directory; bail out rather than fan out into an unknown CWD.
+        popd >/dev/null; or break
     end
 end

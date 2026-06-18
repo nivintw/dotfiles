@@ -26,7 +26,7 @@ function git_prune_local --description "Delete local branches that have been mer
 
     # Ensure we're in a git repository
     if not git rev-parse --git-dir >/dev/null 2>&1
-        echo "Error: Not a git repository."
+        echo "Error: Not a git repository." >&2
         return 1
     end
 
@@ -34,9 +34,14 @@ function git_prune_local --description "Delete local branches that have been mer
         echo "(dry run: no branches will be deleted)"
     end
 
-    # Fetch the latest changes from the remote
+    # Fetch the latest changes from the remote. Abort on failure rather than prune
+    # against stale remote-tracking refs (a failed fetch could mis-classify a branch
+    # as [gone] and risk deleting the only copy).
     echo "Fetching latest changes from remote..."
-    git fetch --prune
+    if not git fetch --prune
+        echo "Error: git fetch failed; aborting to avoid pruning on stale remote state." >&2
+        return 1
+    end
 
     # NOTE: assumes the remote is named "origin".
     # Determine the default branch on the remote (usually origin/main).

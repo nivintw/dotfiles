@@ -13,5 +13,5 @@ function fcor --description "Fuzzy-checkout a recent local branch (by commit dat
     )
     or return
     test -n "$branch"; or return
-    git checkout $branch
+    git checkout $branch; or return
 end
