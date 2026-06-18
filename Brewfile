@@ -84,6 +84,9 @@ brew "shellcheck"       # Static analysis for shell scripts
 brew "taplo"            # TOML toolkit
 brew "typos-cli"        # Source-code spell checker
 
+# --- Languages & runtimes --------------------------------------------------
+brew "node"             # JS runtime — powers npx-based MCP servers (context7, playwright)
+
 # --- Containers & Kubernetes -----------------------------------------------
 brew "k9s"              # Kubernetes CLI to manage your clusters in style
 brew "lazydocker"       # TUI for Docker / Compose
