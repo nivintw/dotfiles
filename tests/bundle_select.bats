@@ -92,3 +92,19 @@ EOF
   [ "$status" -eq 0 ]
   [ "$output" = "start:pos(1)+select" ]
 }
+
+@test "fzf_preselect_bind emits positions in chosen order, not menu order" {
+  # Positions follow the saved selection's order, which need not match the menu
+  # order — guards against an implementation that assumes they're aligned.
+  run fzf_preselect_bind personal homelab work -- work personal
+  [ "$status" -eq 0 ]
+  [ "$output" = "start:pos(3)+select+pos(1)+select" ]
+}
+
+@test "fzf_preselect_bind indexes correctly past a menu name with a space" {
+  # Bundle names can contain spaces (see the round-trip test); a later entry's
+  # position must not be thrown off by word-splitting an earlier spaced name.
+  run fzf_preselect_bind alpha "my bundle" charlie -- charlie
+  [ "$status" -eq 0 ]
+  [ "$output" = "start:pos(3)+select" ]
+}
