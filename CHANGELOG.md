@@ -3,6 +3,17 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.7.0 (2026-06-18)
+
+### ✨ Features
+
+- **fish**: Add tab-completion for install.sh and shell functions
+- **claude**: Overlay machine-local Claude Code settings
+
+### 🐛🚑️ Fixes
+
+- **claude**: Harden settings generation against non-object and empty input
+
 ## v1.6.3 (2026-06-18)
 
 ### 🐛🚑️ Fixes
