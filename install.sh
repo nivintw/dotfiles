@@ -718,16 +718,19 @@ ui_ok "uv tools installed"
 # (so the fresh-uv export near the top never ran) and the caller's PATH lacks it.
 export PATH="$HOME/.local/bin:$PATH"
 
-# Playwright needs a browser binary beyond the Python package. Install Chromium
-# via the repo's *locked* dev dependency — the exact version `uv run pytest` uses
-# (and what CI installs) — not the floating global `playwright` tool, whose version
-# can drift and point pytest at a Chromium revision that was never downloaded. The
-# build lands in a shared OS cache, so the global tool reuses it when versions
-# match. Idempotent (skips if present); non-fatal so a slow/failed download never
-# aborts the bootstrap.
-ui_active "installing Playwright Chromium (browser for the docs-site tests)"
-uv run --project "$DOTFILES" playwright install chromium \
-  || ui_warn "Playwright Chromium install failed; re-run install.sh to retry."
+# Playwright needs a browser binary beyond the Python package. `--only-shell chromium`
+# fetches just the Chromium headless shell (smaller than the full browser): the
+# docs-site tests run headless with no channel, which uses the shell. The `chromium`
+# arg is required — a bare `--only-shell` means "all browsers" and also pulls Firefox
+# + WebKit. Install via the repo's *locked* dev dependency — the exact version
+# `uv run pytest` uses (and what CI installs) — not the floating global `playwright`
+# tool, whose version can drift and point pytest at a revision that was never
+# downloaded. The build lands in a shared OS cache, so the global tool reuses it when
+# versions match. Idempotent (skips if present); non-fatal so a slow/failed download
+# never aborts the bootstrap.
+ui_active "installing Playwright headless shell (browser for the docs-site tests)"
+uv run --project "$DOTFILES" playwright install --only-shell chromium \
+  || ui_warn "Playwright headless shell install failed; re-run install.sh to retry."
 
 # --- 10. Git clone hook (notify-on-clone; opt-in auto-install) ---------------
 # The git template at ~/.config/git/template (stowed in step 3, wired up by

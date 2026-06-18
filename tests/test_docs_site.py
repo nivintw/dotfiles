@@ -16,8 +16,9 @@ behaves as in production rather than taking the file:// fallback path.
 Requires a Playwright browser, which install.sh and CI both provision. If it is
 missing these tests FAIL (with Playwright's own "run playwright install" message)
 rather than silently skipping — a green run should mean the docs were actually
-checked, not quietly skipped. Install locally with:
-    uv run playwright install chromium
+checked, not quietly skipped. These tests run headless, so the lightweight shell
+is enough; install locally with:
+    uv run playwright install --only-shell   # or 'chromium' for headed debugging
 """
 
 from __future__ import annotations
