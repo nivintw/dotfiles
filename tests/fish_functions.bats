@@ -186,3 +186,27 @@ fishrun() {
   [ -d "$tmp/__pycache__" ]  # the cache dir must survive a dry run
   rm -rf "$tmp"
 }
+
+# The real (non-dry-run) path must delete the caches and ONLY the caches.
+@test "pyclean deletes caches but leaves real files intact" {
+  tmp="$(mktemp -d)"
+  mkdir -p "$tmp/__pycache__" "$tmp/.ruff_cache"
+  touch "$tmp/__pycache__/foo.cpython-314.pyc" "$tmp/stray.pyc" "$tmp/keep.py"
+  cd "$tmp"
+  fishrun pyclean
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Python caches cleaned"* ]]
+  [ ! -d "$tmp/__pycache__" ]
+  [ ! -d "$tmp/.ruff_cache" ]
+  [ ! -f "$tmp/stray.pyc" ]
+  [ -f "$tmp/keep.py" ] # a real source file must survive
+  rm -rf "$tmp"
+}
+
+# With no repo, no $DOTFILES, and no ~/dotfiles under an overridden HOME, the
+# docs dir can't be resolved — it must report that rather than serve the wrong tree.
+@test "launch-docs reports a missing docs dir when none can be resolved" {
+  run env HOME="$NONREPO" DOTFILES="" fish -c "cd '$NONREPO'; source '$FUNCDIR/launch-docs.fish'; launch-docs"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"docs site not found"* ]]
+}
