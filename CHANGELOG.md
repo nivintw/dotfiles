@@ -3,6 +3,16 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.5.0 (2026-06-18)
+
+### ✨ Features
+
+- **install**: Add bundle-selection flags and --help; re-prompt with current pick
+
+### ♻️ Refactorings
+
+- **install**: Address review — precedence comment, dedup flags, pre-seed tests
+
 ## v1.4.1 (2026-06-18)
 
 ### 🐛🚑️ Fixes
