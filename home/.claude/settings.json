@@ -16,19 +16,26 @@
       "Bash(brew list *)",
       "Bash(brew info *)"
     ],
-    "deny": [
-      "Read(**/*.env)",
-      "Read(**/*.pem)",
-      "Bash(git clean*)"
-    ],
+    "deny": ["Read(**/*.env)", "Read(**/*.pem)", "Bash(git clean*)"],
     "defaultMode": "default"
+  },
+  "enabledPlugins": {
+    "castify@nivintw-claude-skills": true,
+    "skill-creator@claude-plugins-official": true,
+    "hookify@claude-plugins-official": true,
+    "plugin-dev@claude-plugins-official": true,
+    "claude-code-setup@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "session-report@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "nivintw-claude-skills": {
       "source": {
         "source": "github",
         "repo": "nivintw/nivintw-claude-skills"
-      }
+      },
+      "autoUpdate": true
     }
   },
   "effortLevel": "high",
@@ -36,8 +43,5 @@
   "theme": "dark",
   "remoteControlAtStartup": true,
   "inputNeededNotifEnabled": true,
-  "agentPushNotifEnabled": true,
-  "enabledPlugins": {
-    "castify@nivintw-claude-skills": true
-  }
+  "agentPushNotifEnabled": true
 }
