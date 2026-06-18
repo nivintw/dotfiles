@@ -93,6 +93,18 @@ feed() { # $1 = script path, $2 = JSON payload
   [ "$status" -eq 0 ]
 }
 
+@test "lint skips a check whose tool is missing (no phantom finding)" {
+  # Restrict PATH to just the essentials (bash/cat/jq) so the linters are absent:
+  # a missing ruff must be skipped with a warning, not reported as a lint finding.
+  mkdir "$WORK/bin"
+  ln -s "$(command -v bash)" "$WORK/bin/bash"
+  ln -s "$(command -v cat)" "$WORK/bin/cat"
+  ln -s "$(command -v jq)" "$WORK/bin/jq"
+  printf 'import os\n' > "$WORK/x.py"
+  run bash -c "printf '%s' '{\"tool_input\":{\"file_path\":\"$WORK/x.py\"}}' | PATH='$WORK/bin' CLAUDE_PROJECT_DIR='$WORK' '$LINT'"
+  [ "$status" -eq 0 ]
+}
+
 # --- typecheck-touched.sh: whole-project ty at Stop, guarded ---------------
 
 @test "typecheck skips a turn it triggered itself (stop_hook_active)" {
@@ -101,7 +113,15 @@ feed() { # $1 = script path, $2 = JSON payload
 }
 
 @test "typecheck skips when there are no Python changes" {
-  # $WORK is not a git repo, so the change-detection finds nothing and exits 0.
+  git -C "$WORK" init -q
+  git -C "$WORK" -c user.email=t@e.st -c user.name=t commit -q --allow-empty -m init
+  printf 'notes\n' > "$WORK/readme.txt" # a non-Python change
   run bash -c "printf '%s' '{}' | CLAUDE_PROJECT_DIR='$WORK' '$TYPECHECK'"
   [ "$status" -eq 0 ]
+}
+
+@test "typecheck surfaces a git failure instead of silently skipping" {
+  # $WORK is not a git repo, so the git query fails — exit 1, not a silent 0.
+  run bash -c "printf '%s' '{}' | CLAUDE_PROJECT_DIR='$WORK' '$TYPECHECK'"
+  [ "$status" -eq 1 ]
 }

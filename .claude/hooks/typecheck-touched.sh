@@ -15,8 +15,17 @@ fi
 
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 
-# Skip unless there are uncommitted Python changes (tracked or new).
-git status --porcelain --untracked-files=all 2>/dev/null | grep -qE '\.py$' || exit 0
+# Detect Python changes via git. Test for non-empty output rather than parsing
+# names, which sidesteps porcelain's quoting of unusual paths; and surface a git
+# failure (exit 1) instead of silently treating it as "nothing changed".
+if ! tracked=$(git diff --name-only HEAD -- '*.py' 2>/dev/null) ||
+  ! untracked=$(git ls-files --others --exclude-standard -- '*.py' 2>/dev/null); then
+  echo "typecheck-touched: git query failed; skipping type check" >&2
+  exit 1
+fi
+
+# Skip unless a Python file was changed (tracked) or added (untracked).
+[ -n "$tracked$untracked" ] || exit 0
 
 if ! output=$(uv run ty check . 2>&1); then
   printf 'ty type-check failed:\n\n%s' "$output" >&2

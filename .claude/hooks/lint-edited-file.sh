@@ -15,6 +15,12 @@ cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 
 findings=""
 check() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    # A missing tool is a setup gap, not a lint finding — warn, don't fail the
+    # file (otherwise "ruff: command not found" gets fed back as something to fix).
+    printf '%s not found on PATH; skipping its check (install it to enable)\n' "$1" >&2
+    return
+  fi
   local output
   if ! output=$("$@" 2>&1); then
     findings+="\$ $*"$'\n'"$output"$'\n\n'
