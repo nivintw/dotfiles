@@ -30,5 +30,6 @@ cask "resilio-sync"          # Peer-to-peer file sync
 brew "gource"                # Version control history visualization
 
 # --- App Store (personal Apple ID) -----------------------------------------
-mas "Kindle", id: 302584613  # Kindle reader
-mas "Calca",  id: 635758264  # Markdown calculator
+mas "The Unarchiver", id: 425424353  # Archive extractor
+mas "Kindle",         id: 302584613  # Kindle reader
+mas "Calca",          id: 635758264  # Markdown calculator

@@ -50,7 +50,7 @@ brew "tmux"             # Terminal multiplexer
 # --- Dotfiles bootstrap & macOS management ---------------------------------
 brew "dockutil"         # Scriptable macOS Dock — drives dock.sh
 brew "duti"             # Set default apps for file types / URL schemes
-brew "mas"              # Mac App Store CLI — installs the `mas` apps listed below
+brew "mas"              # Mac App Store CLI — drives the `mas` apps in the opt-in bundles
 brew "pam-reattach"     # Makes Touch ID sudo work inside tmux (see install.sh sudo_local)
 brew "stow"             # Symlink farm manager — deploys this dotfiles repo into $HOME
 brew "topgrade"         # One command to update brew + mas + uv + fisher + more
@@ -241,7 +241,8 @@ vscode "liviuschera.noctis"       # Noctis theme family
 vscode "silofy.hackthebox"        # HackTheBox theme
 
 # ---------------------------------------------------------------------------
-# Mac App Store apps (installed via `mas`; requires being signed into the Store)
-# IDs from `mas list`. Regenerate that view anytime with: mas list
+# No `mas` (Mac App Store) apps in the baseline: a managed work machine may have
+# no App Store / no personal Apple ID, so a baseline `mas` line would fail the
+# install there. App Store apps live in the opt-in bundles under Brewfile.d/
+# (personal, homelab, 1password), installed only on machines that enable them.
 # ---------------------------------------------------------------------------
-mas "The Unarchiver",       id: 425424353    # Archive extractor
