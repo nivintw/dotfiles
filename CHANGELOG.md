@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.6.3 (2026-06-18)
+
+### 🐛🚑️ Fixes
+
+- **hooks**: Scope lint-on-save to files inside the project
+
 ## v1.6.2 (2026-06-18)
 
 ### 🐛🚑️ Fixes
