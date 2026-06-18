@@ -563,6 +563,38 @@ seed_if_absent "$HOME/.config/dotfiles/claude_mcp.local.json" <<'EOF'
 {}
 EOF
 
+# Claude Code settings overlay: install.sh (step 13) deep-merges this over the
+# tracked claude_settings.json baseline and writes the result as a REAL file to
+# ~/.claude/settings.json (which is NOT stowed). The overlay wins per scalar key;
+# arrays (permissions.allow/deny, hooks.<event>) UNION, so a machine adds to the
+# baseline rather than replacing it. Whatever the live settings.json holds beyond
+# the baseline is folded back in here on every run, so machine-local prefs accrue
+# instead of being clobbered. Strict JSON only — parsed by jq, no comments.
+# Examples:
+#   { "theme": "light", "permissions": { "allow": ["Bash(kubectl *)"] } }
+#   machine-local hook (script lives in ~/.config/dotfiles/claude-hooks.local/):
+#   { "hooks": { "Stop": [ { "hooks": [ { "type": "command",
+#       "command": "$HOME/.config/dotfiles/claude-hooks.local/notify.sh" } ] } ] } }
+seed_if_absent "$HOME/.config/dotfiles/claude_settings.local.json" <<'EOF'
+{}
+EOF
+
+# Home for machine-local Claude Code hook scripts referenced from the settings
+# overlay above. Untracked + outside the repo, so a work-only hook never lands in
+# the public repo. (Shared user-level hooks instead go under home/.claude/hooks/.)
+seed_if_absent "$HOME/.config/dotfiles/claude-hooks.local/README.md" <<'EOF'
+# Machine-local Claude Code hook scripts (untracked)
+
+Put per-machine hook scripts here and reference them by absolute path from the
+`hooks` block of `~/.config/dotfiles/claude_settings.local.json`. install.sh
+merges that overlay's `hooks` into the generated `~/.claude/settings.json`
+alongside any shared hooks from the tracked `claude_settings.json` baseline.
+
+Keep work-vs-personal hooks here so they never reach the public repo. Shared
+hooks that should apply on every machine belong in the baseline (and their
+scripts under `home/.claude/hooks/`).
+EOF
+
 # macos.sh sources this just before it restarts Finder/Dock, so per-machine
 # `defaults` writes are applied in the same pass. Use `dwrite ...` (defined in
 # macos.sh) for the same MDM-safe "warn and continue" behavior on managed boxes.
@@ -784,7 +816,85 @@ else
   ui_warn "skipping Claude Code MCP setup (claude CLI not installed — step 11's install likely failed; re-run install.sh)"
 fi
 
-# --- 13. Ollama model for GitLens' local AI ---------------------------------
+# --- 13. Claude Code user settings (baseline + machine-local overlay) --------
+# ~/.claude/settings.json is a GENERATED REAL file — NOT stowed. The tracked
+# claude_settings.json baseline is deep-merged with an untracked overlay
+# (~/.config/dotfiles/claude_settings.local.json) and written out fresh each run.
+# Merge rule (scripts/claude_settings_merge.sh): objects recurse, ARRAYS UNION
+# (permissions.allow/deny and hooks.<event> accumulate instead of one clobbering
+# the other — matching how Claude Code unions permissions across scopes), scalars
+# overlay-wins.
+#
+# Every run also re-captures machine-local drift: whatever the live settings.json
+# holds beyond the baseline (Claude Code's /config and /plugin write through it,
+# or you edited it) is diffed out and folded into the overlay, so prefs accrue
+# rather than being reset. That's the curation workflow: to make a baseline key
+# machine-local, delete it from claude_settings.json — the next run finds it in
+# the live file and moves it into this machine's overlay automatically.
+#
+# Migration: a machine from a previous (stow) install has ~/.claude/settings.json
+# as a SYMLINK into the repo. `cat` reads through it (the migration read); we then
+# `rm -f` the symlink and write a real file in its place. Lossless on the primary
+# machine because claude_settings.json starts as a verbatim copy of the old file.
+#
+# Safety mirrors the MCP step: validate every JSON input with `jq empty` before
+# use; a malformed baseline skips the step (never wipe settings), a malformed
+# overlay is rebuilt from the live delta rather than silently dropping accruals.
+if command -v jq >/dev/null 2>&1; then
+  ui_step "Claude Code user settings (claude_settings.json)"
+  # shellcheck source=scripts/claude_settings_merge.sh
+  . "$DOTFILES/scripts/claude_settings_merge.sh"
+  claude_baseline="$DOTFILES/claude_settings.json"
+  claude_overlay="$HOME/.config/dotfiles/claude_settings.local.json"
+  claude_settings="$HOME/.claude/settings.json"
+
+  if ! jq empty "$claude_baseline" >/dev/null 2>&1; then
+    ui_warn "claude_settings.json is not valid JSON — skipping settings generation (fix it and re-run)"
+  else
+    baseline_json="$(cat "$claude_baseline")"
+
+    # CURRENT: the live settings (cat follows a leftover symlink — the migration
+    # read). Missing/invalid -> treat as {} so a corrupt live file can't poison the
+    # overlay; the merge still restores the baseline.
+    current_json='{}'
+    if [ -e "$claude_settings" ]; then
+      current_raw="$(cat "$claude_settings" 2>/dev/null || true)"
+      if printf '%s' "$current_raw" | jq empty >/dev/null 2>&1; then
+        current_json="$current_raw"
+      else
+        ui_warn "existing ~/.claude/settings.json isn't valid JSON — ignoring it (regenerating from baseline + overlay)"
+      fi
+    fi
+
+    # DELTA: keys/values in CURRENT not already implied by the baseline.
+    delta_json="$(claude_settings_diff "$baseline_json" "$current_json")"
+
+    # Fold DELTA into the overlay (accrues machine-local prefs across runs). A
+    # malformed overlay must not silently wipe accruals — warn and rebuild it from
+    # the live delta only.
+    overlay_json="$delta_json"
+    if [ -f "$claude_overlay" ]; then
+      if jq empty "$claude_overlay" >/dev/null 2>&1; then
+        overlay_json="$(claude_settings_merge "$(cat "$claude_overlay")" "$delta_json")"
+      else
+        ui_warn "ignoring $claude_overlay (not valid JSON) — rebuilding it from the live delta; fix it and re-run"
+      fi
+    fi
+    mkdir -p "$(dirname "$claude_overlay")"
+    printf '%s\n' "$overlay_json" > "$claude_overlay"
+
+    # baseline ⊕ overlay -> a REAL file (rm -f drops a leftover symlink first).
+    merged_json="$(claude_settings_merge "$baseline_json" "$overlay_json")"
+    mkdir -p "$(dirname "$claude_settings")"
+    rm -f "$claude_settings"
+    printf '%s\n' "$merged_json" > "$claude_settings"
+    ui_ok "Claude settings written (baseline + machine-local overlay)"
+  fi
+else
+  ui_warn "skipping Claude Code settings (jq not installed — see Brewfile; re-run install.sh)"
+fi
+
+# --- 14. Ollama model for GitLens' local AI ---------------------------------
 # The stowed VS Code settings point GitLens' AI features at a local Ollama model
 # (gitlens.ai.model = "ollama:qwen2.5-coder:7b"), so commit-message generation
 # and explain-commit run offline — no cloud key, no Copilot. ollama-app (Brewfile
@@ -825,7 +935,7 @@ else
   ui_warn "skipping Ollama setup (ollama not installed; see Brewfile 'ollama-app')"
 fi
 
-# --- 14. macOS system defaults ----------------------------------------------
+# --- 15. macOS system defaults ----------------------------------------------
 # Curated `defaults write` tweaks. Idempotent; restarts Finder/Dock at the end.
 # This is config-as-code: it *asserts* the declared prefs over whatever you've
 # set by hand. Comment it out (or edit macos.sh) if you'd rather run it manually.
@@ -841,7 +951,7 @@ else
   ui_warn "macos.sh exited non-zero — continuing (check ~/.config/dotfiles/macos.local.sh; some defaults may not have applied)"
 fi
 
-# --- 15. Dock layout --------------------------------------------------------
+# --- 16. Dock layout --------------------------------------------------------
 # Declarative Dock via dockutil: removes every current Dock item and rebuilds
 # from dock.sh's list. That's the config-as-code contract — like every other
 # step here, it converges unconditionally (the pinned set is small, so the

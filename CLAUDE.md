@@ -31,10 +31,14 @@ bats tests/            # fish/shell behavior (needs bats-core + fish, both in th
 
 ## Gotchas
 
-- **`home/.claude/settings.json` is a stow symlink.** The `/plugin` TUI, `/config`,
-  and plugin installs write straight through it, so those changes surface as a
-  working-tree diff on `main`. Edit it in the main checkout — worktrees aren't
-  stow-linked.
+- **`~/.claude/settings.json` is generated, not stowed.** `install.sh` deep-merges
+  the tracked `claude_settings.json` baseline with the untracked
+  `~/.config/dotfiles/claude_settings.local.json` overlay (arrays like
+  `permissions.allow` union; the overlay wins per scalar) and writes a real file.
+  `/config`, `/plugin`, and plugin installs write through that real file; the next
+  `install.sh` run folds whatever they changed into this machine's overlay — not the
+  repo. Change shared defaults by editing `claude_settings.json` and re-running
+  install. Merge logic + caveats live in `scripts/claude_settings_merge.sh`.
 - **Python is not a package** (`[tool.uv] package = false`). pyproject.toml exists
   only to give the test suite a managed env. Manage deps with `uv`.
 - **SPDX headers are required** — reuse/hawkeye enforce them; new files need a
