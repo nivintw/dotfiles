@@ -81,7 +81,7 @@ fzf_preselect_bind() {
   # an explicit if/return (not `[ -n ] && printf`) so the success status can't
   # hinge on printf being the last statement if this grows.
   if [ -n "$actions" ]; then
-    printf 'start:%s' "${actions%+}"
+    printf 'load:%s' "${actions%+}"
   fi
   return 0
 }

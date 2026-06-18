@@ -86,7 +86,7 @@ EOF
 @test "fzf_preselect_bind maps chosen names to 1-based menu positions" {
   run fzf_preselect_bind personal homelab work -- personal work
   [ "$status" -eq 0 ]
-  [ "$output" = "start:pos(1)+select+pos(3)+select" ]
+  [ "$output" = "load:pos(1)+select+pos(3)+select" ]
 }
 
 @test "fzf_preselect_bind emits nothing when nothing is chosen" {
@@ -98,7 +98,7 @@ EOF
 @test "fzf_preselect_bind skips chosen names absent from the menu" {
   run fzf_preselect_bind personal homelab -- ghost personal
   [ "$status" -eq 0 ]
-  [ "$output" = "start:pos(1)+select" ]
+  [ "$output" = "load:pos(1)+select" ]
 }
 
 @test "fzf_preselect_bind emits positions in chosen order, not menu order" {
@@ -106,7 +106,7 @@ EOF
   # order — guards against an implementation that assumes they're aligned.
   run fzf_preselect_bind personal homelab work -- work personal
   [ "$status" -eq 0 ]
-  [ "$output" = "start:pos(3)+select+pos(1)+select" ]
+  [ "$output" = "load:pos(3)+select+pos(1)+select" ]
 }
 
 @test "fzf_preselect_bind indexes correctly past a menu name with a space" {
@@ -114,5 +114,5 @@ EOF
   # position must not be thrown off by word-splitting an earlier spaced name.
   run fzf_preselect_bind alpha "my bundle" charlie -- charlie
   [ "$status" -eq 0 ]
-  [ "$output" = "start:pos(3)+select" ]
+  [ "$output" = "load:pos(3)+select" ]
 }
