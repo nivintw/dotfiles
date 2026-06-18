@@ -40,8 +40,11 @@ write_bundles() {
 
 # parse_bundles SEL_FILE
 #   Emit the chosen bundle names from a selection file, one per line: every line
-#   that is neither blank nor a comment. The inverse of write_bundles.
+#   that is neither blank nor a comment. The inverse of write_bundles. A missing
+#   file is an empty selection (baseline only), not an error — so --keep-bundles
+#   on a machine that never saved a pick reads cleanly instead of erroring.
 parse_bundles() {
+  [ -f "$1" ] || return 0
   local line
   while IFS= read -r line; do
     case "$line" in '' | \#*) continue ;; esac
