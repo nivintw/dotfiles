@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+## v1.9.1 (2026-06-26)
+
+### 🐛🚑️ Fixes
+
+- **fish**: Bound launch-docs browser-open probe with an nc poll
+
 ## v1.9.0 (2026-06-18)
 
 ### ✨ Features
