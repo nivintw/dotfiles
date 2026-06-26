@@ -38,13 +38,24 @@ function launch-docs --description "Serve the dotfiles docs/ site locally (pytho
     set -l url "http://localhost:$port"
     echo "Serving $docs at $url  (Ctrl-C to stop)"
     # Open the browser only once the server actually accepts connections, so the
-    # first load never races the listener. Backgrounded so the server below stays
-    # in the foreground and Ctrl-C stops it cleanly. localhost is a secure context,
-    # so the docs' Clipboard-API copy buttons work.
+    # first load never races the listener. Poll the port directly with nc — the same
+    # readiness check the preflight above uses — which fires `open` the instant the
+    # listener is up and is hard-bounded to ~10s. (curl's --retry loop can't do this:
+    # --max-time bounds a single attempt, not the whole sequence, so a probe that races
+    # ahead of the server can lag `open` minutes behind a ready listener — long enough
+    # that you Ctrl-C first, and the browser then opens to a dead port.) If the server
+    # never comes up we simply never open, instead of opening to nothing. Backgrounded
+    # so the server below stays in the foreground and Ctrl-C stops it cleanly. localhost
+    # is a secure context, so the docs' Clipboard-API copy buttons work.
     if type -q open
         begin
-            curl -s --retry 30 --retry-delay 0 --retry-connrefused --max-time 10 -o /dev/null "$url"
-            and open "$url"
+            for attempt in (seq 100)
+                if nc -z localhost $port 2>/dev/null
+                    open "$url"
+                    break
+                end
+                sleep 0.1
+            end
         end &
     end
     python3 -m http.server "$port" --directory "$docs"
