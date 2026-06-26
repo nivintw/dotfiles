@@ -210,3 +210,65 @@ fishrun() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"docs site not found"* ]]
 }
+
+# launch-docs opens the browser from a backgrounded readiness poll, gated on the
+# port actually accepting connections. Stubs drive that branch without a real server,
+# browser, or TTY: `nc` decides readiness, `open` records that it was invoked, `python3`
+# stands in for the foreground http.server — it "serves" until we kill it (recording its
+# pid first), exactly like the real server runs until Ctrl-C — and `sleep` is a no-op so
+# the poll loop never stalls. We launch fish in the background, wait for the poll to act,
+# then stop the "server" and the shell ourselves. Run from the repo root so the docs dir
+# resolves via `git rev-parse --show-toplevel`.
+launchdocs_shims() {
+  SHIM="$(mktemp -d)"
+  OPENLOG="$SHIM/open.log"
+  printf '#!/bin/sh\nprintf "OPENED %%s\\n" "$*" >> "%s"\n' "$OPENLOG" > "$SHIM/open"
+  printf '#!/bin/sh\necho $$ > "%s/server.pid"\nexec /bin/sleep 30\n' "$SHIM" > "$SHIM/python3"
+  printf '#!/bin/sh\nexit 0\n' > "$SHIM/sleep"
+  chmod +x "$SHIM/open" "$SHIM/python3" "$SHIM/sleep"
+}
+
+# Start the stubbed function in the background and return once `open` has fired or the
+# grace period (~3s) elapses, then stop the foreground "server" and the shell.
+run_launchdocs_stubbed() {
+  cd "$BATS_TEST_DIRNAME/.." || return 1
+  # Close fd 3 (bats' trace fd): a backgrounded process that inherits it makes bats
+  # hang at end-of-test waiting for the fd to close.
+  env PATH="$SHIM:$PATH" fish -c "source '$FUNCDIR/launch-docs.fish'; launch-docs" >/dev/null 2>&1 3>&- &
+  LD_PID=$!
+  for _ in $(seq 30); do
+    if [ -f "$OPENLOG" ]; then break; fi
+    sleep 0.1
+  done
+  # The foreground "server" always runs and records its pid (open may fire before it
+  # does, so wait for the pid file too); kill it and the shell so nothing is orphaned.
+  for _ in $(seq 20); do
+    if [ -f "$SHIM/server.pid" ]; then break; fi
+    sleep 0.1
+  done
+  if [ -f "$SHIM/server.pid" ]; then kill "$(cat "$SHIM/server.pid")" 2>/dev/null || true; fi
+  kill "$LD_PID" 2>/dev/null || true
+  wait "$LD_PID" 2>/dev/null || true
+}
+
+@test "launch-docs opens the browser once the port accepts connections" {
+  launchdocs_shims
+  # First nc call is the preflight (must report the port FREE → non-zero so we proceed);
+  # every later call is the readiness poll (READY → zero), so `open` fires on attempt 1.
+  # shellcheck disable=SC2016  # $-expressions are the generated script's, not ours to expand
+  printf '#!/bin/sh\nc="%s/nc.n"\nn=$(cat "$c" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$c"\n[ "$n" -ge 2 ]\n' "$SHIM" > "$SHIM/nc"
+  chmod +x "$SHIM/nc"
+  run_launchdocs_stubbed
+  [ -f "$OPENLOG" ]
+  [[ "$(cat "$OPENLOG")" == *"http://localhost:8000"* ]]
+  rm -rf "$SHIM"
+}
+
+@test "launch-docs never opens the browser if the port never accepts connections" {
+  launchdocs_shims
+  printf '#!/bin/sh\nexit 1\n' > "$SHIM/nc"   # preflight passes (port free); poll never ready
+  chmod +x "$SHIM/nc"
+  run_launchdocs_stubbed
+  [ ! -f "$OPENLOG" ]   # `open` was never invoked — no browser at a dead port
+  rm -rf "$SHIM"
+}
