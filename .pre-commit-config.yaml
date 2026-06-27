@@ -103,9 +103,11 @@ repos:
       - id: zizmor
         name: "🔒 ci · Audit workflows for security issues (zizmor)"
         # --offline keeps the gate deterministic and token-free: the AST audits (template
-        # injection, excessive permissions, artipacked, …) run offline; the network audits
-        # (known-vulnerable-actions, ref-confusion) need a GH token and run in CI instead.
-        # Overriding args drops the upstream default, so re-add --no-progress.
+        # injection, excessive permissions, artipacked, …) run without network, locally and
+        # in CI. The network audits (known-vulnerable-actions, ref-confusion) need a GH
+        # token and are NOT run anywhere yet — add a separate online `zizmor` step with a
+        # token if you want them. Overriding args drops the upstream default, so re-add
+        # --no-progress.
         args: ["--no-progress", "--offline"]
 
   # ------------------------------- 🔒 Security Tools -------------------------------- #

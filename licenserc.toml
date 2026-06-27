@@ -40,10 +40,10 @@ excludes = [
   "docs/assets/asciinema-player.*",
 ]
 
-additionalHeaders = ["markdown-header.toml"]
-
-[mapping.MARKDOWN_CUSTOM]
-extensions = ["md"]
+# NB: markdown is NOT headered inline by hawkeye here — this project has frontmatter-first
+# markdown, so .md stays in hawkeye's default excludes and is licensed via REUSE.toml
+# instead (see the comment on `excludes` above). Hence no `additionalHeaders`/MARKDOWN_CUSTOM
+# mapping: they'd never fire. (markdown-header.toml is unused as a result.)
 
 # '#'-comment files hawkeye doesn't map by default: fish/bats/uv_tools.txt and the
 # Brewfile.d/*.brewfile bundles by extension, plus dotfiles and the baseline Brewfile
