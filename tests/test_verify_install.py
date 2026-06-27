@@ -112,6 +112,13 @@ def test_is_json_object_missing_fails(tmp_path: Path) -> None:
     assert not is_json_object(tmp_path / "missing.json")
 
 
+def test_is_json_object_non_utf8_fails(tmp_path: Path) -> None:
+    """A file with non-UTF-8 bytes is not a JSON object (and must not crash)."""
+    path = tmp_path / "binary.json"
+    path.write_bytes(b"\xff\xfe\x00")
+    assert not is_json_object(path)
+
+
 # --- gitconfig_includes -----------------------------------------------------
 
 

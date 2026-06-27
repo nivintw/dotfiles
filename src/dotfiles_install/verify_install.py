@@ -42,8 +42,8 @@ def is_json_object(path: Path) -> bool:
     if not path.is_file():
         return False
     try:
-        value = json.loads(path.read_text())
-    except OSError, json.JSONDecodeError:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except OSError, UnicodeDecodeError, json.JSONDecodeError:
         return False
     return isinstance(value, dict)
 

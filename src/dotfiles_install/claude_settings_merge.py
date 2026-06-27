@@ -43,7 +43,8 @@ def merge(base: JSONValue, over: JSONValue) -> JSONValue:
 def diff(base: JSONValue, cur: JSONValue) -> JSONValue:
     """Return the minimal delta such that ``merge(base, delta)`` reproduces ``cur``.
 
-    Always an object (``{}`` when there is no drift), so it is safe to fold into the overlay.
+    For the object roots it is called with, the delta is an object (``{}`` when there is no
+    drift), so it is safe to fold into the overlay.
     """
     delta = _diff(base, cur)
     return delta if delta is not None else {}
