@@ -47,6 +47,16 @@ Do not add Claude attribution to commits or PR descriptions. No Co-Authored-By l
 
 Follow the conventional-commit format. Capitalize the first word of the description. In the body, explain WHY over HOW.
 
+## Local model offload
+
+When a task is **bulk and mechanical** — and a local model is available on this machine — prefer routing it to that local model to conserve Claude tokens, rather than doing the grunt work inline. Pick the tier by stakes and latency: a fast small model for high-volume, low-stakes work (classification, log/diff triage, quick summaries, simple boilerplate); a larger local model when quality matters more than speed (non-trivial codegen, careful summarization, first-pass analysis).
+
+- **It's an offload target, not a replacement.** Anything agentic, multi-file, or high-stakes stays on Claude. Treat local output as an untrusted first-pass draft and **always verify it** before use.
+- **Mechanism.** Claude Code subagents can't run on a local model natively, so the driving agent shells out to it — e.g. via Bash to an OpenAI-compatible endpoint (`curl http://localhost:11434/...`) or the model's own CLI.
+- **Degrades gracefully.** This only applies when a local model is actually present and responding; on a machine without one (a work laptop, CI) it's a no-op — never block on it.
+
+Which models, the endpoint, and benchmarks are per-machine specifics — they live in the untracked machine-local file imported below, so they vary by machine without churning this file.
+
 ## Machine-local instructions
 
 Per-machine guidance (work vs personal) lives in an untracked file outside the dotfiles repo and is imported below. `install.sh` seeds it empty, so the import never dangles; fill it in on a given machine for work-only context that shouldn't be public.
