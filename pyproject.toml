@@ -64,18 +64,3 @@ convention = "google"
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
-
-[tool.commitizen]
-name = "cz_gitmoji"
-version_provider = "uv"
-update_changelog_on_bump = true
-annotated_tag = true
-# v-prefixed tags (v1.0.0) — the GitHub release convention. The CI release stage
-# reads cz's computed version and tags v<version> to match; this also applies if
-# you ever run `cz bump` locally.
-tag_format = "v$version"
-# Commit subject for a local `cz bump`. CI does NOT use this — it runs cz with
-# --files-only and creates the signed commit via the API with its own "[skip ci]"
-# headline (see main.yml), so this stays clean of [skip ci] to avoid skipping CI
-# on a locally-made bump.
-bump_message = "🔖 bump: $current_version → $new_version"

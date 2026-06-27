@@ -39,7 +39,10 @@ dwrite() {
   return 0
 }
 
-[ "$(uname)" = "Darwin" ] || { echo "macos.sh is macOS-only; skipping." >&2; exit 0; }
+[ "$(uname)" = "Darwin" ] || {
+  echo "macos.sh is macOS-only; skipping." >&2
+  exit 0
+}
 
 log "Applying macOS defaults"
 

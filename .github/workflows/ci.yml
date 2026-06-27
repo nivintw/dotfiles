@@ -12,13 +12,18 @@
 # Keeping it reusable means the gate is defined once and both pipelines run the
 # exact same checks.
 #
-# Most hooks self-bootstrap their pinned env (shellcheck, typos, gitleaks, ruff,
-# rumdl, validate-pyproject, uv-lock, the pre-commit-hooks builtins), so the only
-# tools to install are the `language: system` ones CI actually needs: fish (the
-# fish hooks), bats (the behavior tests), and ripgrep (the fsearch behavior test,
-# which gates on `rg` before its usage path). uv runs the `ty` hook + pytest. The
+# Most hooks self-bootstrap their pinned env (shellcheck, shfmt, actionlint, zizmor,
+# typos, gitleaks, ruff, rumdl, validate-pyproject, uv-lock, the pre-commit-hooks
+# builtins), so the only tools to install are the `language: system` ones CI actually
+# needs: fish (the fish hooks), bats (the behavior tests), ripgrep (the fsearch
+# behavior test, which gates on `rg`), and osv-scanner (the dependency-CVE hook — a
+# release binary, like hawkeye/taplo). uv runs the `ty`/`uv audit` hooks + pytest. The
 # pytest suite includes Playwright docs-site tests that drive a real browser, so a
 # (cached) Chromium is installed just before that step.
+#
+# Third-party actions are pinned to a commit SHA (with the human-readable tag in a
+# trailing comment) so a moved tag can't change what runs — Renovate bumps the SHA via
+# the `# renovate:`-annotated pins. zizmor audits these workflows in the prek gate.
 #
 # SKIP=taplo,hawkeye-format: the prek hooks for these are `language: system` and expect
 # the Brewfile binaries, which aren't on the ubuntu runner — so prek skips them and they
@@ -54,10 +59,13 @@ jobs:
   lint-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          # Read-only gate — don't leave the checkout token in .git/config (zizmor artipacked).
+          persist-credentials: false
 
       - name: Set up uv (+ managed Python)
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
 
@@ -65,10 +73,20 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y fish bats ripgrep
 
       - name: Cache prek hook environments
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.cache/prek
           key: prek-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Install osv-scanner (the dependency-CVE prek hook needs it on PATH)
+        env:
+          # renovate: datasource=github-releases depName=google/osv-scanner
+          OSV_VERSION: "2.4.0"
+        run: |
+          curl -fsSL "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64" \
+            -o "$RUNNER_TEMP/osv-scanner"
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+          echo "$RUNNER_TEMP" >>"$GITHUB_PATH"
 
       - name: Run prek hooks (same as local)
         env:
@@ -78,6 +96,7 @@ jobs:
       # taplo + hawkeye skip prek above (system binaries absent on the runner); run them
       # here instead so their checks are still enforced in CI.
       - name: Check SPDX license headers (hawkeye)
+        # renovate: datasource=github-releases depName=korandoru/hawkeye
         run: |
           curl -fsSL https://github.com/korandoru/hawkeye/releases/download/v6.5.1/hawkeye-x86_64-unknown-linux-gnu.tar.xz \
             | tar -xJ --strip-components=1 -C "$RUNNER_TEMP" hawkeye-x86_64-unknown-linux-gnu/hawkeye
@@ -85,6 +104,7 @@ jobs:
           "$RUNNER_TEMP/hawkeye" check
 
       - name: Check TOML formatting (taplo)
+        # renovate: datasource=github-releases depName=tamasfe/taplo
         run: |
           curl -fsSL https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-linux-x86_64.gz \
             | gunzip -c >"$RUNNER_TEMP/taplo"
@@ -110,7 +130,7 @@ jobs:
         run: echo "version=$(uv run playwright --version | awk '{print $2}')" >>"$GITHUB_OUTPUT"
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}

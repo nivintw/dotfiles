@@ -36,18 +36,19 @@ vi_tilde() { printf '%s\n' "${1/#$HOME/\~}"; }
 # confirm stow actually linked a file into this repo (not a stale real file or a
 # link into some other tree). A dangling or out-of-tree link fails.
 vi_symlink_into_repo() {
-  link="$1"; repo="$2"
+  link="$1"
+  repo="$2"
   [ -L "$link" ] || return 1
   target="$(readlink "$link")" || return 1
   # Relative link target -> resolve against the link's own directory.
   case "$target" in
-    /*) ;;
-    *)  target="$(cd "$(dirname "$link")" 2>/dev/null && cd "$(dirname "$target")" 2>/dev/null && pwd)/$(basename "$target")" || return 1 ;;
+  /*) ;;
+  *) target="$(cd "$(dirname "$link")" 2>/dev/null && cd "$(dirname "$target")" 2>/dev/null && pwd)/$(basename "$target")" || return 1 ;;
   esac
   repo_abs="$(cd "$repo" 2>/dev/null && pwd)" || return 1
   case "$target" in
-    "$repo_abs"/*) return 0 ;;
-    *) return 1 ;;
+  "$repo_abs"/*) return 0 ;;
+  *) return 1 ;;
   esac
 }
 
@@ -62,7 +63,8 @@ vi_is_json_object() {
 # True when git config file $1 has an [include] path equal to $2 (after ~ expansion).
 # That's the mechanism the dotfiles rely on for the machine-local overlay to win.
 vi_gitconfig_includes() {
-  cfg="$1"; want="${2/#\~/$HOME}"
+  cfg="$1"
+  want="${2/#\~/$HOME}"
   { [ -f "$cfg" ] || [ -L "$cfg" ]; } || return 1
   command -v git >/dev/null 2>&1 || return 1
   # Process substitution keeps the loop in THIS shell, so `return` works directly.
@@ -78,7 +80,10 @@ vi_gitconfig_includes() {
 # tool unavailable). Touch ID for sudo (pam_tid) silently falls back to a password
 # when this is 0, which is the confusing "why is it still asking?" failure.
 vi_touchid_enrolled_count() {
-  command -v bioutil >/dev/null 2>&1 || { printf '0\n'; return 0; }
+  command -v bioutil >/dev/null 2>&1 || {
+    printf '0\n'
+    return 0
+  }
   # "User 501:\t1 biometric template(s)" -> sum the leading integers. The grep
   # stages exit non-zero when bioutil's output doesn't match (a sensor with ZERO
   # enrolled prints, no sensor at all, or different wording) — which is precisely
@@ -86,10 +91,10 @@ vi_touchid_enrolled_count() {
   # `set -o pipefail` that non-zero would propagate and abort, so `|| true` guards
   # it; awk's END runs even on empty input, so we always get an integer, and the
   # ${count:-0} default covers any remaining edge. Total function: one int, exit 0.
-  count="$(bioutil -c 2>/dev/null \
-    | grep -oE '[0-9]+ biometric template' \
-    | grep -oE '^[0-9]+' \
-    | awk '{s += $1} END {print s + 0}' || true)"
+  count="$(bioutil -c 2>/dev/null |
+    grep -oE '[0-9]+ biometric template' |
+    grep -oE '^[0-9]+' |
+    awk '{s += $1} END {print s + 0}' || true)"
   printf '%s\n' "${count:-0}"
 }
 
@@ -103,7 +108,7 @@ vi_pam_tid_enabled() {
 # other paths default to the live machine.
 verify_install() {
   dotfiles="${1:?usage: verify_install <dotfiles-dir>}"
-  ok()  { printf 'OK\t%s\n' "$1"; }
+  ok() { printf 'OK\t%s\n' "$1"; }
   bad() { printf 'BAD\t%s\n' "$1"; }
 
   # 1. Baseline Homebrew packages all installed.
@@ -193,7 +198,8 @@ verify_install() {
   fi
 
   # 9. ~/.gitconfig Include-s the machine-local overlay (so it can override).
-  gitconfig="$HOME/.gitconfig"; gitconfig_local="$HOME/.gitconfig_local"
+  gitconfig="$HOME/.gitconfig"
+  gitconfig_local="$HOME/.gitconfig_local"
   if vi_gitconfig_includes "$gitconfig" "$gitconfig_local"; then
     ok "$(vi_tilde "$gitconfig") includes $(vi_tilde "$gitconfig_local")"
   else
@@ -211,8 +217,11 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   problems=0
   while IFS=$'\t' read -r status msg; do
     case "$status" in
-      OK)  printf '  \033[32m✔\033[0m %s\n' "$msg" ;;
-      BAD) printf '  \033[33m⚠\033[0m %s\n' "$msg"; problems=$((problems + 1)) ;;
+    OK) printf '  \033[32m✔\033[0m %s\n' "$msg" ;;
+    BAD)
+      printf '  \033[33m⚠\033[0m %s\n' "$msg"
+      problems=$((problems + 1))
+      ;;
     esac
   done < <(verify_install "$here")
   if [ "$problems" -eq 0 ]; then

@@ -23,25 +23,44 @@ DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # (before brew installs bash 5), so no associative arrays, no ${v^^} — just
 # $'...' ANSI literals.
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
-  C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'; C_DIM=$'\033[2m'
-  C_BLUE=$'\033[34m'; C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_RED=$'\033[31m'
-  G_OK='✔'; G_ACTIVE='●'; G_WARN='⚠'; G_ERR='✗'
+  C_RESET=$'\033[0m'
+  C_BOLD=$'\033[1m'
+  C_DIM=$'\033[2m'
+  C_BLUE=$'\033[34m'
+  C_GREEN=$'\033[32m'
+  C_YELLOW=$'\033[33m'
+  C_RED=$'\033[31m'
+  G_OK='✔'
+  G_ACTIVE='●'
+  G_WARN='⚠'
+  G_ERR='✗'
 else
-  C_RESET=''; C_BOLD=''; C_DIM=''
-  C_BLUE=''; C_GREEN=''; C_YELLOW=''; C_RED=''
-  G_OK='[ok]'; G_ACTIVE='[..]'; G_WARN='[!!]'; G_ERR='[xx]'
+  C_RESET=''
+  C_BOLD=''
+  C_DIM=''
+  C_BLUE=''
+  C_GREEN=''
+  C_YELLOW=''
+  C_RED=''
+  G_OK='[ok]'
+  G_ACTIVE='[..]'
+  G_WARN='[!!]'
+  G_ERR='[xx]'
 fi
 
 ui_banner() { printf '\n%s%s%s\n' "$C_BOLD" "$1" "$C_RESET"; }
-ui_step()   { printf '\n%s%s==>%s %s\n' "$C_BOLD" "$C_BLUE" "$C_RESET" "$1"; }
-ui_ok()     { printf '%s%s%s %s\n'     "$C_GREEN"  "$G_OK"     "$C_RESET" "$1"; }
-ui_active() { printf '%s%s%s %s\n'     "$C_BLUE"   "$G_ACTIVE" "$C_RESET" "$1"; }
+ui_step() { printf '\n%s%s==>%s %s\n' "$C_BOLD" "$C_BLUE" "$C_RESET" "$1"; }
+ui_ok() { printf '%s%s%s %s\n' "$C_GREEN" "$G_OK" "$C_RESET" "$1"; }
+ui_active() { printf '%s%s%s %s\n' "$C_BLUE" "$G_ACTIVE" "$C_RESET" "$1"; }
 # Every ui_warn is also remembered (WARNINGS) so the closing summary can replay
 # everything that needed attention — you never have to scroll back through a long,
 # noisy install (e.g. a transient brew download failure) to find what went wrong.
 WARNINGS=()
-ui_warn()   { WARNINGS=(${WARNINGS[@]+"${WARNINGS[@]}"} "$1"); printf '%s%s%s %s\n' "$C_YELLOW" "$G_WARN" "$C_RESET" "$1"; }
-ui_err()    { printf '%s%s%s %s\n' >&2 "$C_RED"    "$G_ERR"    "$C_RESET" "$1"; }
+ui_warn() {
+  WARNINGS=(${WARNINGS[@]+"${WARNINGS[@]}"} "$1")
+  printf '%s%s%s %s\n' "$C_YELLOW" "$G_WARN" "$C_RESET" "$1"
+}
+ui_err() { printf '%s%s%s %s\n' "$C_RED" "$G_ERR" "$C_RESET" "$1" >&2; }
 ui_detail() { printf '   %s%s%s\n' "$C_DIM" "$1" "$C_RESET"; }
 
 # --- Opt-in bundle discovery + CLI args -------------------------------------
@@ -117,22 +136,46 @@ bundles_from_flags=0
 keep_bundles=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -h | --help) usage; exit 0 ;;
-    --no-bundles) bundles_from_flags=1; shift ;;
-    --keep-bundles) keep_bundles=1; shift ;;
-    --bundle)
-      shift
-      [ "$#" -gt 0 ] || { ui_err "--bundle requires a NAME"; exit 2; }
-      require_known_bundle "$1"
-      add_requested_bundle "$1"
-      bundles_from_flags=1; shift ;;
-    --bundle=*)
-      _name="${1#--bundle=}"
-      require_known_bundle "$_name"
-      add_requested_bundle "$_name"
-      bundles_from_flags=1; shift ;;
-    --) shift; break ;;
-    -* | *) ui_err "unexpected argument: $1"; echo >&2; usage >&2; exit 2 ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  --no-bundles)
+    bundles_from_flags=1
+    shift
+    ;;
+  --keep-bundles)
+    keep_bundles=1
+    shift
+    ;;
+  --bundle)
+    shift
+    [ "$#" -gt 0 ] || {
+      ui_err "--bundle requires a NAME"
+      exit 2
+    }
+    require_known_bundle "$1"
+    add_requested_bundle "$1"
+    bundles_from_flags=1
+    shift
+    ;;
+  --bundle=*)
+    _name="${1#--bundle=}"
+    require_known_bundle "$_name"
+    add_requested_bundle "$_name"
+    bundles_from_flags=1
+    shift
+    ;;
+  --)
+    shift
+    break
+    ;;
+  -* | *)
+    ui_err "unexpected argument: $1"
+    echo >&2
+    usage >&2
+    exit 2
+    ;;
   esac
 done
 
@@ -179,7 +222,11 @@ start_sudo_keepalive() {
   # Refresh the timestamp every 50s (< the 5-min default) until this script exits.
   # The kill -0 self-check makes the child exit if the parent dies, as a backstop
   # to the EXIT trap.
-  ( while true; do sudo -n true 2>/dev/null; sleep 50; kill -0 "$$" 2>/dev/null || exit 0; done ) &
+  (while true; do
+    sudo -n true 2>/dev/null
+    sleep 50
+    kill -0 "$$" 2>/dev/null || exit 0
+  done) &
   SUDO_KEEPALIVE_PID=$!
 }
 stop_sudo_keepalive() {
@@ -231,7 +278,10 @@ if ! command -v brew >/dev/null 2>&1; then
     [ -x "$brew_bin" ] && eval "$("$brew_bin" shellenv)" && break
   done
 fi
-command -v brew >/dev/null 2>&1 || { ui_err "Homebrew install failed."; exit 1; }
+command -v brew >/dev/null 2>&1 || {
+  ui_err "Homebrew install failed."
+  exit 1
+}
 
 if ! command -v uv >/dev/null 2>&1; then
   ui_step "Installing uv"
@@ -239,7 +289,10 @@ if ! command -v uv >/dev/null 2>&1; then
   # uv installs to ~/.local/bin (newer) or ~/.cargo/bin (older); cover both.
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
-command -v uv >/dev/null 2>&1 || { ui_err "uv install failed."; exit 1; }
+command -v uv >/dev/null 2>&1 || {
+  ui_err "uv install failed."
+  exit 1
+}
 
 # --- 1. Homebrew formulae + casks -------------------------------------------
 # Acquire sudo ONCE and keep it warm for the bundle + privileged block, instead of
@@ -251,7 +304,7 @@ command -v uv >/dev/null 2>&1 || { ui_err "uv install failed."; exit 1; }
 # before the fisher/Claude installers below (see step 2).
 ui_step "Privileged setup — sudo (kept warm through the bundle)"
 start_sudo_keepalive
-enable_touch_id_sudo  # pam_tid now; the pam_reattach (tmux) line is added in step 2
+enable_touch_id_sudo # pam_tid now; the pam_reattach (tmux) line is added in step 2
 
 # brew bundle adopts already-present casks in place rather than clobbering them.
 # Non-fatal: a transient single-package failure shouldn't abort the whole bootstrap
@@ -334,13 +387,13 @@ elif [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
   # see its casks/brews before opting in.
   fzf_rc=0
   picked="$(
-    printf '%s\n' ${avail[@]+"${avail[@]}"} \
-      | fzf --multi --height=40% --reverse --border \
-            --prompt='bundles> ' \
-            --header='opt-in bundles · ENTER confirms · ESC cancels (--no-bundles to clear)' \
-            --preview="cat '$bundles_dir'/{}.brewfile" \
-            --preview-window=right,60% \
-            ${fzf_seed[@]+"${fzf_seed[@]}"}
+    printf '%s\n' ${avail[@]+"${avail[@]}"} |
+      fzf --multi --height=40% --reverse --border \
+        --prompt='bundles> ' \
+        --header='opt-in bundles · ENTER confirms · ESC cancels (--no-bundles to clear)' \
+        --preview="cat '$bundles_dir'/{}.brewfile" \
+        --preview-window=right,60% \
+        ${fzf_seed[@]+"${fzf_seed[@]}"}
   )" || fzf_rc=$?
   # A cancel (non-zero) leaves an existing selection untouched; on a fresh machine
   # with nothing saved yet it falls through to a baseline-only file so the install
@@ -369,8 +422,8 @@ while IFS= read -r bundle; do
     ui_active "installing opt-in bundle: $bundle"
     # Non-fatal (as with the baseline above): the summary's brew bundle check
     # surfaces anything that didn't land.
-    brew bundle install --file="$bundle_file" \
-      || ui_warn "opt-in bundle '$bundle' had install failures (see output above) — the summary lists what's missing"
+    brew bundle install --file="$bundle_file" ||
+      ui_warn "opt-in bundle '$bundle' had install failures (see output above) — the summary lists what's missing"
     installed_bundles=(${installed_bundles[@]+"${installed_bundles[@]}"} "$bundle")
   else
     ui_warn "skipping opt-in bundle '$bundle' (no $bundle_file)"
@@ -458,9 +511,9 @@ ui_ok "privileged setup complete"
 # preserve them next to the file and warn than to silently delete divergent config.
 ui_step "dotfiles symlinks (stow)"
 managed_files=(
-  "$HOME/Library/Application Support/Code/User/settings.json"  # VS Code / Settings Sync
-  "$HOME/.config/atuin/config.toml"                            # atuin writes a default on first run
-  "$HOME/.config/topgrade.toml"                                # topgrade --edit-config seeds a default
+  "$HOME/Library/Application Support/Code/User/settings.json" # VS Code / Settings Sync
+  "$HOME/.config/atuin/config.toml"                           # atuin writes a default on first run
+  "$HOME/.config/topgrade.toml"                               # topgrade --edit-config seeds a default
 )
 for f in "${managed_files[@]}"; do
   [ -f "$f" ] && [ ! -L "$f" ] || continue
@@ -481,7 +534,10 @@ for f in "${managed_files[@]}"; do
     # version is preserved rather than overwriting the last.
     backup="$f.pre-stow.bak"
     n=1
-    while [ -e "$backup" ]; do backup="$f.pre-stow.bak.$n"; n=$((n + 1)); done
+    while [ -e "$backup" ]; do
+      backup="$f.pre-stow.bak.$n"
+      n=$((n + 1))
+    done
     ui_warn "backing up modified $f -> $backup (differs from the repo version)"
     mv "$f" "$backup"
   fi
@@ -529,8 +585,8 @@ if ! gitconfig_action="$(gitconfig_migrate "$HOME/.gitconfig" "$HOME/.gitconfig_
 fi
 if [ -n "$gitconfig_action" ]; then
   case "$gitconfig_action" in
-    backed\ up*) ui_warn "$gitconfig_action" ;;
-    *) ui_active "$gitconfig_action" ;;
+  backed\ up*) ui_warn "$gitconfig_action" ;;
+  *) ui_active "$gitconfig_action" ;;
   esac
 fi
 
@@ -566,7 +622,7 @@ seed_if_absent() {
   # SPDX header is needed.
   if [ ! -f "$1" ]; then
     mkdir -p "$(dirname "$1")"
-    cat > "$1"
+    cat >"$1"
     ui_active "created $1"
   fi
 }
@@ -769,7 +825,7 @@ ui_step "Python CLI tools (uv)"
     case "$tool" in '' | \#*) continue ;; esac
     # shellcheck disable=SC2086  # intentional split: line holds tool + --with args
     uv tool install $tool
-  done < "$DOTFILES/uv_tools.txt"
+  done <"$DOTFILES/uv_tools.txt"
 )
 ui_ok "uv tools installed"
 
@@ -789,8 +845,8 @@ export PATH="$HOME/.local/bin:$PATH"
 # versions match. Idempotent (skips if present); non-fatal so a slow/failed download
 # never aborts the bootstrap.
 ui_active "installing Playwright headless shell (browser for the docs-site tests)"
-uv run --project "$DOTFILES" playwright install --only-shell chromium \
-  || ui_warn "Playwright headless shell install failed; re-run install.sh to retry."
+uv run --project "$DOTFILES" playwright install --only-shell chromium ||
+  ui_warn "Playwright headless shell install failed; re-run install.sh to retry."
 
 # --- 10. Git clone hook (notify-on-clone; opt-in auto-install) ---------------
 # The git template at ~/.config/git/template (stowed in step 3, wired up by
@@ -896,10 +952,10 @@ if command -v claude >/dev/null 2>&1; then
     # bare-command (PATH-resolved) servers have no leading '/', so they pass through.
     cmd="$(printf '%s' "$json" | jq -r '.command // empty')"
     case "$cmd" in
-      /*) if [ ! -x "$cmd" ]; then
-            ui_warn "skipping '$name' (command not found: $cmd)"
-            continue
-          fi ;;
+    /*) if [ ! -x "$cmd" ]; then
+      ui_warn "skipping '$name' (command not found: $cmd)"
+      continue
+    fi ;;
     esac
     claude mcp remove "$name" --scope user >/dev/null 2>&1 || true
     claude mcp add-json "$name" "$json" --scope user >/dev/null
@@ -984,12 +1040,12 @@ if command -v jq >/dev/null 2>&1; then
     # there is never a window with no settings file).
     mkdir -p "$(dirname "$claude_overlay")" "$(dirname "$claude_settings")"
     overlay_tmp="$claude_overlay.tmp.$$"
-    printf '%s\n' "$overlay_json" > "$overlay_tmp" && mv -f "$overlay_tmp" "$claude_overlay"
+    printf '%s\n' "$overlay_json" >"$overlay_tmp" && mv -f "$overlay_tmp" "$claude_overlay"
     if [ -d "$claude_settings" ]; then
       ui_warn "refusing to write: ~/.claude/settings.json is a directory (remove it and re-run)"
     else
       settings_tmp="$claude_settings.tmp.$$"
-      printf '%s\n' "$merged_json" > "$settings_tmp" && mv -f "$settings_tmp" "$claude_settings"
+      printf '%s\n' "$merged_json" >"$settings_tmp" && mv -f "$settings_tmp" "$claude_settings"
       ui_ok "Claude settings written (baseline + machine-local overlay)"
     fi
   fi
@@ -1017,11 +1073,11 @@ if command -v ollama >/dev/null 2>&1; then
     # down, start a headless `ollama serve` and probe again.
     open -a Ollama 2>/dev/null || true
     if ! curl -fsS --retry 20 --retry-delay 1 --retry-connrefused -m 30 \
-         http://localhost:11434/api/tags >/dev/null 2>&1; then
+      http://localhost:11434/api/tags >/dev/null 2>&1; then
       ollama serve >/dev/null 2>&1 &
       curl -fsS --retry 20 --retry-delay 1 --retry-connrefused -m 30 \
-        http://localhost:11434/api/tags >/dev/null 2>&1 \
-        || ui_warn "Ollama server didn't come up; start it and re-run to pull the model."
+        http://localhost:11434/api/tags >/dev/null 2>&1 ||
+        ui_warn "Ollama server didn't come up; start it and re-run to pull the model."
     fi
   fi
   if ollama list 2>/dev/null | awk 'NR>1 {print $1}' | grep -qx "$OLLAMA_MODEL"; then
@@ -1078,8 +1134,8 @@ verified=()
 problems=()
 while IFS=$'\t' read -r status msg; do
   case "$status" in
-    OK)  verified=(${verified[@]+"${verified[@]}"} "$msg") ;;
-    BAD) problems=(${problems[@]+"${problems[@]}"} "$msg") ;;
+  OK) verified=(${verified[@]+"${verified[@]}"} "$msg") ;;
+  BAD) problems=(${problems[@]+"${problems[@]}"} "$msg") ;;
   esac
 done < <(verify_install "$DOTFILES")
 

@@ -17,7 +17,7 @@
 set -euo pipefail
 
 config="home/.ssh/config"
-[ -f "$config" ] || exit 0  # nothing to check
+[ -f "$config" ] || exit 0 # nothing to check
 
 violations=()
 
@@ -26,7 +26,7 @@ while IFS= read -r line; do
   trimmed="$(printf '%s' "$line" | sed -E 's/^[[:space:]]+//')"
 
   case "$trimmed" in
-    '' | '#'*) continue ;;  # blank or comment
+  '' | '#'*) continue ;; # blank or comment
   esac
 
   # Host lines: only `Host *` and `Host github.com` are portable/non-sensitive.
@@ -52,7 +52,7 @@ while IFS= read -r line; do
     violations+=("machine-specific directive: $trimmed")
     continue
   fi
-done < "$config"
+done <"$config"
 
 if [ "${#violations[@]}" -gt 0 ]; then
   echo "ERROR: $config must stay generic — move concrete hosts to ~/.ssh/config.local" >&2

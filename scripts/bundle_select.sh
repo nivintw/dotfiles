@@ -18,12 +18,14 @@
 #   bundle names as commented hints, then the chosen names (bare, one per line).
 #   The `--` separates the two variable-length lists so names with spaces survive.
 write_bundles() {
-  local sel_file="$1"; shift
+  local sel_file="$1"
+  shift
   local avail=()
   while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do
-    avail=(${avail[@]+"${avail[@]}"} "$1"); shift
+    avail=(${avail[@]+"${avail[@]}"} "$1")
+    shift
   done
-  [ "${1:-}" = "--" ] && shift   # drop the separator; remaining "$@" = chosen names
+  [ "${1:-}" = "--" ] && shift # drop the separator; remaining "$@" = chosen names
   {
     echo '# Opt-in Brewfile bundles for this machine, one name per line. Each maps'
     echo '# to <repo>/Brewfile.d/<name>.brewfile. Lines starting with # are ignored.'
@@ -35,7 +37,7 @@ write_bundles() {
     echo
     local n
     for n in "$@"; do echo "$n"; done
-  } > "$sel_file"
+  } >"$sel_file"
 }
 
 # parse_bundles SEL_FILE
@@ -49,7 +51,7 @@ parse_bundles() {
   while IFS= read -r line; do
     case "$line" in '' | \#*) continue ;; esac
     printf '%s\n' "$line"
-  done < "$1"
+  done <"$1"
 }
 
 # fzf_preselect_bind AVAIL... -- CHOSEN...
@@ -62,9 +64,10 @@ parse_bundles() {
 fzf_preselect_bind() {
   local avail=()
   while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do
-    avail=(${avail[@]+"${avail[@]}"} "$1"); shift
+    avail=(${avail[@]+"${avail[@]}"} "$1")
+    shift
   done
-  [ "${1:-}" = "--" ] && shift   # drop the separator; remaining "$@" = chosen names
+  [ "${1:-}" = "--" ] && shift # drop the separator; remaining "$@" = chosen names
   local actions='' name a idx
   for name in "$@"; do
     idx=1

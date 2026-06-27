@@ -80,6 +80,7 @@ brew "gitleaks"         # Secret scanner (pre-commit hook; see .pre-commit-confi
 brew "hadolint"         # Smarter Dockerfile linter
 brew "hawkeye"          # SPDX license-header formatter (pre-commit; REUSE compliance)
 brew "hyperfine"        # Command-line benchmarking tool
+brew "osv-scanner"      # Dependency CVE scanner (pre-commit hook; see .pre-commit-config.yaml)
 brew "shellcheck"       # Static analysis for shell scripts
 brew "taplo"            # TOML toolkit
 brew "typos-cli"        # Source-code spell checker

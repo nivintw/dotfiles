@@ -20,8 +20,8 @@ f=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null ||
 # fall through to the original behavior rather than hard-failing.
 if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
   case "$f" in
-    "$CLAUDE_PROJECT_DIR"/*) ;;
-    *) exit 0 ;;
+  "$CLAUDE_PROJECT_DIR"/*) ;;
+  *) exit 0 ;;
   esac
 fi
 

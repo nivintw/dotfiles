@@ -15,7 +15,10 @@ set -euo pipefail
 
 log() { printf '\n\033[1;34m==>\033[0m %s\n' "$1"; }
 
-[ "$(uname)" = "Darwin" ] || { echo "dock.sh is macOS-only; skipping." >&2; exit 0; }
+[ "$(uname)" = "Darwin" ] || {
+  echo "dock.sh is macOS-only; skipping." >&2
+  exit 0
+}
 command -v dockutil >/dev/null 2>&1 || {
   echo "dockutil not found — install it via the Brewfile, then re-run." >&2
   exit 0
