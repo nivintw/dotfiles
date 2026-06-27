@@ -56,10 +56,15 @@ bats tests/            # fish/shell behavior (needs bats-core + fish, both in th
 - **`main` is protected** (prek `no-commit-to-branch`). Make changes on a branch in
   a git worktree, then open a PR. Live-test stow-symlinked dotfiles in the main
   checkout first, then move the change into a worktree for the PR.
-- **Commits:** write a plain Conventional Commit (`type(scope): Description`); the
-  `conventional-gitmoji` hook prepends the emoji — don't add it yourself.
-- **Releases:** commitizen (`cz_gitmoji`) drives versioning and `CHANGELOG.md`; CI's
-  release stage creates the signed bump commit via the GitHub App +
-  `createCommitOnBranch`. The changelog and version are tool-generated — don't
-  hand-edit. Don't merge a second PR while a release run from the first is still in
-  flight.
+- **Commits:** write a plain Conventional Commit (`type(scope): Description`) — **no
+  gitmoji**. release-please derives version bumps from the bare commit type and can't
+  parse a leading emoji, so don't prepend one. (The joyful emoji labels live on the
+  prek hooks, not in commit messages.)
+- **Releases:** release-please drives versioning and `CHANGELOG.md` (manifest mode). The
+  version-of-record is `.release-please-manifest.json` + the `vX.Y.Z` git tags — **not**
+  `pyproject.toml` (its `[project].version` is decorative under `package = false`, so it's
+  deliberately not mirrored; that also stops `uv.lock` from drifting on a release). On push
+  to `main`, release-please maintains a Release PR (CHANGELOG + manifest) that auto-merges
+  by rebase once the required CI check passes, then cuts the tag + GitHub Release. `main`
+  has no signature requirement, so the App token's rebase-merge lands directly. The
+  changelog and manifest are tool-generated — don't hand-edit.
