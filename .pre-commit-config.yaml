@@ -74,12 +74,66 @@ repos:
         # file doesn't trip SC1091 on the un-staged source.
         args: ["-s", "bash", "-x"]
 
+  - repo: https://github.com/maxwinterstein/shfmt-py
+    rev: v4.0.0
+    hooks:
+      - id: shfmt
+        name: "🐚 shell · Format shell scripts with shfmt"
+        # -i 2 matches .editorconfig (indent_size = 2).
+        args: ["-w", "-i", "2"]
+        # bats files are identified as shell but use `@test` syntax shfmt can't parse;
+        # exclude them (shellcheck still lints them via its own hook).
+        exclude: '\.bats$'
+
+  # ----------------------------- ⚙️ GitHub Actions ---------------------------------- #
+  # actionlint lints the workflows (and shellchecks their `run:` blocks); zizmor security-
+  # audits them. Both are pip-backed hooks that self-bootstrap a pinned env — no system
+  # binary, so they run identically locally and in CI.
+  - repo: https://github.com/Mateusz-Grzelinski/actionlint-py
+    rev: v1.7.12.24
+    hooks:
+      - id: actionlint
+        name: "⚙️ ci · Lint workflows with actionlint"
+        # shellcheck-py puts a shellcheck on PATH so actionlint can lint `run:` blocks.
+        additional_dependencies: ["shellcheck-py"]
+
+  - repo: https://github.com/woodruffw/zizmor-pre-commit
+    rev: v1.26.1
+    hooks:
+      - id: zizmor
+        name: "🔒 ci · Audit workflows for security issues (zizmor)"
+        # --offline keeps the gate deterministic and token-free: the AST audits (template
+        # injection, excessive permissions, artipacked, …) run offline; the network audits
+        # (known-vulnerable-actions, ref-confusion) need a GH token and run in CI instead.
+        # Overriding args drops the upstream default, so re-add --no-progress.
+        args: ["--no-progress", "--offline"]
+
   # ------------------------------- 🔒 Security Tools -------------------------------- #
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
     hooks:
       - id: gitleaks
         name: "🔒 security · Detect secrets with gitleaks"
+
+  # ----------------------- 🔒 Dependency CVEs (supply chain) ------------------------ #
+  # ruff `ALL` lints the *code*, not the dependency tree. `uv audit` checks the resolved
+  # deps against PyPA advisories; osv-scanner cross-checks uv.lock against the OSV database.
+  # Both are system tools — uv ships `audit`, and osv-scanner is a release binary
+  # (Brewfile/CI install), like hawkeye/taplo — so CI and local match.
+  - repo: local
+    hooks:
+      - id: uv-audit
+        name: "🔒 deps · Audit dependencies for CVEs (uv audit)"
+        entry: uv audit --preview-features audit-command
+        language: system
+        files: '^(pyproject\.toml|uv\.lock)$'
+        pass_filenames: false
+      - id: osv-scanner
+        name: "🔒 deps · Scan uv.lock for CVEs (osv-scanner)"
+        entry: osv-scanner scan source --lockfile uv.lock
+        language: system
+        files: '^uv\.lock$'
+        pass_filenames: false
 
   # --------------------------- ⚖️ Licensing & Compliance ---------------------------- #
   # hawkeye adds/maintains the SPDX headers (config: licenserc.toml); reuse verifies

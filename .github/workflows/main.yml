@@ -1,102 +1,93 @@
 # SPDX-FileCopyrightText: © 2026 Tyler Nivin
 # SPDX-License-Identifier: MIT
 
-# Main pipeline: on every push to main, run the SAME quality gate as PRs, then —
-# only here — a release stage. This is the GitHub Actions analogue of a Jenkins
-# `when { branch 'main' }` stage: a separate job (`release`) gated by `needs: ci`,
-# so it runs only after the gate passes and only on main (this workflow's trigger).
+# Main pipeline: on every push to main, run the SAME quality gate as PRs, then — only
+# here — a commitizen release stage (gated by `needs: ci`).
 #
 # RELEASE FLOW (commitizen decides everything; the API just stamps its decision):
 #   1. `cz bump --files-only` computes the next version from the conventional-commit
-#      history (first release with no tags → forced MAJOR → v1.0.0) and writes it
-#      into pyproject.toml + uv.lock + CHANGELOG.md, WITHOUT committing or tagging.
+#      history and writes the version-of-record (pyproject.toml/.cz.toml, per the
+#      configured version_provider) + lockfile + CHANGELOG.md, WITHOUT committing.
 #   2. The workflow creates a GitHub-SIGNED commit of those files via the GraphQL
-#      createCommitOnBranch mutation, authenticated as the `nivintw-ci-app` GitHub
-#      App → the commit is Verified and attributed to nivintw-ci-app[bot].
-#   3. An annotated tag v<version> is created pointing at that commit.
-#   4. A GitHub Release is cut, body = the changelog section cz generated.
-# The bump skips cleanly when a push has nothing releasable (docs/chore-only).
+#      createCommitOnBranch mutation, authenticated as a release GitHub App → the
+#      commit is Verified and attributed to the app[bot].
+#   3. An annotated tag v<version> is created; 4. a GitHub Release is cut.
 #
-# WHY THIS SHAPE (vs. a plain `cz bump` + git push):
-#   - Auth: pushing to main must come from a ruleset BYPASS actor. The default
-#     GITHUB_TOKEN can't bypass a ruleset (it isn't a selectable actor); the
-#     `nivintw-ci-app` App is — it's in the `update-main` ruleset's bypass list.
-#   - Signatures: the `protect-main` ruleset requires verified-signed commits and
-#     is NEVER bypassed, so the bot's commit must be signed too. A locally-created
-#     `git commit` can only be signed by a key on the runner (tied to a user, not
-#     an App). createCommitOnBranch makes GitHub sign it server-side as the App —
-#     so no signing key is stored anywhere.
-#   - No loop: unlike GITHUB_TOKEN, an App token's push DOES re-trigger workflows,
-#     so the bump commit headline carries "[skip ci]" — GitHub then skips the run
-#     for that push.
-#
-# RACE SAFETY (overlapping merges): two merges in quick succession would otherwise
-# start two release runs that both try to stamp a bump, and the second's
-# createCommitOnBranch fails STALE_DATA (its expected head no longer matches main).
-# Two things prevent that, and must stay together:
-#   - `concurrency` serializes release runs (never cancel an in-flight one), so only
-#     one stamps at a time.
-#   - the release job operates on the LIVE main tip (checkout ref: main, and the
-#     expected head is read fresh from that checkout — NOT the triggering push SHA).
-#     So when a queued run finally starts, it sees the prior run's bump already on
-#     main, finds nothing new to release, and exits cleanly. If a real commit landed
-#     in between, it's swept into that run's release instead of being lost.
-#
-# REQUIRED REPO SETUP (must exist before the first release runs):
-#   - The `nivintw-ci-app` GitHub App: Repository permissions → Contents: Read and
-#     write; installed on this repo; in the `update-main` ruleset bypass list (it is).
-#   - Two repository secrets from that App:
-#       CI_APP_ID           — the App's "App ID"
-#       CI_APP_PRIVATE_KEY  — a generated private key (.pem contents)
+# REPO SETUP TO ENABLE RELEASES (the release job SKIPS cleanly until these exist, so
+# merging to main is always safe — see the `preflight` job below) — see REVIEW.md:
+#   - A release GitHub App with Contents: Read+write, installed on this repo, and in
+#     the bypass list of any ruleset that protects main.
+#   - Two repository secrets from that app: CI_APP_ID and CI_APP_PRIVATE_KEY.
+#   - If you don't want signed/app releases, replace this job with a plain
+#     `cz bump && git push` using a PAT, or delete the release job entirely.
 
 name: main
 
 on:
   push:
     branches: [main]
-  # Manual trigger: run the release on demand from the Actions tab (or
-  # `gh workflow run main.yml`). Needed because GitHub doesn't run a brand-new
-  # push-triggered workflow on the very commit that introduces it, and handy for
-  # re-running a release that failed partway.
   workflow_dispatch:
 
 permissions:
   contents: read
 
 # Serialize release runs so overlapping merges can't race the signed-bump stamping.
-# cancel-in-progress: false — NEVER cancel a run that may be mid-stamp; let the next
-# one queue and run after, against the (by then advanced) main tip. See RACE SAFETY.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  # Same gate as the PR pipeline — defined once, in the reusable ci.yml.
   ci:
     uses: ./.github/workflows/ci.yml
 
+  # Guard: the release job needs the release App secrets. Secrets can't be read in a
+  # job-level `if:`, so a step (which CAN see secrets) reports whether they're present,
+  # and the release job gates on that output. Until CI_APP_ID is set, release SKIPS
+  # cleanly (green run, no failure); add the secrets and auto-release activates itself.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      release_enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          CI_APP_ID: ${{ secrets.CI_APP_ID }}
+        run: |
+          if [ -n "$CI_APP_ID" ]; then
+            echo "enabled=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::Release skipped — CI_APP_ID not set. Add the release App secrets (CI_APP_ID, CI_APP_PRIVATE_KEY) to enable auto-release."
+          fi
+
   release:
-    needs: ci
+    needs: [ci, preflight]
+    if: needs.preflight.outputs.release_enabled == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Mint a token for the nivintw-ci-app App (the ruleset bypass actor)
+      - name: Mint a token for the release App (the ruleset bypass actor)
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
         with:
           app-id: ${{ secrets.CI_APP_ID }}
           private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
+          # Scope the token to the minimum the release needs (signed bump commit, tag, ref,
+          # release) instead of inheriting the App's blanket perms (zizmor github-app).
+          permission-contents: write
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          # Check out the LIVE main tip, not the triggering push SHA: if a prior
-          # release run already stamped a bump, this run must see it (and then find
-          # nothing to release) rather than target a stale head. See RACE SAFETY.
+          # Check out the LIVE main tip, not the triggering push SHA, so a prior
+          # release run's bump is seen rather than targeting a stale head.
           ref: main
-          fetch-depth: 0 # full history + tags: the changelog and the no-tags (first-release) check
+          fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
+          # Bump/tag/release go through the API with this token, not `git push`, so the
+          # token needn't be persisted to .git/config (zizmor artipacked).
+          persist-credentials: false
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
 
@@ -110,24 +101,12 @@ jobs:
         run: |
           set -euo pipefail
           old="$(cz version --project)"
-          # First release (no tags yet) cuts v1.0.0; after that the increment is
-          # inferred from the conventional-commit types since the last tag.
           incr=()
           if [ -z "$(git tag)" ]; then incr=(--increment MAJOR); fi
-          # --files-only writes pyproject + uv.lock + CHANGELOG.md but does NOT
-          # commit/tag (the signed commit is made via the API below).
-          # --changelog-to-stdout emits just the new section, for the Release body.
-          # cz exits non-zero with nothing changed when there's nothing to release.
-          # Scratch files (notes/log/file-list) go to $RUNNER_TEMP, OUTSIDE the work
-          # tree — otherwise `git status` would list them as untracked and they'd get
-          # swept into changed_files.txt and committed into the bump commit.
           if cz bump --yes --files-only --changelog-to-stdout "${incr[@]}" \
                >"$RUNNER_TEMP/release_notes.md" 2>"$RUNNER_TEMP/bump.log"; then
             new="$(cz version --project)"
             git status --porcelain | cut -c4- >"$RUNNER_TEMP/changed_files.txt"
-            # The live main tip we're bumping ON TOP OF (HEAD hasn't moved — cz only
-            # touched working-tree files). createCommitOnBranch stamps against this
-            # exact oid, so a racing push is caught instead of silently overwritten.
             {
               echo "released=true"
               echo "old=$old"
@@ -142,9 +121,9 @@ jobs:
             echo "cz bump failed:" >&2; cat "$RUNNER_TEMP/bump.log" >&2; exit 1
           fi
 
-      - name: Create the signed bump commit + annotated tag as nivintw-ci-app
+      - name: Create the signed bump commit + annotated tag
         if: steps.bump.outputs.released == 'true'
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           OLD: ${{ steps.bump.outputs.old }}
           NEW: ${{ steps.bump.outputs.new }}
@@ -156,22 +135,11 @@ jobs:
             const fs = require('fs');
             const { owner, repo } = context.repo;
             const { OLD, NEW, TAG, HEAD_OID } = process.env;
-
-            // The files cz changed (pyproject.toml, uv.lock, CHANGELOG.md, …),
-            // listed in the scratch file under $RUNNER_TEMP. The paths themselves are
-            // repo-relative, so they're read below relative to the working tree.
             const paths = fs.readFileSync(`${process.env.RUNNER_TEMP}/changed_files.txt`, 'utf8').split('\n').filter(Boolean);
             const additions = paths.map((path) => ({
               path,
               contents: fs.readFileSync(path).toString('base64'),
             }));
-
-            // createCommitOnBranch makes a GitHub-SIGNED commit (Verified),
-            // attributed to the authenticated App, and fast-forwards main to it.
-            // expectedHeadOid is the live main tip we checked out and bumped on top of
-            // (NOT context.sha, the triggering push — that can be stale behind a prior
-            // release's bump). It guards against a racing push. "[skip ci]" in the
-            // headline stops this push from re-triggering the pipeline.
             const res = await github.graphql(
               `mutation($input: CreateCommitOnBranchInput!) {
                  createCommitOnBranch(input: $input) { commit { oid } }
@@ -187,8 +155,6 @@ jobs:
             );
             const oid = res.createCommitOnBranch.commit.oid;
             core.info(`signed bump commit: ${oid}`);
-
-            // Annotated tag → ref, pointing at the signed commit.
             const tag = await github.rest.git.createTag({
               owner, repo, tag: TAG, message: TAG, object: oid, type: 'commit',
             });
@@ -199,7 +165,10 @@ jobs:
         if: steps.bump.outputs.released == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Route the step output through env, not `${{ }}` in the script, so it can't be
+          # interpreted as shell (zizmor template-injection).
+          TAG: ${{ steps.bump.outputs.tag }}
         run: |
-          gh release create "${{ steps.bump.outputs.tag }}" \
-            --title "${{ steps.bump.outputs.tag }}" \
+          gh release create "$TAG" \
+            --title "$TAG" \
             --notes-file "$RUNNER_TEMP/release_notes.md"

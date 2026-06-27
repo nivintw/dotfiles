@@ -2,14 +2,12 @@
 # SPDX-License-Identifier: MIT
 
 # hawkeye (https://github.com/korandoru/hawkeye) — inserts & maintains SPDX license
-# headers for REUSE compliance. Run: `hawkeye format` (or `check`). The `reuse` hook
-# verifies overall compliance. Header text is templated from [properties] below so the
-# year/holder/license live in one place. Only files with no usable comment syntax stay
-# in REUSE.toml: strict JSON, the iTerm binary plist, the uv-generated lockfile, and
-# the fisher plugin manifest (fisher reads every non-blank line as a plugin spec).
+# headers for REUSE compliance. Run: `hawkeye format` (or `check`). Header text is
+# templated from [properties] so year/holder/license live in one place. Only files
+# with no usable comment syntax stay in REUSE.toml (strict JSON, lockfiles).
 
 # REUSE-IgnoreStart — this template literally contains an SPDX-License-Identifier line;
-# without the guard, `reuse lint` tries to parse the {{ ... }} placeholder as a license.
+# without the guard, `reuse lint` tries to parse the placeholder as a license.
 inlineHeader = """
 SPDX-FileCopyrightText: © {{ props["inceptionYear"] }} {{ props["copyrightHolder"] }}
 SPDX-License-Identifier: {{ props["spdxLicenseIdentifier"] }}
@@ -17,26 +15,29 @@ SPDX-License-Identifier: {{ props["spdxLicenseIdentifier"] }}
 # REUSE-IgnoreEnd
 
 # Negations cancel hawkeye's built-in default excludes (which skip **/*.md and
-# **/.gitignore) so those get headered too. `**/.claude/` is a directory-form exclude
-# (note: no trailing /**) — it prunes the whole tree, so the blanket `!**/*.md` can't
-# re-include markdown inside it (CLAUDE.md, skills/*/SKILL.md). A contents-form
-# `**/.claude/**` would NOT work here: hawkeye keeps walking the tree and the `!**/*.md`
-# force-include re-headers those .md anyway. Keep this list in sync with REUSE.toml:
-# anything excluded here gets annotated there instead.
+# **/.gitignore) so those get headered too.
+# This project has frontmatter-first markdown (YAML on line 1 — Claude Code skills,
+# Jekyll/Hugo), so markdown stays in hawkeye's default excludes (a line-1 SPDX comment
+# would break the frontmatter) and is licensed via REUSE.toml instead. Note hawkeye
+# can't re-exclude a file once an include (`!`) matches it, so there's no `!**/*.md`.
 excludes = [
   "LICENSE",
   "LICENSES/**",
-  "iterm2/**",
   "uv.lock",
   "**/*.json",
-  "home/.config/fish/fish_plugins",
-  "!**/*.md",
   "!**/.gitignore",
-  "**/.claude/",                    # SPDX headers break Claude Code's frontmatter parsers
-  "**/.python-version",             # bare version string, no comment syntax
-  "**/.vscode/*",                   # editor config (JSON), can't take a header
-  "docs/.nojekyll",                 # empty GitHub Pages marker; annotated in REUSE.toml
-  "docs/assets/asciinema-player.*", # vendored third-party player (Apache-2.0); annotated in REUSE.toml
+  "**/.python-version",
+  "**/.vscode/*",
+  # CODEOWNERS has no extension hawkeye maps; it carries its own `#` header (reuse-verified).
+  "**/CODEOWNERS",
+  # Repo-specific: SPDX headers break Claude Code's frontmatter parsers; the iterm2 plist
+  # is binary; fish_plugins treats '#' as data; .nojekyll is an empty marker; the vendored
+  # asciinema player is Apache-licensed (annotated in REUSE.toml, not restamped here).
+  "**/.claude/",
+  "iterm2/**",
+  "home/.config/fish/fish_plugins",
+  "docs/.nojekyll",
+  "docs/assets/asciinema-player.*",
 ]
 
 additionalHeaders = ["markdown-header.toml"]
@@ -45,20 +46,21 @@ additionalHeaders = ["markdown-header.toml"]
 extensions = ["md"]
 
 # '#'-comment files hawkeye doesn't map by default: fish/bats/uv_tools.txt and the
-# Brewfile.d/*.brewfile opt-in bundles by extension, plus dotfiles and the baseline
-# Brewfile (Ruby DSL) matched by exact filename (it has no extension).
+# Brewfile.d/*.brewfile bundles by extension, plus dotfiles and the baseline Brewfile
+# (Ruby DSL) matched by exact filename (no extension), and the git template post-checkout
+# hook (shell, '#' comments).
 [mapping.SCRIPT_STYLE]
-extensions = ["fish", "bats", "txt", "brewfile"]
+extensions = ["txt", "fish", "bats", "brewfile"]
 filenames = [
-  "Brewfile",
   ".gitignore",
-  ".gitconfig",
-  "ignore",             # ~/.config/git/ignore — the global gitignore (XDG default location)
   ".envrc",
+  "Brewfile",
+  ".gitconfig",
+  "ignore",
   "config",
   ".stow-local-ignore",
   "tmux.conf",
-  "post-checkout",      # git template hook (~/.config/git/template/hooks/) — shell, '#' comments
+  "post-checkout",
 ]
 
 [properties]

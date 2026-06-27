@@ -82,7 +82,7 @@ gitconfig_migrate() {
   overlay_base="$(basename "$overlay")"
   migrated="$(_gitconfig_strip_self_include "$target" "$overlay_base")"
   if ! printf '\n# --- migrated from %s by install.sh (see %s) ---\n%s\n' \
-    "$target" "$backup" "$migrated" >> "$overlay"; then
+    "$target" "$backup" "$migrated" >>"$overlay"; then
     printf 'gitconfig_migrate: could not write %s (left %s in place)\n' "$overlay" "$target" >&2
     return 1
   fi

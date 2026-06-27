@@ -3,9 +3,7 @@
 
 [markdown_custom]
 firstLine = "<!--"
-# Trailing newline is intentional.
-# This is to ensure proper formatting in markdown files.
-# I.e. rumdl is unhappy if there's no blank line after the header.
+# Trailing newline is intentional (rumdl wants a blank line after the header).
 endLine = "-->\n"
 firstLineDetectionPattern = "^<!--"
 lastLineDetectionPattern = "-->"

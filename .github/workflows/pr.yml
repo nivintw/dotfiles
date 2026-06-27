@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: © 2026 Tyler Nivin
 # SPDX-License-Identifier: MIT
 
-# Open-PR pipeline: run the shared quality gate (lint/format/test) on every pull
-# request. No write access, nothing released — just the checks. This is the status
-# check to require in branch protection (shows up as "ci / lint-and-test").
+# Open-PR pipeline: run the shared quality gate on every pull request. No write
+# access, nothing released — just the checks. Require "ci / lint-and-test" in branch
+# protection / the ruleset.
 
 name: pr
 
