@@ -19,6 +19,9 @@ bats tests/          # fish behavior  (needs bats-core + fish, both in the Brewf
 uv run pytest        # config validity (uv handles the Python env from pyproject.toml)
 ```
 
+The heavyweight end-to-end VM smoke test is **opt-in** and never part of the above — see
+[End-to-end VM smoke test](#end-to-end-vm-smoke-test-opt-in) below.
+
 ## bats — fish behavior
 
 - **`git_prune_local.bats`** — the branch-pruning logic, the one function where a
@@ -78,3 +81,30 @@ This layers on top of the checks that already sweep *every* file: `fish -n`
 parses each function, `shellcheck` lints each script, and `test_data_files.py`
 parses each config. Inventory coverage answers the orthogonal question — does
 each thing that can break have *something* watching it?
+
+## End-to-end VM smoke test (opt-in)
+
+`scripts/vm-smoke.sh` boots a clean [Tart](https://tart.run) VM, runs `install.sh`
+end-to-end inside it from scratch, and asserts `verify_install` reports healthy — the one
+thing the unit/config suites can't do: prove the installer works on a genuinely clean
+machine.
+
+It is **heavy and opt-in**: the first run pulls a multi-GB macOS base image and a full
+install takes many minutes, so it never runs in the default `uv run pytest`.
+
+**Prerequisite:** `tart` and `sshpass` (both in the Brewfile — `brew bundle` installs them);
+Tart needs Apple Silicon.
+
+```bash
+# Directly:
+scripts/vm-smoke.sh                 # clone -> boot -> install -> verify -> teardown
+scripts/vm-smoke.sh --keep          # leave the VM running to debug a failure
+scripts/vm-smoke.sh --image REF     # clone a different base image
+
+# Via pytest (opt-in gate — only runs with the env var set and tart present):
+DOTFILES_VM_SMOKE=1 uv run pytest -m integration
+```
+
+`tests/vm_smoke.bats` unit-tests the harness's arg-parsing and preflight (no VM boot); the
+boot-and-install path is covered by the opt-in pytest above. It targets the current bash
+installer today and is the verification gate for the Python installer rewrite (#53).
