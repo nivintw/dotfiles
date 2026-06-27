@@ -6,9 +6,11 @@
 #
 # RELEASE FLOW (release-please, manifest mode — single package):
 #   1. On push to main, release-please scans Conventional Commits since the last release
-#      and maintains a "Release PR" that bumps the version (.release-please-manifest.json,
-#      mirrored into the version-of-record via release-please-config.json's extra-files)
-#      + CHANGELOG.md.
+#      and maintains a "Release PR" that bumps the version in .release-please-manifest.json
+#      + CHANGELOG.md. The version-of-record is the manifest + the vX.Y.Z git tags; it is
+#      deliberately NOT mirrored into pyproject.toml (no release-please-config.json
+#      extra-files), because that would leave uv.lock stale and red-light the Release PR's
+#      uv-lock check. pyproject [project].version is decorative here (package = false).
 #   2. That Release PR is auto-merged (`--auto --rebase`) once its required checks pass, so
 #      releases are continuous; release-please then cuts the `vX.Y.Z` tag + GitHub Release.
 #   3. The action authenticates as the release GitHub App (see below). An App token is a
