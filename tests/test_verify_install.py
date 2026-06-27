@@ -76,6 +76,26 @@ def test_symlink_into_repo_missing_path_fails(tmp_path: Path) -> None:
     assert not symlink_into_repo(tmp_path / "nope", repo)
 
 
+def test_symlink_into_repo_pointing_at_repo_root_fails(tmp_path: Path) -> None:
+    """A symlink resolving to the repo root itself is not 'inside' it (bash requires under)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(repo)
+    assert not symlink_into_repo(link, repo)
+
+
+def test_symlink_into_repo_nonexistent_repo_fails(tmp_path: Path) -> None:
+    """A non-existent repo dir yields False (bash failed when cd into it failed)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    target = repo / "file"
+    target.write_text("x\n")
+    link = tmp_path / "link"
+    link.symlink_to(target)
+    assert not symlink_into_repo(link, tmp_path / "does-not-exist")
+
+
 # --- is_json_object ---------------------------------------------------------
 
 
