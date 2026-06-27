@@ -7,6 +7,19 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.10.0](https://github.com/nivintw/dotfiles/compare/v1.9.1...v1.10.0) (2026-06-27)
+
+
+### Features
+
+* **installer:** Port pure-logic helpers to a Python package ([429c7d2](https://github.com/nivintw/dotfiles/commit/429c7d278f9fe2f26a2f6dac91f18b8fae02a70c))
+
+
+### Bug Fixes
+
+* **installer:** Harden verify predicate and correct diff docstring ([b581999](https://github.com/nivintw/dotfiles/commit/b581999499198a529c47e5bb6979a34a5259288d))
+* **installer:** Tighten symlink_into_repo to match the bash original ([f37e2a9](https://github.com/nivintw/dotfiles/commit/f37e2a929a1ff4d9279275fae8b76f9dd9d1e610))
+
 ## v1.9.1 (2026-06-26)
 
 ### 🐛🚑️ Fixes
