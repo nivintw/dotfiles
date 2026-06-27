@@ -310,6 +310,13 @@ enable_touch_id_sudo # pam_tid now; the pam_reattach (tmux) line is added in ste
 # Non-fatal: a transient single-package failure shouldn't abort the whole bootstrap
 # (the rest is idempotent and re-runnable). The closing summary runs `brew bundle
 # check` and lists precisely what's still missing, so you don't scroll back.
+# The cirruslabs tap (provides tart for the VM smoke harness) ships the softnet helper
+# binary, which newer Homebrew refuses to install from an untrusted tap. Tap + trust it up
+# front so the bundle below can install tart. Best-effort: a no-op on Homebrew versions
+# without the trust gate, and never fatal.
+brew tap cirruslabs/cli >/dev/null 2>&1 || true
+brew trust cirruslabs/cli >/dev/null 2>&1 || true
+
 ui_step "Homebrew packages (brew bundle)"
 if brew bundle install --file="$DOTFILES/Brewfile"; then
   ui_ok "Homebrew packages installed"

@@ -40,6 +40,9 @@ testpaths = ["tests"]
 # The installer helper package lives under src/ but is deliberately not installed
 # (package = false). Put src/ on sys.path so tests can `import dotfiles_install`.
 pythonpath = ["src"]
+markers = [
+  "integration: end-to-end tests that boot a VM (opt-in, needs tart); skipped by default.",
+]
 
 [tool.ruff]
 target-version = "py314"
