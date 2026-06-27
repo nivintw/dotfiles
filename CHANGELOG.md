@@ -3,6 +3,10 @@ SPDX-FileCopyrightText: © 2026 Tyler Nivin
 SPDX-License-Identifier: MIT
 -->
 
+# Changelog
+
+<!-- release-please prepends new releases above; entries below predate the release-please migration. -->
+
 ## v1.9.1 (2026-06-26)
 
 ### 🐛🚑️ Fixes

@@ -40,7 +40,7 @@ feed() { # $1 = script path, $2 = JSON payload
 @test "guard blocks CHANGELOG.md" {
   feed "$GUARD" '{"tool_input":{"file_path":"/repo/CHANGELOG.md"}}'
   [ "$status" -eq 2 ]
-  [[ "$output" == *"commitizen"* ]]
+  [[ "$output" == *"release-please"* ]]
 }
 
 @test "guard blocks files under LICENSES/" {

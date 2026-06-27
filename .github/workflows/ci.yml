@@ -1,16 +1,11 @@
 # SPDX-FileCopyrightText: © 2026 Tyler Nivin
 # SPDX-License-Identifier: MIT
 
-# CI — the shared lint/format/test job, runs the same prek hooks + tests as local
-# on a free ubuntu-latest runner.
-#
-# This is a REUSABLE workflow (on: workflow_call). It holds the quality gate only;
-# the triggers live in the callers:
-#   - pr.yml    (on: pull_request)        → this job. The open-PR pipeline.
-#   - main.yml  (on: push to main)        → this job, THEN a release stage that
-#                                            bumps the version + cuts a release.
-# Keeping it reusable means the gate is defined once and both pipelines run the
-# exact same checks.
+# CI — the shared lint/format/test gate. REUSABLE (on: workflow_call); the triggers
+# live in the callers:
+#   - pr.yml    (on: pull_request)  → this gate. The open-PR pipeline.
+#   - main.yml  (on: push to main)  → this gate, THEN a release-please stage.
+# Defining the gate once means both pipelines run the exact same checks.
 #
 # Most hooks self-bootstrap their pinned env (shellcheck, shfmt, actionlint, zizmor,
 # typos, gitleaks, ruff, rumdl, validate-pyproject, uv-lock, the pre-commit-hooks
@@ -121,10 +116,10 @@ jobs:
 
       # Key the browser cache on the Playwright version, NOT uv.lock: the bundled
       # Chromium build is pinned 1:1 to the Playwright release, while uv.lock churns
-      # on every dependency change AND every release bump (cz writes the project
-      # version into it). Keying on uv.lock therefore busted this cache on basically
-      # every merge, re-downloading Chromium each time. The version is read from the
-      # synced env (uv sync ran above), so it reflects exactly what pytest will drive.
+      # on every dependency change. Keying on uv.lock therefore busted this cache on
+      # basically every such change, re-downloading Chromium each time. The version is
+      # read from the synced env (uv sync ran above), so it reflects exactly what
+      # pytest will drive.
       - name: Resolve Playwright version (stable cache key)
         id: pw
         run: echo "version=$(uv run playwright --version | awk '{print $2}')" >>"$GITHUB_OUTPUT"

@@ -12,7 +12,7 @@
 ansible --with passlib --with jc --with jmespath --with netaddr --with ansible-lint
 ansible-dev-tools
 checkov
-commitizen --with cz-conventional-gitmoji
+commitizen
 copier
 jc
 playwright
