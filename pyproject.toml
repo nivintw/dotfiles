@@ -37,6 +37,9 @@ package = false # don't try to build/install this repo as a package
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The installer helper package lives under src/ but is deliberately not installed
+# (package = false). Put src/ on sys.path so tests can `import dotfiles_install`.
+pythonpath = ["src"]
 
 [tool.ruff]
 target-version = "py314"
@@ -64,6 +67,9 @@ convention = "google"
   "S607",
   "INP001", # pytest test dir, not an importable package (flat `from conftest import`)
 ]
+# verify_install shells out to fixed git/bioutil commands (resolved via shutil.which, so
+# no partial-path S607); the argv is constant with no user input, so the S603 audit is moot.
+"src/dotfiles_install/verify_install.py" = ["S603"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
