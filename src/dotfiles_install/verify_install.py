@@ -26,15 +26,17 @@ _TEMPLATE_RE = re.compile(r"(\d+) biometric template")
 
 
 def symlink_into_repo(link: Path, repo: Path) -> bool:
-    """Report whether ``link`` is a symlink resolving to a path inside ``repo``."""
-    if not link.is_symlink():
+    """Report whether ``link`` is a symlink resolving to a path strictly inside ``repo``.
+
+    Matches the bash original: ``repo`` must exist (it failed when ``cd "$repo"`` did) and the
+    target must be *under* the repo, not the repo root itself.
+    """
+    if not link.is_symlink() or not repo.is_dir():
         return False
     target = link.readlink()
     if not target.is_absolute():
         target = link.parent / target
-    resolved = target.resolve()
-    repo_abs = repo.resolve()
-    return resolved == repo_abs or repo_abs in resolved.parents
+    return repo.resolve() in target.resolve().parents
 
 
 def is_json_object(path: Path) -> bool:
