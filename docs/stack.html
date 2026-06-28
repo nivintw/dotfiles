@@ -124,7 +124,7 @@
         </div>
         <div class="feature">
           <span class="feature__mark">◇</span>
-          <div><h3><a href="https://ollama.com/" rel="noopener">Ollama</a> → GitLens</h3><p>A local <a href="https://ollama.com/library/qwen2.5-coder" rel="noopener"><code>qwen2.5-coder:7b</code></a> model serves GitLens' AI features (commit messages, explain commit/changes) entirely offline — no cloud key, no Copilot seat. The bootstrap pulls the model idempotently.</p></div>
+          <div><h3><a href="https://ollama.com/" rel="noopener">Ollama</a> → GitLens &amp; Claude offload</h3><p>A local <a href="https://ollama.com/library/qwen2.5-coder" rel="noopener"><code>qwen2.5-coder:7b</code></a> model serves GitLens' AI features (commit messages, explain commit/changes) entirely offline — no cloud key, no Copilot seat. On Apple&nbsp;Silicon with &gt;32&nbsp;GB unified memory the bootstrap also pulls the faster MLX model <code>qwen3.5:35b-a3b-coding-nvfp4</code> for offloading bulk work off Claude's token budget. Both pulls are idempotent; a reasoning model, it stays off GitLens (which can't disable its thinking) and is driven with <code>"think": false</code>.</p></div>
         </div>
       </section>
     </main>
