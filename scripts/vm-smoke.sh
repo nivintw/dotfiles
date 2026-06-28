@@ -180,17 +180,20 @@ ASK
       "${VM_USER}@${VM_IP}" "$@"
   }
 
-  # wait_for DESC TIMEOUT CMD... — poll CMD until it succeeds or TIMEOUT seconds elapse.
+  # wait_for DESC TIMEOUT INTERVAL CMD... — poll CMD until it succeeds or TIMEOUT seconds
+  # elapse, sleeping INTERVAL between probes. Use a fine INTERVAL where startup latency matters
+  # (IP/SSH) and a coarse one for long waits (the multi-minute install) so we don't open
+  # hundreds of fresh SSH connections just to poll a marker file.
   wait_for() {
-    local desc="$1" timeout="$2" waited=0
-    shift 2
+    local desc="$1" timeout="$2" interval="$3" waited=0
+    shift 3
     until "$@" >/dev/null 2>&1; do
       if [ "$waited" -ge "$timeout" ]; then
         printf 'vm-smoke.sh: timed out after %ss waiting for %s\n' "$timeout" "$desc" >&2
         return 1
       fi
-      sleep 2
-      waited=$((waited + 2))
+      sleep "$interval"
+      waited=$((waited + interval))
     done
   }
 
@@ -213,7 +216,7 @@ ASK
       exit 0'
     log "$label: waiting for install to finish (timeout ${INSTALL_TIMEOUT}s)"
     # shellcheck disable=SC2016
-    if ! wait_for "install to finish" "$INSTALL_TIMEOUT" \
+    if ! wait_for "install to finish" "$INSTALL_TIMEOUT" 15 \
       ssh_vm 'test -f "$HOME/dotfiles/.install.rc"'; then
       log "$label: TIMED OUT — last 40 log lines from the VM:"
       # shellcheck disable=SC2016
@@ -256,7 +259,7 @@ REMOTE
   tart run --no-graphics "$VM_NAME" >"$RUN_LOG" 2>&1 &
 
   log "Waiting for the VM to acquire an IP"
-  if ! wait_for "an IP address" 180 tart ip "$VM_NAME"; then
+  if ! wait_for "an IP address" 180 2 tart ip "$VM_NAME"; then
     log "VM never came up — 'tart run' console log:"
     cat "$RUN_LOG" >&2 || true
     return 1
@@ -265,7 +268,7 @@ REMOTE
   log "VM is up at ${VM_IP}"
 
   log "Waiting for SSH"
-  wait_for "SSH" 180 ssh_vm true
+  wait_for "SSH" 180 2 ssh_vm true
 
   # install.sh runs sudo repeatedly across a multi-minute install. Crucially its keepalive
   # calls `sudo -v`, which RE-AUTHENTICATES — and NOPASSWD does NOT cover `sudo -v`, so a

@@ -29,5 +29,5 @@ brewfile_core() {
 # sourced. Sourcing has NO side effects — it only defines the function.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   set -euo pipefail
-  brewfile_core "${1:?usage: brewfile_core.sh <brewfile>}"
+  brewfile_core "$@" # the function's own ${1:?} prints the usage error when no arg is given
 fi
