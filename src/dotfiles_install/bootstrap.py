@@ -83,15 +83,17 @@ def _install_uv() -> bool:
 
 
 def _activate_homebrew() -> None:
-    """Put a freshly installed brew on ``PATH`` for the rest of the run (Apple Silicon vs Intel).
+    """Put a freshly installed brew's ``bin`` and ``sbin`` on ``PATH`` (Apple Silicon vs Intel).
 
-    PATH-only, like ``install.sh``: it does *not* export ``HOMEBREW_PREFIX`` etc. (``brew``
-    derives its prefix from its own location). A later phase needing the prefix should call
+    Mirrors ``brew shellenv``'s PATH effect (both ``bin`` and ``sbin``) but not its
+    ``HOMEBREW_*``/``MANPATH`` exports — nothing in the install path reads those, and ``brew``
+    derives its prefix from its own location. A later phase needing the prefix should call
     ``brew --prefix`` rather than read the environment.
     """
     for brew_bin in _BREW_BINARIES:
         if os.access(brew_bin, os.X_OK):
-            _prepend_path(brew_bin.parent)
+            _prepend_path(brew_bin.parent.parent / "sbin")
+            _prepend_path(brew_bin.parent)  # bin prepended last, so it sits ahead of sbin
             return
 
 

@@ -148,7 +148,7 @@ def _install_opt_in_bundles(ctx: InstallContext) -> None:
 def _migrate_legacy_selection(ctx: InstallContext, sel: Path) -> None:
     """Adopt a legacy ``brewfiles`` selection as ``bundles`` once, if ``bundles`` is absent."""
     legacy = sel.with_name("brewfiles")  # the pre-rename sibling of the bundles file
-    if not sel.exists() and legacy.exists():
+    if not sel.is_file() and legacy.is_file():  # match bash's `-f` (skip non-regular files)
         shutil.copyfile(legacy, sel)
         ctx.ui.detail("migrated selection from legacy ~/.config/dotfiles/brewfiles")
 

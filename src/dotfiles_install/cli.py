@@ -53,7 +53,8 @@ def main(
     ] = False,
 ) -> None:
     """Converge this Mac to the state declared in the repo (dotfiles bootstrap)."""
-    requested = tuple(bundle or ())
+    # Dedup repeated --bundle values, preserving order (bash's add_requested_bundle).
+    requested = tuple(dict.fromkeys(bundle or ()))
     _validate_bundles(requested, no_bundles=no_bundles, keep_bundles=keep_bundles)
     ui = UI()
     ctx = InstallContext(
