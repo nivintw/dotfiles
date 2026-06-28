@@ -44,6 +44,16 @@ setup() {
   [[ "$output" == *'brew "btop"'* ]]
 }
 
+@test "drops vscode extension and mas app lines (GUI-bound, not CLI core)" {
+  printf 'brew "git"\nvscode "ms-python.python"\nmas "Xcode", id: 497799835\nbrew "jq"\n' >"$BREWFILE"
+  run brewfile_core "$BREWFILE"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'brew "git"'* ]]
+  [[ "$output" == *'brew "jq"'* ]]
+  [[ "$output" != *"ms-python.python"* ]]
+  [[ "$output" != *"Xcode"* ]]
+}
+
 @test "a Brewfile with no casks is returned unchanged" {
   printf 'tap "a/b"\nbrew "git"\nbrew "fish"\n' >"$BREWFILE"
   run brewfile_core "$BREWFILE"
