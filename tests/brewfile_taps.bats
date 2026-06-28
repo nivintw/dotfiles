@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: MIT
 
 #
-# Unit tests for scripts/brewfile_taps.sh — the pure Brewfile tap parser install.sh uses to
-# trust third-party taps before bundling. No brew, no network: just text in, tap names out.
+# Unit tests for scripts/brewfile_taps.sh — the pure Brewfile tap parser the installer uses
+# to trust third-party taps before bundling. No brew, no network: just text in, tap names out.
 #
 # Run:  bats tests/brewfile_taps.bats
 

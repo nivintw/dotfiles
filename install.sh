@@ -63,6 +63,23 @@ ui_warn() {
 ui_err() { printf '%s%s%s %s\n' "$C_RED" "$G_ERR" "$C_RESET" "$1" >&2; }
 ui_detail() { printf '   %s%s%s\n' "$C_DIM" "$1" "$C_RESET"; }
 
+# retry DESC MAX CMD... — run CMD, retrying up to MAX times with a short backoff. Returns 0
+# on the first success, non-zero if every attempt fails. For network bootstraps (fisher,
+# TPM/git clones, curl|bash installers, package downloads) where a transient blip shouldn't
+# abort an otherwise idempotent install. Callers make it non-fatal with `|| ui_warn ...` so
+# a persistent failure degrades to a warning + re-run hint instead of killing the bootstrap.
+retry() {
+  local desc="$1" max="$2" n=1
+  shift 2
+  while :; do
+    if "$@"; then return 0; fi
+    [ "$n" -ge "$max" ] && return 1
+    ui_detail "$desc failed (attempt $n/$max) — retrying in 3s"
+    n=$((n + 1))
+    sleep 3
+  done
+}
+
 # --- Opt-in bundle discovery + CLI args -------------------------------------
 # Discover the available opt-in bundles (Brewfile.d/<name>.brewfile, basename
 # minus the suffix) up front because both --help (lists them) and --bundle
@@ -803,25 +820,37 @@ ui_ok "overlay files ready"
 # --- 5. Fish plugins (fisher) -----------------------------------------------
 # fisher update installs everything listed in the now-symlinked fish_plugins.
 ui_step "Fish plugins (fisher)"
-fish -c '
-  if not functions -q fisher
-    curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source
-    fisher install jorgebucaran/fisher
-  end
-  fisher update
-'
-ui_ok "fish plugins installed"
+_install_fisher() {
+  fish -c '
+    if not functions -q fisher
+      curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source
+      fisher install jorgebucaran/fisher
+    end
+    fisher update
+  '
+}
+if retry "fisher (fish plugins)" 3 _install_fisher; then
+  ui_ok "fish plugins installed"
+else
+  ui_warn "fisher bootstrap failed (network?) — fish plugins not installed; re-run install.sh to retry"
+fi
 
 # --- 6. tmux plugins (TPM) --------------------------------------------------
 # Clone TPM if missing, then install the plugins declared in the stowed tmux.conf.
 ui_step "tmux plugins (TPM)"
 TPM_DIR="$HOME/.config/tmux/plugins/tpm"
+# rm -rf before each clone attempt so a retry after a partial clone can't fail on a
+# non-empty target directory.
+_clone_tpm() { rm -rf "$TPM_DIR" && git clone --depth 1 https://github.com/tmux-plugins/tpm "$TPM_DIR"; }
 if [ ! -d "$TPM_DIR" ]; then
   ui_active "installing TPM (tmux plugin manager)"
-  git clone --depth 1 https://github.com/tmux-plugins/tpm "$TPM_DIR"
+  retry "TPM clone" 3 _clone_tpm ||
+    ui_warn "TPM clone failed (network?) — tmux plugins not installed; re-run install.sh to retry"
 fi
-"$TPM_DIR/bin/install_plugins" >/dev/null 2>&1 || true
-ui_ok "tmux plugins installed"
+if [ -x "$TPM_DIR/bin/install_plugins" ]; then
+  "$TPM_DIR/bin/install_plugins" >/dev/null 2>&1 || true
+  ui_ok "tmux plugins installed"
+fi
 
 # --- 7. atuin history import ------------------------------------------------
 # atuin starts with an empty database and only records commands run after it's
@@ -854,7 +883,8 @@ ui_step "Python CLI tools (uv)"
   while IFS= read -r tool; do
     case "$tool" in '' | \#*) continue ;; esac
     # shellcheck disable=SC2086  # intentional split: line holds tool + --with args
-    uv tool install $tool
+    retry "uv tool install $tool" 3 uv tool install $tool ||
+      ui_warn "uv tool install failed for: $tool (re-run install.sh to retry)"
   done <"$DOTFILES/uv_tools.txt"
 )
 ui_ok "uv tools installed"
@@ -906,9 +936,13 @@ fi
 # step below so a first-run bootstrap can register servers without a re-run.
 if ! command -v claude >/dev/null 2>&1; then
   ui_step "Installing Claude Code CLI (native installer)"
-  curl -fsSL https://claude.ai/install.sh | bash
-  export PATH="$HOME/.local/bin:$PATH"
-  ui_ok "Claude Code CLI installed"
+  _install_claude() { curl -fsSL https://claude.ai/install.sh | bash; }
+  if retry "Claude Code install" 3 _install_claude; then
+    export PATH="$HOME/.local/bin:$PATH"
+    ui_ok "Claude Code CLI installed"
+  else
+    ui_warn "Claude Code install failed (network?) — skipping; re-run install.sh to retry"
+  fi
 fi
 
 # --- 12. Claude Code user-scope MCP servers ---------------------------------
@@ -988,7 +1022,8 @@ if command -v claude >/dev/null 2>&1; then
     fi ;;
     esac
     claude mcp remove "$name" --scope user >/dev/null 2>&1 || true
-    claude mcp add-json "$name" "$json" --scope user >/dev/null
+    claude mcp add-json "$name" "$json" --scope user >/dev/null ||
+      ui_warn "failed to register MCP server '$name' (re-run install.sh to retry)"
   done < <(printf '%s' "$resolved_mcp" | jq -r 'to_entries[] | "\(.key)\t\(.value | tojson)"')
   ui_ok "MCP servers registered"
 else
@@ -1146,8 +1181,14 @@ fi
 # step here, it converges unconditionally (the pinned set is small, so the
 # replacement is cheap). Run dock.sh yourself any time to re-apply.
 ui_step "Dock layout (dock.sh)"
-bash "$DOTFILES/dock.sh"
-ui_ok "Dock layout applied"
+# Non-fatal (like macos.sh above): the Dock rebuild can fail without a GUI/Dock session
+# (e.g. a headless VM), and that must not abort the run right before the verification
+# summary. dock.sh is idempotent, so a re-run reapplies it.
+if bash "$DOTFILES/dock.sh"; then
+  ui_ok "Dock layout applied"
+else
+  ui_warn "dock.sh exited non-zero — continuing (the Dock may need a GUI session; re-run install.sh)"
+fi
 
 # --- 17. Verification & summary ---------------------------------------------
 # Deterministic post-install check (scripts/verify_install.sh — also runnable
