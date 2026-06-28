@@ -7,10 +7,11 @@
 # The fish-behavior tests are separate and run with bats (see tests/README.md).
 [project]
 name = "dotfiles"
-# Decorative: package = false, so nothing builds/reads this. release-please tracks the
-# real version in .config/.release-please-manifest.json + git tags and does NOT mirror it here
-# (mirroring would drift uv.lock and red-light the Release PR). Safe to leave static.
-version = "1.9.1"
+# Nothing builds/reads this (package = false), but release-please keeps it in sync with the
+# version-of-record (.config/.release-please-manifest.json + git tags) via extra-files — it
+# rewrites this AND uv.lock's dotfiles version together on each release, so uv-lock stays
+# green. Kept in step manually here so manifest = pyproject = uv.lock.
+version = "1.11.0"
 requires-python = ">=3.14"
 description = "Tyler Nivin's dotfiles and config repo"
 authors = [{ name = "Tyler Nivin", email = "tyler@nivin.tech" }]
