@@ -7,6 +7,19 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.13.0](https://github.com/nivintw/dotfiles/compare/v1.12.1...v1.13.0) (2026-06-28)
+
+
+### Features
+
+* **install:** Port bootstrap toolchain + brew bundle to Python (phases 0-1) ([87344a7](https://github.com/nivintw/dotfiles/commit/87344a777d531fde9fb4899e6d1ddeebc6d00767)), closes [#67](https://github.com/nivintw/dotfiles/issues/67)
+
+
+### Bug Fixes
+
+* **install:** Address adversarial review of the phase 0-1 port ([ab1283b](https://github.com/nivintw/dotfiles/commit/ab1283b05ebb189fccf9bffa00f93f9bf06118d2)), closes [#67](https://github.com/nivintw/dotfiles/issues/67)
+* **install:** Address code-review findings on the phase 0-1 port ([b30085b](https://github.com/nivintw/dotfiles/commit/b30085b09e1d389679c410ad2efc0a950be83966)), closes [#67](https://github.com/nivintw/dotfiles/issues/67)
+
 ## [1.12.1](https://github.com/nivintw/dotfiles/compare/v1.12.0...v1.12.1) (2026-06-28)
 
 
