@@ -31,5 +31,5 @@ brewfile_taps() {
 # sourced by install.sh. Sourcing has NO side effects — it only defines the function.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   set -euo pipefail
-  brewfile_taps "${1:?usage: brewfile_taps.sh <brewfile>}"
+  brewfile_taps "$@" # the function's own ${1:?} prints the usage error when no arg is given
 fi

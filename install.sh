@@ -154,8 +154,9 @@ add_requested_bundle() {
 requested_bundles=()
 bundles_from_flags=0
 keep_bundles=0
-# Core profile: export so it reaches the bundle wrapper, the Ollama step, and the
-# verify_install call at the end of this run (and is inherited by any sub-shell).
+# Core profile. Exported so it reaches _brew_bundle and the verify_install call at the end of
+# this run (and any sub-shell). The Ollama step isn't flag-driven: --core skips the ollama-app
+# cask, so its `command -v ollama` guard self-skips — a transitive effect, not a DOTFILES_CORE read.
 export DOTFILES_CORE=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -296,10 +297,20 @@ auth       sufficient     pam_tid.so"
 
 # --- 0. Bootstrap toolchain (Homebrew + uv) ---------------------------------
 # Everything else (fish, stow, the rest) comes from brew bundle below.
+# These two are network curl|bash bootstraps like the later fisher/Claude steps, so they get
+# the same retry treatment — a transient blip on the very first network op shouldn't kill the
+# whole install. Capture the installer script first (so a failed download actually fails the
+# attempt and triggers a retry — piping curl straight into a shell hides a fetch failure as an
+# empty no-op), then run it. A PERSISTENT failure still aborts via the command -v check below.
 if ! command -v brew >/dev/null 2>&1; then
   ui_step "Installing Homebrew"
-  NONINTERACTIVE=1 /bin/bash -c \
-    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  _install_brew() {
+    local script
+    script="$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || return 1
+    [ -n "$script" ] || return 1
+    NONINTERACTIVE=1 /bin/bash -c "$script"
+  }
+  retry "Homebrew install" 3 _install_brew || true
   # Put brew on PATH for the rest of this script (Apple Silicon vs Intel).
   for brew_bin in /opt/homebrew/bin/brew /usr/local/bin/brew; do
     [ -x "$brew_bin" ] && eval "$("$brew_bin" shellenv)" && break
@@ -312,7 +323,13 @@ command -v brew >/dev/null 2>&1 || {
 
 if ! command -v uv >/dev/null 2>&1; then
   ui_step "Installing uv"
-  curl -LsSf https://astral.sh/uv/install.sh | sh
+  _install_uv() {
+    local script
+    script="$(curl -LsSf https://astral.sh/uv/install.sh)" || return 1
+    [ -n "$script" ] || return 1
+    printf '%s\n' "$script" | sh
+  }
+  retry "uv install" 3 _install_uv || true
   # uv installs to ~/.local/bin (newer) or ~/.cargo/bin (older); cover both.
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
@@ -353,10 +370,10 @@ EOF
 # the --core profile (DOTFILES_CORE=1) bundle a casks-stripped copy so only CLI formulae land.
 _brew_bundle() {
   _trust_brewfile_taps "$1"
-  [ "${DOTFILES_CORE:-0}" = "1" ] || {
+  if [ "${DOTFILES_CORE:-0}" != "1" ]; then
     brew bundle install --file="$1"
     return
-  }
+  fi
   local core_bf rc
   core_bf="$(mktemp -t brewfile-core)"
   brewfile_core "$1" >"$core_bf"
