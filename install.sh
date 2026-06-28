@@ -1199,14 +1199,17 @@ fi
 # ⚠️ qwen3.5-a3b is a REASONING model: programmatic callers must send "think": false,
 # or the token budget is spent on hidden thinking and the response comes back empty.
 # That is why GitLens — which can't set think:false — stays on the 7b, not this model.
-OLLAMA_MODEL="qwen2.5-coder:7b"                 # GitLens + universal fallback (~4.7GB)
-OLLAMA_MLX_MODEL="qwen3.5:35b-a3b-coding-nvfp4" # Claude offload, gated (~21GB)
+# OLLAMA_MODEL (GitLens + universal fallback) + OLLAMA_MLX_MODEL (gated, Claude offload)
+# live in one shared fragment so uninstall.sh offers to remove exactly what we provision.
+# shellcheck source=scripts/ollama_models.sh disable=SC1091
+. "$DOTFILES/scripts/ollama_models.sh"
 
-# ollama_pull_model MODEL SIZE — idempotent (skip if already present) and non-fatal
-# (a failed pull degrades to a warning + re-run hint, never aborts the install).
+# ollama_pull_model MODEL SIZE INSTALLED — idempotent (skip if MODEL is already a line of
+# INSTALLED, the model inventory captured once by the caller) and non-fatal (a failed pull
+# degrades to a warning + re-run hint, never aborts the install).
 ollama_pull_model() {
-  local model="$1" size="$2"
-  if ollama list 2>/dev/null | awk 'NR>1 {print $1}' | grep -qx "$model"; then
+  local model="$1" size="$2" installed="$3"
+  if printf '%s\n' "$installed" | grep -qx "$model"; then
     ui_ok "Ollama model $model already present"
   else
     ui_active "pulling Ollama model $model ($size, one-time)"
@@ -1236,13 +1239,15 @@ if command -v ollama >/dev/null 2>&1; then
         ui_warn "Ollama server didn't come up; start it and re-run to pull the model."
     fi
   fi
+  # Capture the model inventory once (one daemon round-trip) and reuse it for both checks.
+  installed_models="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')"
   # Baseline model — every capable machine.
-  ollama_pull_model "$OLLAMA_MODEL" "~4.7GB"
+  ollama_pull_model "$OLLAMA_MODEL" "~4.7GB" "$installed_models"
   # Gated MLX model — Apple Silicon + >32GB unified memory (32 GiB = 34359738368
   # bytes; require strictly more so exactly-32GB machines fall back to just the 7b).
   if [ "$(uname -m)" = "arm64" ] &&
     [ "$(sysctl -n hw.memsize 2>/dev/null || echo 0)" -gt 34359738368 ]; then
-    ollama_pull_model "$OLLAMA_MLX_MODEL" "~21GB"
+    ollama_pull_model "$OLLAMA_MLX_MODEL" "~21GB" "$installed_models"
   else
     ui_detail "skipping MLX model $OLLAMA_MLX_MODEL (needs Apple Silicon + >32GB RAM)"
   fi

@@ -97,6 +97,12 @@ un_mcp_names() {
   fi
 }
 
+# un_is_yes ANSWER — true for an affirmative prompt reply (y/yes, any case). One place
+# for the accept pattern so the proceed gate and the per-item offers can't drift.
+un_is_yes() {
+  case "$1" in [yY] | [yY][eE][sS]) return 0 ;; *) return 1 ;; esac
+}
+
 # --- run-state + summary ledger ----------------------------------------------------
 DRY_RUN=0
 ASSUME_YES=0
@@ -123,11 +129,9 @@ proceed_gate() {
   printf '%sThis removes the dotfiles symlinks and installer-owned setup. Proceed? [y/N]%s ' "$C_BOLD" "$C_RESET"
   local ans
   read -r ans
-  case "$ans" in [yY] | [yY][eE][sS]) return 0 ;; *)
-    ui_warn "aborted — nothing changed."
-    exit 0
-    ;;
-  esac
+  un_is_yes "$ans" && return 0
+  ui_warn "aborted — nothing changed."
+  exit 0
 }
 
 # offer QUESTION — a Tier-2/3 prompt that DEFAULTS TO NO. In --dry-run it only
@@ -143,7 +147,7 @@ offer() {
   printf '   %s [y/N] ' "$q"
   local ans
   read -r ans
-  case "$ans" in [yY] | [yY][eE][sS]) return 0 ;; *) return 1 ;; esac
+  un_is_yes "$ans"
 }
 
 # do_or_echo DESC CMD... — run CMD (recording DESC as removed), or in --dry-run just
@@ -239,10 +243,14 @@ tier2_ollama_models() {
     rec_left "Ollama models not checked (server not running); start Ollama and re-run to manage them"
     return 0
   }
+  # The model names come from the same shared fragment install.sh provisions from, so we
+  # always offer to remove exactly what it pulls — no drift if a model tag changes.
+  # shellcheck source=scripts/ollama_models.sh disable=SC1091
+  . "$DOTFILES/scripts/ollama_models.sh"
   local present model
   present="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')"
   ui_step "Ollama models provisioned by this repo"
-  for model in "qwen2.5-coder:7b" "qwen3.5:35b-a3b-coding-nvfp4"; do
+  for model in "$OLLAMA_MODEL" "$OLLAMA_MLX_MODEL"; do
     printf '%s\n' "$present" | grep -qx "$model" || continue
     if offer "Remove Ollama model $model?"; then
       do_or_echo "ollama rm $model" ollama rm "$model"
