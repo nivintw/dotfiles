@@ -12,8 +12,10 @@
 #   - tart clone + run a headless ephemeral VM (deleted on exit unless --keep).
 #   - SSH in via SSH_ASKPASS (no password ever lands in argv).
 #   - Ship the repo in with `git archive HEAD` — no .git, no shared-mount race.
-#   - Run install.sh DETACHED (nohup; rc -> marker, output -> log), polled over fresh SSH
-#     connections so the run survives the installer toggling the firewall mid-install.
+#   - Run install.sh --core DETACHED (nohup; rc -> marker, output -> log), polled over fresh
+#     SSH connections so the run survives the installer toggling the firewall mid-install. The
+#     --core profile installs CLI formulae only — skipping the GUI app/font casks and the
+#     Ollama model pull a headless smoke VM doesn't need — and verify runs core-aware to match.
 #   - By default install TWICE (idempotency); --once does a single pass.
 #   - Gate on verify_install's OK/BAD stream, tolerating only the Touch-ID-no-sensor BAD
 #     (a VM has no biometric sensor); the firewall and everything else stay strict.
@@ -200,11 +202,13 @@ ASK
   # the guest, so SC2016 (don't-expand-in-single-quotes) is the desired behaviour, not a bug.
   run_install() {
     local label="$1" rc
-    log "$label: launching install.sh --no-bundles (detached) in the VM"
+    log "$label: launching install.sh --no-bundles --core (detached) in the VM"
+    # --core: CLI formulae only — skip the heavy GUI app/font casks and the Ollama model
+    # pull, which a headless smoke VM doesn't need and which would dominate the run time.
     # shellcheck disable=SC2016
     ssh_vm 'cd "$HOME/dotfiles" \
       && rm -f .install.rc .install.log \
-      && nohup sh -c "./install.sh --no-bundles >.install.log 2>&1; echo \$? >.install.rc" \
+      && nohup sh -c "./install.sh --no-bundles --core >.install.log 2>&1; echo \$? >.install.rc" \
            >/dev/null 2>&1 < /dev/null & \
       exit 0'
     log "$label: waiting for install to finish (timeout ${INSTALL_TIMEOUT}s)"
@@ -236,6 +240,8 @@ ASK
     log "$label: running verify_install in the VM and evaluating the result"
     ssh_vm 'bash -s' <<'REMOTE' | evaluate_stream
 cd "$HOME/dotfiles"
+# Match the --core install: verify the casks-stripped baseline, not the full Brewfile.
+export DOTFILES_CORE=1
 # shellcheck source=/dev/null
 source scripts/verify_install.sh
 verify_install "$PWD"
