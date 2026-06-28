@@ -7,6 +7,28 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.11.0](https://github.com/nivintw/dotfiles/compare/v1.10.0...v1.11.0) (2026-06-28)
+
+
+### Features
+
+* **installer:** Add --core profile and run the smoke harness on it ([cd930a8](https://github.com/nivintw/dotfiles/commit/cd930a8830e791fce00b48ecd602ef68a6c4728a))
+* **test:** Add Tart VM end-to-end installer smoke harness ([23f2f61](https://github.com/nivintw/dotfiles/commit/23f2f61c7b8ada63ff71d253f91374705f7468b8))
+
+
+### Bug Fixes
+
+* Address Copilot review round 2 ([b59e758](https://github.com/nivintw/dotfiles/commit/b59e75812f3bb302b9a9d9ac212bcb900908e242)), closes [#31](https://github.com/nivintw/dotfiles/issues/31)
+* Address Copilot review round 3 ([9873300](https://github.com/nivintw/dotfiles/commit/98733005931f243c7e46f6f9fa54684ea28307e2))
+* **installer:** Core profile must also drop vscode/mas entries ([069f073](https://github.com/nivintw/dotfiles/commit/069f073eec4cf1df18d50c2b7ce6c00ab1c39d68))
+* **installer:** Harden network-bootstrap steps against transient failure ([e5400b5](https://github.com/nivintw/dotfiles/commit/e5400b550ea7024bdc356322b14bd2725e89a6c4))
+* **installer:** Re-clone TPM when the checkout is partial ([6534baf](https://github.com/nivintw/dotfiles/commit/6534bafd3feffd7125573cd770eaffdb60ef8204))
+* **installer:** Trust all Brewfile taps before bundling ([560054f](https://github.com/nivintw/dotfiles/commit/560054f641ad2c2ecddda002806411d6aa96fccd))
+* **installer:** Use stow --no-folding so fresh-machine symlinks are per-file ([7624c68](https://github.com/nivintw/dotfiles/commit/7624c68fe60fb887c6e988c97cf311b77aa65a63))
+* **test:** Disable sudo auth in the VM so the install runs unattended ([8abca33](https://github.com/nivintw/dotfiles/commit/8abca33d41e7064811a8242596274c115cf5b2f8)), closes [#31](https://github.com/nivintw/dotfiles/issues/31)
+* **test:** Gate on the non-fatal install outputs; harden harness inputs ([e558bc9](https://github.com/nivintw/dotfiles/commit/e558bc9762da5dccca5e82aadf04450f13331ddc))
+* **test:** Make VM smoke cleanup trap-safe and sudo unattended ([12eb85e](https://github.com/nivintw/dotfiles/commit/12eb85e4911eff9998ec5d5bd238fbcac22f4934)), closes [#31](https://github.com/nivintw/dotfiles/issues/31)
+
 ## [1.10.0](https://github.com/nivintw/dotfiles/compare/v1.9.1...v1.10.0) (2026-06-27)
 
 
