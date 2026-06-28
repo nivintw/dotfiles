@@ -312,10 +312,21 @@ enable_touch_id_sudo # pam_tid now; the pam_reattach (tmux) line is added in ste
 # check` and lists precisely what's still missing, so you don't scroll back.
 # The cirruslabs tap (provides tart for the VM smoke harness) ships the softnet helper
 # binary, which newer Homebrew refuses to install from an untrusted tap. Tap + trust it up
-# front so the bundle below can install tart. Best-effort: a no-op on Homebrew versions
-# without the trust gate, and never fatal.
+# front so the bundle below can install tart. `brew trust` changes Homebrew's trusted-tap
+# set, so do it explicitly (not silently) and only where the subcommand exists — older
+# Homebrew has no trust gate and needs nothing. Never fatal: the bundle summary reports if
+# tart still ends up missing.
+ui_step "Trusting the cirruslabs tap (needed to install tart)"
 brew tap cirruslabs/cli >/dev/null 2>&1 || true
-brew trust cirruslabs/cli >/dev/null 2>&1 || true
+if brew commands 2>/dev/null | grep -qx trust; then
+  if brew trust cirruslabs/cli >/dev/null 2>&1; then
+    ui_ok "cirruslabs/cli tap trusted"
+  else
+    ui_warn "could not trust cirruslabs/cli — tart may fail to install (retry: brew trust cirruslabs/cli)"
+  fi
+else
+  ui_ok "this Homebrew has no tap-trust gate — nothing to trust"
+fi
 
 ui_step "Homebrew packages (brew bundle)"
 if brew bundle install --file="$DOTFILES/Brewfile"; then
