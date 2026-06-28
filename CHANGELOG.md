@@ -7,6 +7,14 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.12.1](https://github.com/nivintw/dotfiles/compare/v1.12.0...v1.12.1) (2026-06-28)
+
+
+### Bug Fixes
+
+* **gitconfig:** Round-trip a non-UTF-8 ~/.gitconfig byte-faithfully ([3e84f6f](https://github.com/nivintw/dotfiles/commit/3e84f6fc63dcac84f19512f20a16e1b588032d6b))
+* **install:** Use rm -f when clearing managed files pre-stow ([42db894](https://github.com/nivintw/dotfiles/commit/42db894e7bd742e34e5848e04318a3f65e1a680e))
+
 ## [1.12.0](https://github.com/nivintw/dotfiles/compare/v1.11.1...v1.12.0) (2026-06-28)
 
 
