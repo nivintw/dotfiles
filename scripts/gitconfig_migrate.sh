@@ -108,7 +108,12 @@ gitconfig_migrate() {
 #   user's own config and the only thing we must catch is a path that resolves to
 #   the overlay; anything fancier simply fails safe by being kept.)
 _gitconfig_strip_self_include() {
-  awk -v ovl="$2" '
+  # LC_ALL=C keeps awk byte-oriented: a real ~/.gitconfig can carry non-UTF-8 bytes
+  # (e.g. a Latin-1 name), and under a UTF-8 locale awk tries to decode them — BSD awk
+  # aborts the record with "towc: multibyte conversion failure" (dropping the line),
+  # and gawk replaces the bytes. Either silently corrupts the migrated config. In the
+  # C locale awk treats input as raw bytes, so exotic encodings round-trip verbatim.
+  LC_ALL=C awk -v ovl="$2" '
     # git section names and keys are case-insensitive, so match on a lowercased
     # copy of each line (and a lowercased overlay basename) — this also keeps the
     # literal pattern made of real words, not a char-class fragment.
