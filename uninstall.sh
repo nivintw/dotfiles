@@ -172,8 +172,10 @@ do_or_echo() {
   else
     # Non-fatal, but never silent: a failed reversal is exactly "left to finish by hand", so
     # record it (with the command to retry) into the ledger the closing summary surfaces.
+    # `printf %q` shell-escapes each argument so the retry hint stays copy-pasteable even
+    # when a path or value contains spaces or metacharacters.
     ui_warn "failed: $desc (continuing)"
-    rec_failed "$desc — retry by hand: $*"
+    rec_failed "$desc — retry by hand: $(printf '%q ' "$@")"
   fi
 }
 
