@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING
 from dotfiles_install import commands
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from dotfiles_install.context import InstallContext
 
 _RETRY_ATTEMPTS = 3
@@ -32,29 +34,35 @@ _BREW_BINARIES = (Path("/opt/homebrew/bin/brew"), Path("/usr/local/bin/brew"))
 
 def bootstrap_toolchain(ctx: InstallContext) -> None:
     """Install Homebrew and uv if absent, aborting (exit 1) if either fails to land."""
-    _ensure_homebrew(ctx)
-    _ensure_uv(ctx)
+    _ensure_tool(
+        ctx,
+        command="brew",
+        label="Homebrew",
+        install=_install_homebrew,
+        activate=_activate_homebrew,
+    )
+    _ensure_tool(ctx, command="uv", label="uv", install=_install_uv, activate=_activate_uv)
 
 
-def _ensure_homebrew(ctx: InstallContext) -> None:
-    """Install Homebrew when missing, then hard-fail the run if ``brew`` is still not on PATH."""
-    if commands.which("brew") is None:
-        ctx.ui.step("Installing Homebrew")
-        commands.retry("Homebrew install", _RETRY_ATTEMPTS, _install_homebrew, ui=ctx.ui)
-        _activate_homebrew()
-    if commands.which("brew") is None:
-        ctx.ui.err("Homebrew install failed.")
-        raise SystemExit(1)
+def _ensure_tool(
+    ctx: InstallContext,
+    *,
+    command: str,
+    label: str,
+    install: Callable[[], bool],
+    activate: Callable[[], None],
+) -> None:
+    """Install ``command`` when absent, then hard-fail the run if it's still not on PATH.
 
-
-def _ensure_uv(ctx: InstallContext) -> None:
-    """Install uv when missing, then hard-fail the run if ``uv`` is still not on PATH."""
-    if commands.which("uv") is None:
-        ctx.ui.step("Installing uv")
-        commands.retry("uv install", _RETRY_ATTEMPTS, _install_uv, ui=ctx.ui)
-        _activate_uv()
-    if commands.which("uv") is None:
-        ctx.ui.err("uv install failed.")
+    ``label`` derives the user-facing strings to match ``install.sh`` exactly: the step header
+    (``Installing <label>``), the retry description and the abort message (``<label> install``).
+    """
+    if commands.which(command) is None:
+        ctx.ui.step(f"Installing {label}")
+        commands.retry(f"{label} install", _RETRY_ATTEMPTS, install, ui=ctx.ui)
+        activate()
+    if commands.which(command) is None:
+        ctx.ui.err(f"{label} install failed.")
         raise SystemExit(1)
 
 
@@ -63,8 +71,7 @@ def _install_homebrew() -> bool:
     script = commands.fetch(["curl", "-fsSL", _BREW_INSTALL_URL])
     if script is None:
         return False
-    result = commands.run(["/bin/bash", "-c", script], env={"NONINTERACTIVE": "1"})
-    return not result.returncode
+    return commands.run_ok(["/bin/bash", "-c", script], env={"NONINTERACTIVE": "1"})
 
 
 def _install_uv() -> bool:
@@ -72,12 +79,16 @@ def _install_uv() -> bool:
     script = commands.fetch(["curl", "-LsSf", _UV_INSTALL_URL])
     if script is None:
         return False
-    result = commands.run(["sh"], input_text=script)
-    return not result.returncode
+    return commands.run_ok(["sh"], input_text=script)
 
 
 def _activate_homebrew() -> None:
-    """Put a freshly installed brew on ``PATH`` for the rest of the run (Apple Silicon vs Intel)."""
+    """Put a freshly installed brew on ``PATH`` for the rest of the run (Apple Silicon vs Intel).
+
+    PATH-only, like ``install.sh``: it does *not* export ``HOMEBREW_PREFIX`` etc. (``brew``
+    derives its prefix from its own location). A later phase needing the prefix should call
+    ``brew --prefix`` rather than read the environment.
+    """
     for brew_bin in _BREW_BINARIES:
         if os.access(brew_bin, os.X_OK):
             _prepend_path(brew_bin.parent)

@@ -55,6 +55,21 @@ def run(
     )
 
 
+def run_ok(
+    argv: Sequence[str],
+    *,
+    env: Mapping[str, str] | None = None,
+    capture: bool = False,
+    input_text: str | None = None,
+) -> bool:
+    """Run ``argv`` and report whether it exited zero — for callers that need only success/failure.
+
+    Folds the "did it succeed?" decision into the seam so callers don't open-code
+    ``not result.returncode`` (and never flip its polarity by accident).
+    """
+    return run(argv, env=env, capture=capture, input_text=input_text).returncode == 0
+
+
 def fetch(argv: Sequence[str]) -> str | None:
     """Capture stdout of ``argv`` (a ``curl`` invocation); return ``None`` if it fails or is empty.
 

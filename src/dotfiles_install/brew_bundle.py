@@ -19,7 +19,6 @@ Touch-ID-for-sudo enable is a privileged PAM write owned by the phase-2 block (#
 
 from __future__ import annotations
 
-import os
 import shutil
 import sys
 import tempfile
@@ -29,13 +28,13 @@ from typing import TYPE_CHECKING
 from dotfiles_install import commands
 from dotfiles_install.brewfile import brewfile_core, brewfile_taps
 from dotfiles_install.bundle_select import fzf_preselect_bind, parse_bundles, write_bundles
+from dotfiles_install.layout import DOTFILES, discover_bundles
 
 if TYPE_CHECKING:
     from dotfiles_install.context import InstallContext
 
-_DOTFILES = Path(__file__).resolve().parents[2]
-_BREWFILE = _DOTFILES / "Brewfile"
-_BUNDLES_DIR = _DOTFILES / "Brewfile.d"
+_BREWFILE = DOTFILES / "Brewfile"
+_BUNDLES_DIR = DOTFILES / "Brewfile.d"
 
 
 # Home-based paths are resolved lazily (not module constants) so they honor ``$HOME`` at call
@@ -94,17 +93,20 @@ def _brew_bundle(ctx: InstallContext, brewfile: Path) -> bool:
 
 def _bundle_install(brewfile: Path) -> bool:
     """Run ``brew bundle install --file=<brewfile>`` and report success."""
-    result = commands.run(["brew", "bundle", "install", f"--file={brewfile}"])
-    return not result.returncode
+    return commands.run_ok(["brew", "bundle", "install", f"--file={brewfile}"])
 
 
 def _bundle_install_core(core_text: str) -> bool:
     """Write the cask-stripped Brewfile to a temp file, bundle it, and clean up."""
-    handle, name = tempfile.mkstemp(prefix="brewfile-core")
-    os.close(handle)
-    temp = Path(name)
+    with tempfile.NamedTemporaryFile(
+        "w",
+        prefix="brewfile-core",
+        delete=False,
+        encoding="utf-8",
+    ) as handle:
+        handle.write(core_text)
+        temp = Path(handle.name)
     try:
-        temp.write_text(core_text, encoding="utf-8")
         return _bundle_install(temp)
     finally:
         temp.unlink(missing_ok=True)
@@ -116,7 +118,7 @@ def _trust_taps(ctx: InstallContext, brewfile_text: str) -> None:
         return
     for tap in brewfile_taps(brewfile_text):
         commands.run(["brew", "tap", tap], capture=True)  # add the tap; non-fatal, quiet
-        if not commands.run(["brew", "trust", tap]).returncode:
+        if commands.run_ok(["brew", "trust", tap]):
             ctx.ui.detail(f"trusted tap: {tap}")
         else:
             ctx.ui.warn(
@@ -135,17 +137,12 @@ def _brew_supports_trust() -> bool:
 
 def _install_opt_in_bundles(ctx: InstallContext) -> None:
     """Resolve the bundle selection (migrate, persist, or pick), then install what's selected."""
-    available = _available_bundles()
+    available = discover_bundles()
     sel = _selection_file()
     sel.parent.mkdir(parents=True, exist_ok=True)
     _migrate_legacy_selection(ctx, sel)
     _resolve_selection(ctx, available, sel)
     _run_selected_bundles(ctx, sel)
-
-
-def _available_bundles() -> list[str]:
-    """Return the opt-in bundle names (``Brewfile.d/<name>.brewfile`` basenames), sorted."""
-    return sorted(path.stem for path in _BUNDLES_DIR.glob("*.brewfile"))
 
 
 def _migrate_legacy_selection(ctx: InstallContext, sel: Path) -> None:

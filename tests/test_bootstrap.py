@@ -44,11 +44,10 @@ def test_bootstrap_skips_installs_when_tools_present(monkeypatch: pytest.MonkeyP
     bootstrap.bootstrap_toolchain(_ctx())  # must not raise
 
 
-def test_homebrew_installs_when_absent_then_present(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A missing brew triggers the retried install, then the post-check passes."""
+def test_ensure_tool_installs_when_absent_then_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A missing tool triggers the retried install and activation, then the post-check passes."""
     presence: Iterator[str | None] = iter([None, "/opt/homebrew/bin/brew"])
     monkeypatch.setattr(commands, "which", lambda _name: next(presence))
-    monkeypatch.setattr(bootstrap, "_activate_homebrew", lambda: None)
     called: list[str] = []
 
     def _retry(description: str, _attempts: int, _func: object, **_kwargs: object) -> bool:
@@ -56,18 +55,31 @@ def test_homebrew_installs_when_absent_then_present(monkeypatch: pytest.MonkeyPa
         return True
 
     monkeypatch.setattr(commands, "retry", _retry)
-    bootstrap._ensure_homebrew(_ctx())  # must not raise
+    activated: list[bool] = []
+    bootstrap._ensure_tool(
+        _ctx(),
+        command="brew",
+        label="Homebrew",
+        install=lambda: True,
+        activate=lambda: activated.append(True),
+    )
     assert called == ["Homebrew install"]
+    assert activated == [True]
 
 
-def test_homebrew_hard_fails_when_still_absent(monkeypatch: pytest.MonkeyPatch) -> None:
-    """If brew is still missing after the install attempt, the run aborts with exit 1."""
+def test_ensure_tool_hard_fails_when_still_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """If the tool is still missing after the install attempt, the run aborts with exit 1."""
     monkeypatch.setattr(commands, "which", lambda _name: None)
-    monkeypatch.setattr(bootstrap, "_activate_homebrew", lambda: None)
     monkeypatch.setattr(commands, "retry", lambda *_a, **_k: False)
 
     with pytest.raises(SystemExit) as excinfo:
-        bootstrap._ensure_homebrew(_ctx())
+        bootstrap._ensure_tool(
+            _ctx(),
+            command="uv",
+            label="uv",
+            install=lambda: False,
+            activate=lambda: None,
+        )
     assert excinfo.value.code == 1
 
 
