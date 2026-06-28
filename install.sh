@@ -108,6 +108,9 @@ Options:
   --no-bundles     Opt into no bundles (baseline only); bypass the picker.
   --keep-bundles   Keep the saved selection as-is; skip the picker without
                    rewriting it. Can't be combined with --bundle/--no-bundles.
+  --core           Core profile: install CLI formulae only — skip the GUI app and
+                   font casks (and, with them, the Ollama app + its model pull). For
+                   headless/minimal installs and the VM smoke harness.
   -h, --help       Show this help and exit.
 
 Opt-in Brewfile bundles (Brewfile.d/<name>.brewfile):
@@ -151,11 +154,18 @@ add_requested_bundle() {
 requested_bundles=()
 bundles_from_flags=0
 keep_bundles=0
+# Core profile: export so it reaches the bundle wrapper, the Ollama step, and the
+# verify_install call at the end of this run (and is inherited by any sub-shell).
+export DOTFILES_CORE=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
   -h | --help)
     usage
     exit 0
+    ;;
+  --core)
+    DOTFILES_CORE=1
+    shift
     ;;
   --no-bundles)
     bundles_from_flags=1
@@ -319,9 +329,12 @@ command -v uv >/dev/null 2>&1 || {
 # `brew trust` changes Homebrew's trusted-tap set, so this is explicit (not silent) and only
 # attempted where the subcommand exists — older Homebrew has no trust gate. Non-fatal: a
 # failed trust is a warning; the closing `brew bundle check` still reports anything missing.
-# brewfile_taps() is the pure, unit-tested Brewfile parser (scripts/brewfile_taps.sh).
+# brewfile_taps()/brewfile_core() are the pure, unit-tested Brewfile parsers
+# (scripts/brewfile_taps.sh, scripts/brewfile_core.sh).
 # shellcheck source=/dev/null
 . "$DOTFILES/scripts/brewfile_taps.sh"
+# shellcheck source=/dev/null
+. "$DOTFILES/scripts/brewfile_core.sh"
 _trust_brewfile_taps() {
   brew commands 2>/dev/null | grep -qx trust || return 0
   while IFS= read -r _tap; do
@@ -336,10 +349,21 @@ _trust_brewfile_taps() {
 $(brewfile_taps "$1")
 EOF
 }
-# Every bundle install goes through here: trust the file's declared taps, then bundle.
+# Every bundle install goes through here: trust the file's declared taps, then bundle. Under
+# the --core profile (DOTFILES_CORE=1) bundle a casks-stripped copy so only CLI formulae land.
 _brew_bundle() {
   _trust_brewfile_taps "$1"
-  brew bundle install --file="$1"
+  [ "${DOTFILES_CORE:-0}" = "1" ] || {
+    brew bundle install --file="$1"
+    return
+  }
+  local core_bf rc
+  core_bf="$(mktemp -t brewfile-core)"
+  brewfile_core "$1" >"$core_bf"
+  brew bundle install --file="$core_bf"
+  rc=$?
+  rm -f "$core_bf"
+  return "$rc"
 }
 
 # Acquire sudo ONCE and keep it warm for the bundle + privileged block, instead of

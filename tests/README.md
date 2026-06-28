@@ -85,12 +85,18 @@ each thing that can break have *something* watching it?
 ## End-to-end VM smoke test (opt-in)
 
 `scripts/vm-smoke.sh` boots a clean [Tart](https://tart.run) VM, ships the repo in with
-`git archive HEAD`, runs `install.sh` end-to-end inside it from scratch (by default
+`git archive HEAD`, runs `install.sh --core` end-to-end inside it from scratch (by default
 **twice**, to prove idempotency), and gates on `verify_install`'s `OK`/`BAD` stream — the
 one thing the unit/config suites can't do: prove the installer works on a genuinely clean
 machine. It tolerates only the Touch-ID-no-sensor `BAD` (a VM has no biometric sensor); the
 application firewall and every other check stay strict, and a `VERIFY_DONE` sentinel makes a
 truncated SSH stream fail closed rather than read as a pass.
+
+It exercises the **`--core` profile** — CLI formulae only, with the GUI app/font casks and
+the Ollama model pull skipped — so a smoke run isn't dominated by multi-GB GUI cask
+downloads a headless VM doesn't need; `verify_install` runs core-aware (`DOTFILES_CORE=1`) to
+match. The full-baseline install (casks included) is still what a real machine runs and what
+the unit/config tests cover.
 
 It is **heavy and opt-in**: the first run pulls a multi-GB macOS base image and a full
 install takes many minutes, so it never runs in the default `uv run pytest`.
