@@ -5,9 +5,10 @@
 
 Each :class:`Phase` declares its display name, the operating systems it applies to (for
 per-phase gating), and whether it needs root. :data:`REGISTRY` mirrors ``install.sh``'s
-phases 0-17 in order. Phase *bodies* are not ported yet — every ``run`` is ``None`` here, a
-stub the sibling phase-port issues (#67-#72) fill in one slice at a time. Until then the live
-installer remains ``install.sh`` and this registry drives nothing privileged.
+phases 0-17 in order. Phase *bodies* are ported one slice at a time (#67-#72): phases 0-1
+(bootstrap toolchain + brew bundle) carry a ``run`` callable; the rest are still ``None``
+stubs. Until the cutover (#72) the live installer remains ``install.sh`` and running this
+registry drives nothing privileged.
 """
 
 from __future__ import annotations
@@ -15,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from dotfiles_install.bootstrap import bootstrap_toolchain
+from dotfiles_install.brew_bundle import install_packages
 from dotfiles_install.os_detect import OS, current_os
 
 if TYPE_CHECKING:
@@ -43,8 +46,8 @@ class Phase:
 _MAC = frozenset({OS.MACOS})
 
 REGISTRY: tuple[Phase, ...] = (
-    Phase(0, "Bootstrap toolchain (Homebrew + uv)", _MAC),
-    Phase(1, "Homebrew packages (brew bundle)", _MAC),
+    Phase(0, "Bootstrap toolchain (Homebrew + uv)", _MAC, run=bootstrap_toolchain),
+    Phase(1, "Homebrew packages (brew bundle)", _MAC, run=install_packages),
     Phase(2, "Privileged setup (fish shell, firewall, Touch ID)", _MAC, privileged=True),
     Phase(3, "dotfiles symlinks (stow)", _MAC),
     Phase(4, "Machine-local overlay files", _MAC),
