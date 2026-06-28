@@ -49,6 +49,8 @@ UNTESTED_SCRIPTS = {
     " end-to-end by the opt-in VM smoke harness and guarded by shellcheck + the consistency tests",
     "macos.sh": "writes macOS defaults; covered by shellcheck + the opt-in VM smoke harness",
     "dock.sh": "rebuilds the Dock via dockutil; covered by shellcheck + the VM smoke harness",
+    "ollama_models.sh": "pure data — the two Ollama model identifiers shared by install.sh"
+    " and uninstall.sh; no logic to unit-test (guarded by shellcheck)",
 }
 
 

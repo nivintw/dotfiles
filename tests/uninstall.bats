@@ -114,3 +114,19 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *github* ]]
 }
+
+# --- un_is_yes --------------------------------------------------------------
+
+@test "un_is_yes: accepts y / Y / yes / YES" {
+  for a in y Y yes YES Yes; do
+    run un_is_yes "$a"
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "un_is_yes: rejects empty, n, and anything else" {
+  for a in "" n N no nope maybe q; do
+    run un_is_yes "$a"
+    [ "$status" -ne 0 ]
+  done
+}
