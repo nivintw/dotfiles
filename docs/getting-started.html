@@ -206,7 +206,7 @@ brew bundle install --file=~/dotfiles/Brewfile.d/personal.brewfile</code></pre>
         </div>
         <div class="feature">
           <span class="feature__mark">−</span>
-          <div><h3>Reverses only what it owns</h3><p>It auto-removes the provably-ours, reversible setup — <a href="https://www.gnu.org/software/stow/" rel="noopener">stow</a> symlinks, the TPM clone, the Claude MCP registrations, the iTerm2 prefs pointer — then <em>offers</em> (default no) to remove created artifacts like the uv tools and Ollama models, and <em>asks</em> before lossy system changes: your login shell, and <code>/etc/pam.d/sudo_local</code> (removed only when its contents are the ones the installer wrote, so it never deletes a file it didn't author).</p></div>
+          <div><h3>Reverses only what it owns</h3><p>It auto-removes the provably-ours, reversible setup — <a href="https://www.gnu.org/software/stow/" rel="noopener">stow</a> symlinks, the Claude MCP registrations, the iTerm2 prefs pointer — then <em>offers</em> (default no) to remove things it can't prove it owns: the TPM clone, the uv tools, the Ollama models. It <em>asks</em> before lossy system changes too — your login shell, and <code>/etc/pam.d/sudo_local</code> (removed only when its contents match the standard Touch-ID config the installer writes, and always after an explicit prompt).</p></div>
         </div>
         <div class="feature">
           <span class="feature__mark">−</span>

@@ -1209,7 +1209,7 @@ fi
 # degrades to a warning + re-run hint, never aborts the install).
 ollama_pull_model() {
   local model="$1" size="$2" installed="$3"
-  if printf '%s\n' "$installed" | grep -qx "$model"; then
+  if printf '%s\n' "$installed" | grep -qxF "$model"; then
     ui_ok "Ollama model $model already present"
   else
     ui_active "pulling Ollama model $model ($size, one-time)"
@@ -1240,7 +1240,10 @@ if command -v ollama >/dev/null 2>&1; then
     fi
   fi
   # Capture the model inventory once (one daemon round-trip) and reuse it for both checks.
-  installed_models="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')"
+  # The `|| installed_models=""` keeps a transient `ollama list` failure non-fatal under
+  # `set -euo pipefail`: a bare assignment from a failed pipeline would otherwise abort the
+  # whole install here. Degrading to empty just means each model is treated as absent (pull).
+  installed_models="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')" || installed_models=""
   # Baseline model — every capable machine.
   ollama_pull_model "$OLLAMA_MODEL" "~4.7GB" "$installed_models"
   # Gated MLX model — Apple Silicon + >32GB unified memory (32 GiB = 34359738368
