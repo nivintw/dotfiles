@@ -226,52 +226,42 @@ if [ "$(uname)" != "Darwin" ]; then
   exit 1
 fi
 
-# --- sudo: enabled early, kept warm for the privileged span only ------------
+# --- sudo: one authentication for the post-bundle privileged block ----------
 # Root is needed for Touch-ID PAM, /etc/shells + chsh, the firewall, and the rare
-# cask that ships a .pkg (microsoft-office is the only one in this repo). The old
-# design acquired sudo only AFTER brew bundle, so each privileged cask fell back to
-# a TYPED PASSWORD (Touch ID wasn't wired up yet) and re-prompted whenever sudo's
-# ~5-min ticket lapsed across slow multi-GB downloads — a string of password
-# prompts that don't even say which package wants them (macOS names the calling
-# app, iTerm, not the cask).
+# cask that ships a .pkg (microsoft-office is the only one in this repo).
 #
-# Now: enable Touch ID for sudo FIRST (so any prompt is a fingerprint, not a typed
-# password), acquire sudo once, and keep it warm with a background refresher for
-# exactly the bundle + privileged block. start_sudo_keepalive/stop_sudo_keepalive
-# bound that window: it's dropped (sudo -k) BEFORE any curl|bash installer runs —
-# Homebrew/uv already ran above, fisher/Claude run later — so no third-party
-# bootstrap ever executes with a live, passwordless ticket. The EXIT trap is the
-# safety net: it kills the refresher and drops the ticket even if the run aborts.
-need_sudo() { sudo -v; }
-
-SUDO_KEEPALIVE_PID=""
-start_sudo_keepalive() {
-  need_sudo
-  # Refresh the timestamp every 50s (< the 5-min default) until this script exits.
-  # The kill -0 self-check makes the child exit if the parent dies, as a backstop
-  # to the EXIT trap.
-  (while true; do
-    sudo -n true 2>/dev/null
-    sleep 50
-    kill -0 "$$" 2>/dev/null || exit 0
-  done) &
-  SUDO_KEEPALIVE_PID=$!
-}
-stop_sudo_keepalive() {
-  if [ -n "$SUDO_KEEPALIVE_PID" ]; then
-    kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true
-    SUDO_KEEPALIVE_PID=""
-  fi
-  sudo -k
-}
-trap 'if [ -n "${SUDO_KEEPALIVE_PID:-}" ]; then kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true; fi; sudo -k 2>/dev/null || true' EXIT
+# The fact this design is built around: `brew bundle` INVALIDATES the sudo
+# timestamp. A ticket acquired before the bundle is gone by the time the bundle
+# finishes — confirmed on this stack for BOTH the tty-keyed default and a global
+# (timestamp_type=global) timestamp, and it is NOT a `sudo -k` (Homebrew issues
+# none). So a ticket cannot be "kept warm" across the bundle by any means: an
+# earlier background-refresher design (acquire before the bundle, refresh every 50s)
+# could not survive the wipe — once it lands, a non-interactive `sudo -n` refresh
+# can't revive the ticket — so it re-prompted anyway. Acquiring sudo BEFORE the
+# bundle is pure waste: it spends a prompt brew then discards, and the privileged
+# block after the bundle has to authenticate AGAIN — the "two Touch ID prompts" bug.
+#
+# So we do NOT span the bundle. Touch ID is enabled up front (free on a re-run —
+# the contents check in enable_touch_id_sudo reads sudo_local WITHOUT sudo — and on
+# a fresh machine it makes any cask password prompt during the bundle a fingerprint
+# tap). sudo proper is acquired exactly ONCE, for the single contiguous privileged
+# block AFTER the bundle (Touch-ID finalize, /etc/shells + chsh, firewall): one
+# authentication, a fingerprint tap on a re-run. The ticket is dropped (sudo -k) at
+# the end of that block, BEFORE any curl|bash installer runs (Homebrew/uv already
+# ran above; fisher/Claude run later), so no third-party bootstrap executes with a
+# live, passwordless ticket. The EXIT trap drops it even if the run aborts.
+trap 'sudo -k 2>/dev/null || true' EXIT
 
 # Enable (and keep current) Touch ID for sudo via /etc/pam.d/sudo_local — NOT
 # /etc/pam.d/sudo, which macOS rewrites on OS updates. pam_reattach (Brewfile) makes
 # it work inside tmux/screen and must precede pam_tid; it only exists AFTER brew
 # bundle, so this is called twice: once before the bundle (pam_tid only — enough for
 # the terminal running the installer) and again after (adds the pam_reattach line).
-# Idempotent: the file is only rewritten when its contents would change.
+# Idempotent: the file is only rewritten when its contents would change. The
+# contents check reads sudo_local with a plain `cat` (it's world-readable, mode
+# 0644 — verify_install.sh reads it the same way), NOT `sudo cat`, so a re-run where
+# the file is already correct needs no sudo here at all — which is what lets the
+# pre-bundle call cost zero prompts (see the sudo notes above).
 #
 # The "Touch ID is on but it still asks for my password" failure (enabled here, but
 # no fingerprint enrolled, so pam_tid SILENTLY falls back to a password) is caught
@@ -289,7 +279,7 @@ enable_touch_id_sudo() {
     desired="auth       optional       $pam_reattach
 auth       sufficient     pam_tid.so"
   fi
-  if [ "$(sudo cat /etc/pam.d/sudo_local 2>/dev/null)" != "$desired" ]; then
+  if [ "$(cat /etc/pam.d/sudo_local 2>/dev/null)" != "$desired" ]; then
     printf '%s\n' "$desired" | sudo tee /etc/pam.d/sudo_local >/dev/null
     ui_ok "Touch ID for sudo enabled (/etc/pam.d/sudo_local)"
   fi
@@ -383,15 +373,13 @@ _brew_bundle() {
   return "$rc"
 }
 
-# Acquire sudo ONCE and keep it warm for the bundle + privileged block, instead of
-# the old string of typed-password prompts scattered through brew bundle. Enabling
-# Touch ID up front means every prompt after the first is a fingerprint tap — so a
-# re-run authenticates with a single tap, and even a brand-new Mac costs just one
-# typed password (to write the PAM file) and taps thereafter. The Homebrew/uv
-# installers above already ran WITHOUT a warm ticket; the keepalive is stopped
-# before the fisher/Claude installers below (see step 2).
-ui_step "Privileged setup — sudo (kept warm through the bundle)"
-start_sudo_keepalive
+# Enable Touch ID for sudo BEFORE the bundle — but do NOT acquire a lasting ticket
+# here (brew bundle would wipe it; see the sudo notes above). On a re-run this is a
+# no-op that needs no sudo (the contents check reads sudo_local without sudo); on a
+# fresh machine it costs one typed password to write the PAM file, so that any cask
+# password prompt during the bundle is a fingerprint tap instead. sudo proper is
+# acquired once, after the bundle, in step 2.
+ui_step "Touch ID for sudo"
 enable_touch_id_sudo # pam_tid now; the pam_reattach (tmux) line is added in step 2
 
 # brew bundle adopts already-present casks in place rather than clobbering them.
@@ -537,54 +525,66 @@ if [ -f "$brew_local" ]; then
 fi
 
 # --- 2. Privileged setup — fish shell, firewall, finalize Touch ID ----------
-# sudo is already warm from step 1's keepalive, so these run with no new prompt.
-# We drop the ticket (stop_sudo_keepalive) at the end of the block — before the
-# fisher/Claude curl|bash installers — so no third-party bootstrap runs warm.
+# Acquire sudo ONCE here, for this whole contiguous block. brew bundle just wiped
+# any earlier timestamp, so this is THE single authentication of the run — a
+# fingerprint tap on a re-run. The Touch-ID finalize, /etc/shells + chsh, and the
+# firewall below all run off this one ticket (no brew between them to invalidate
+# it); it's dropped (sudo -k) at the end, before the fisher/Claude curl|bash
+# installers, so no third-party bootstrap runs with a warm ticket.
+#
+# Acquiring sudo here (after the bundle, by design — see the sudo notes up top)
+# means it can't fail fast before the bundle, so guard it: if the auth is declined
+# or fails, WARN and skip ONLY these privileged steps. The rest of the run (stow,
+# the dotfiles, every non-root step below) still completes — losing root must not
+# cost the user their symlinks — and the closing summary flags whatever's missing.
 ui_step "Privileged setup (fish shell, firewall)"
-
-# Finalize Touch ID for sudo: re-run now that brew bundle has installed pam_reattach,
-# so the sudo_local file gains the tmux/screen line (pam_tid alone was written in
-# step 1). Idempotent — rewrites only if the contents differ.
-enable_touch_id_sudo
-
-# Make fish the default login shell. fish is brew-installed (see Brewfile); a
-# brew upgrade can disturb an already-open fish session until it's restarted —
-# accepted tradeoff. Register it in /etc/shells, then chsh *via sudo*: root can
-# set the login shell without a separate password prompt, keeping this inside the
-# single sudo session (a bare `chsh` would prompt for your password on its own).
-fish_bin="$(command -v fish)"
-if ! grep -qxF "$fish_bin" /etc/shells; then
-  ui_active "registering $fish_bin in /etc/shells"
-  echo "$fish_bin" | sudo tee -a /etc/shells >/dev/null
-fi
-if [ "${SHELL:-}" != "$fish_bin" ]; then
-  ui_active "setting fish as the default shell (chsh)"
-  sudo chsh -s "$fish_bin" "$(id -un)"
-  ui_ok "fish set as the default shell"
+if ! sudo -v; then
+  ui_warn "couldn't authenticate for sudo — skipping privileged setup (Touch ID for sudo, fish as the default shell, firewall); re-run install.sh as an administrator to finish these"
 else
-  ui_ok "fish already the default shell"
-fi
+  # Finalize Touch ID for sudo: now that brew bundle has installed pam_reattach, the
+  # sudo_local file gains the tmux/screen line (pam_tid alone was written before the
+  # bundle on a fresh machine). Idempotent — rewrites only if the contents differ.
+  enable_touch_id_sudo
 
-# macOS application firewall + stealth mode (don't respond to ping/port scans);
-# both ship OFF on macOS. Done here to stay within the single sudo session rather
-# than at the very end of the run.
-ui_active "enabling the macOS application firewall + stealth mode"
-# socketfilterfw is the least version-stable call here: on recent macOS
-# --setglobalstate can print a deprecation and no-op while still exiting 0. So
-# don't trust the exit code (and don't let it abort the bootstrap) — apply, then
-# verify the actual state and warn if it didn't take.
-sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on >/dev/null 2>&1 || true
-sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode on >/dev/null 2>&1 || true
-if sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null | grep -qi enabled; then
-  ui_ok "application firewall enabled"
-else
-  ui_warn "could not confirm the firewall is on (macOS may have changed socketfilterfw); enable it in System Settings → Network → Firewall"
-fi
+  # Make fish the default login shell. fish is brew-installed (see Brewfile); a
+  # brew upgrade can disturb an already-open fish session until it's restarted —
+  # accepted tradeoff. Register it in /etc/shells, then chsh *via sudo*: root can
+  # set the login shell without a separate password prompt, keeping this inside the
+  # single sudo session (a bare `chsh` would prompt for your password on its own).
+  fish_bin="$(command -v fish)"
+  if ! grep -qxF "$fish_bin" /etc/shells; then
+    ui_active "registering $fish_bin in /etc/shells"
+    echo "$fish_bin" | sudo tee -a /etc/shells >/dev/null
+  fi
+  if [ "${SHELL:-}" != "$fish_bin" ]; then
+    ui_active "setting fish as the default shell (chsh)"
+    sudo chsh -s "$fish_bin" "$(id -un)"
+    ui_ok "fish set as the default shell"
+  else
+    ui_ok "fish already the default shell"
+  fi
 
-# Done with root. Stop the keepalive and drop the ticket so nothing downstream
-# (the fisher/Claude curl|bash installers included) runs with a warm sudo timestamp.
-stop_sudo_keepalive
-ui_ok "privileged setup complete"
+  # macOS application firewall + stealth mode (don't respond to ping/port scans);
+  # both ship OFF on macOS. Done here to stay within the single sudo session rather
+  # than at the very end of the run.
+  ui_active "enabling the macOS application firewall + stealth mode"
+  # socketfilterfw is the least version-stable call here: on recent macOS
+  # --setglobalstate can print a deprecation and no-op while still exiting 0. So
+  # don't trust the exit code (and don't let it abort the bootstrap) — apply, then
+  # verify the actual state and warn if it didn't take.
+  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on >/dev/null 2>&1 || true
+  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode on >/dev/null 2>&1 || true
+  if sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null | grep -qi enabled; then
+    ui_ok "application firewall enabled"
+  else
+    ui_warn "could not confirm the firewall is on (macOS may have changed socketfilterfw); enable it in System Settings → Network → Firewall"
+  fi
+
+  # Done with root. Drop the ticket so nothing downstream (the fisher/Claude
+  # curl|bash installers included) runs with a warm sudo timestamp.
+  sudo -k
+  ui_ok "privileged setup complete"
+fi
 
 # --- 3. Symlink dotfiles into $HOME -----------------------------------------
 # Stow refuses to overwrite existing real files. Clear known managed files that
