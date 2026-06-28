@@ -295,6 +295,36 @@ command -v uv >/dev/null 2>&1 || {
 }
 
 # --- 1. Homebrew formulae + casks -------------------------------------------
+
+# Homebrew refuses to load a formula/cask from an UNTRUSTED third-party tap, which aborts
+# `brew bundle` outright on a clean machine (e.g. terraform-linters/tap for tflint,
+# cirruslabs/cli for tart). So before bundling from any Brewfile, trust the taps it declares.
+# `brew trust` changes Homebrew's trusted-tap set, so this is explicit (not silent) and only
+# attempted where the subcommand exists — older Homebrew has no trust gate. Non-fatal: a
+# failed trust is a warning; the closing `brew bundle check` still reports anything missing.
+# brewfile_taps() is the pure, unit-tested Brewfile parser (scripts/brewfile_taps.sh).
+# shellcheck source=/dev/null
+. "$DOTFILES/scripts/brewfile_taps.sh"
+_trust_brewfile_taps() {
+  brew commands 2>/dev/null | grep -qx trust || return 0
+  while IFS= read -r _tap; do
+    [ -n "$_tap" ] || continue
+    brew tap "$_tap" >/dev/null 2>&1 || true
+    if brew trust "$_tap" >/dev/null 2>&1; then
+      ui_detail "trusted tap: $_tap"
+    else
+      ui_warn "could not trust tap $_tap — its packages may fail to install (retry: brew trust $_tap)"
+    fi
+  done <<EOF
+$(brewfile_taps "$1")
+EOF
+}
+# Every bundle install goes through here: trust the file's declared taps, then bundle.
+_brew_bundle() {
+  _trust_brewfile_taps "$1"
+  brew bundle install --file="$1"
+}
+
 # Acquire sudo ONCE and keep it warm for the bundle + privileged block, instead of
 # the old string of typed-password prompts scattered through brew bundle. Enabling
 # Touch ID up front means every prompt after the first is a fingerprint tap — so a
@@ -310,26 +340,8 @@ enable_touch_id_sudo # pam_tid now; the pam_reattach (tmux) line is added in ste
 # Non-fatal: a transient single-package failure shouldn't abort the whole bootstrap
 # (the rest is idempotent and re-runnable). The closing summary runs `brew bundle
 # check` and lists precisely what's still missing, so you don't scroll back.
-# The cirruslabs tap (provides tart for the VM smoke harness) ships the softnet helper
-# binary, which newer Homebrew refuses to install from an untrusted tap. Tap + trust it up
-# front so the bundle below can install tart. `brew trust` changes Homebrew's trusted-tap
-# set, so do it explicitly (not silently) and only where the subcommand exists — older
-# Homebrew has no trust gate and needs nothing. Never fatal: the bundle summary reports if
-# tart still ends up missing.
-ui_step "Trusting the cirruslabs tap (needed to install tart)"
-brew tap cirruslabs/cli >/dev/null 2>&1 || true
-if brew commands 2>/dev/null | grep -qx trust; then
-  if brew trust cirruslabs/cli >/dev/null 2>&1; then
-    ui_ok "cirruslabs/cli tap trusted"
-  else
-    ui_warn "could not trust cirruslabs/cli — tart may fail to install (retry: brew trust cirruslabs/cli)"
-  fi
-else
-  ui_ok "this Homebrew has no tap-trust gate — nothing to trust"
-fi
-
 ui_step "Homebrew packages (brew bundle)"
-if brew bundle install --file="$DOTFILES/Brewfile"; then
+if _brew_bundle "$DOTFILES/Brewfile"; then
   ui_ok "Homebrew packages installed"
 else
   ui_warn "some baseline Homebrew packages failed to install (see output above) — the summary lists what's still missing; re-run install.sh to retry"
@@ -440,7 +452,7 @@ while IFS= read -r bundle; do
     ui_active "installing opt-in bundle: $bundle"
     # Non-fatal (as with the baseline above): the summary's brew bundle check
     # surfaces anything that didn't land.
-    brew bundle install --file="$bundle_file" ||
+    _brew_bundle "$bundle_file" ||
       ui_warn "opt-in bundle '$bundle' had install failures (see output above) — the summary lists what's missing"
     installed_bundles=(${installed_bundles[@]+"${installed_bundles[@]}"} "$bundle")
   else
@@ -459,7 +471,7 @@ fi
 brew_local="$HOME/.config/dotfiles/Brewfile.local"
 if [ -f "$brew_local" ]; then
   ui_step "Machine-private Brewfile additions (Brewfile.local)"
-  if brew bundle install --file="$brew_local"; then
+  if _brew_bundle "$brew_local"; then
     ui_ok "machine-private additions installed"
   else
     ui_warn "some Brewfile.local packages failed to install (see output above) — the summary lists what's missing"
