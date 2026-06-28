@@ -72,6 +72,7 @@ convention = "google"
   "S603",
   "S607",
   "INP001", # pytest test dir, not an importable package (flat `from conftest import`)
+  "SLF001", # tests verify private phase helpers (idempotency guards, install command shape)
 ]
 # verify_install shells out to fixed git/bioutil commands (resolved via shutil.which, so
 # no partial-path S607); the argv is constant with no user input, so the S603 audit is moot.
