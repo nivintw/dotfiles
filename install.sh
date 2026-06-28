@@ -616,7 +616,11 @@ for f in "${managed_files[@]}"; do
   fi
   if cmp -s "$f" "$repo_src"; then
     ui_active "removing existing real file so stow can symlink it: $f"
-    rm "$f"
+    # -f so a write-protected managed file (e.g. a read-only atuin/VS Code config)
+    # can't stall the install on an interactive "remove write-protected file?" prompt
+    # mid-run. We already know it's a real file identical to the repo copy — nothing
+    # to preserve. Mirrors the rm -f in gitconfig_migrate.sh.
+    rm -f "$f"
   else
     # Don't clobber a backup from an earlier run — number it so each divergent
     # version is preserved rather than overwriting the last.
