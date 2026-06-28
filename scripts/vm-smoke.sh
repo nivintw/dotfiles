@@ -45,7 +45,7 @@ Requires tart (in the Brewfile) and an Apple Silicon host.
   -h, --help    Show this help
 
 Env: VM_SMOKE_IMAGE, VM_SMOKE_USER (default admin), VM_SMOKE_PASS (default admin),
-     VM_SMOKE_INSTALL_TIMEOUT (seconds, default 1800).
+     VM_SMOKE_INSTALL_TIMEOUT (seconds, default 3600).
 EOF
 }
 
@@ -101,7 +101,9 @@ main() {
 
   local IMAGE="${VM_SMOKE_IMAGE:-ghcr.io/cirruslabs/macos-sequoia-base:latest}"
   local VM_USER="${VM_SMOKE_USER:-admin}"
-  local INSTALL_TIMEOUT="${VM_SMOKE_INSTALL_TIMEOUT:-1800}"
+  # Generous default: a from-scratch install downloads the full baseline Brewfile, including
+  # heavy GUI casks, over the network into a fresh VM. Override with VM_SMOKE_INSTALL_TIMEOUT.
+  local INSTALL_TIMEOUT="${VM_SMOKE_INSTALL_TIMEOUT:-3600}"
   local ONCE=0 NEGATIVE=0
   local VM_IP=""
   # KEEP, VM_NAME and WORK are read by the EXIT trap (cleanup), which can fire after main's
