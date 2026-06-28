@@ -127,3 +127,12 @@ def test_valid_bundle_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
     result = runner.invoke(app, ["--bundle", "1password"])
     assert result.exit_code == 0
     assert "unknown bundle" not in result.output
+
+
+@pytest.mark.usefixtures("_no_real_installs")
+def test_repeated_bundle_is_deduplicated(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A ``--bundle`` value passed twice is recorded once (matching bash's add_requested_bundle)."""
+    monkeypatch.setattr(cli, "current_os", lambda: OS.MACOS)
+    result = runner.invoke(app, ["--bundle", "1password", "--bundle", "1password"])
+    assert result.exit_code == 0
+    assert "1password, 1password" not in result.output
