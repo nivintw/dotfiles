@@ -1188,8 +1188,8 @@ fi
 #    Copilot. This is the baseline model, pulled on every capable machine.
 #  • Claude bulk-offload (see ~/.config/dotfiles/CLAUDE.local.md) prefers the faster,
 #    higher-quality MLX model qwen3.5:35b-a3b-coding-nvfp4. It runs on Ollama's MLX
-#    engine, which needs Apple Silicon + >32GB unified memory, so it is GATED — other
-#    machines are unaffected and keep just the 7b (also the non-MLX fallback).
+#    engine, which needs Apple Silicon + >32GB unified memory + macOS 13+, so it is GATED —
+#    other machines are unaffected and keep just the 7b (also the non-MLX fallback).
 #
 # ollama-app (Brewfile cask) ships both the `ollama` CLI and a menu-bar app serving
 # the API on :11434 (auto-starts on login). We make sure the server is up, then pull.
@@ -1246,13 +1246,15 @@ if command -v ollama >/dev/null 2>&1; then
   installed_models="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')" || installed_models=""
   # Baseline model — every capable machine.
   ollama_pull_model "$OLLAMA_MODEL" "~4.7GB" "$installed_models"
-  # Gated MLX model — Apple Silicon + >32GB unified memory (32 GiB = 34359738368
-  # bytes; require strictly more so exactly-32GB machines fall back to just the 7b).
-  if [ "$(uname -m)" = "arm64" ] &&
-    [ "$(sysctl -n hw.memsize 2>/dev/null || echo 0)" -gt 34359738368 ]; then
+  # Gated MLX model — the engine needs Apple Silicon, >32GB unified memory, AND macOS 13+
+  # (#57). 32 GiB = 34359738368 bytes; require strictly more so exactly-32GB machines fall
+  # back to just the 7b. Capture the probes first so an empty/failed read defaults cleanly.
+  mem_bytes="$(sysctl -n hw.memsize 2>/dev/null || echo 0)"
+  os_major="$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)"
+  if [ "$(uname -m)" = "arm64" ] && [ "$mem_bytes" -gt 34359738368 ] && [ "${os_major:-0}" -ge 13 ]; then
     ollama_pull_model "$OLLAMA_MLX_MODEL" "~21GB" "$installed_models"
   else
-    ui_detail "skipping MLX model $OLLAMA_MLX_MODEL (needs Apple Silicon + >32GB RAM)"
+    ui_detail "skipping MLX model $OLLAMA_MLX_MODEL (needs Apple Silicon + >32GB RAM + macOS 13+)"
   fi
 else
   ui_warn "skipping Ollama setup (ollama not installed; see Brewfile 'ollama-app')"
