@@ -28,7 +28,11 @@ jobs:
         with:
           # Exclude this repo's own URL — it 404s until the repo is pushed/public. (lychee
           # excludes mailto: links by default.) Scope to Markdown so LICENSES/lockfiles aren't crawled.
-          args: "--no-progress --exclude 'github\\.com/nivintw/dotfiles' '**/*.md'"
+          # Also exclude gnu.org: it blackholes GitHub's runner IPs (the README's GNU Stow link
+          # TIMEOUTs even at --timeout 30 + 5 retries — a hard block, not slowness), which reddens
+          # this check on every PR. It's a stable canonical URL, safe to skip. LOCAL DIVERGENCE
+          # pending nivintw/copier-everything#65.
+          args: "--no-progress --exclude 'github\\.com/nivintw/dotfiles' --exclude 'gnu\\.org' '**/*.md'"
           fail: true
         env:
           # Authenticated requests raise GitHub's rate limit, so github.com links don't flake.
