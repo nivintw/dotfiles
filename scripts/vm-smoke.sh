@@ -259,22 +259,26 @@ REMOTE
   log "Waiting for SSH"
   wait_for "SSH" 180 ssh_vm true
 
-  # install.sh runs sudo repeatedly across a multi-minute install — including `sudo -v` to
-  # keep its timestamp warm — which needs either a tty or passwordless sudo. A headless SSH
-  # session has neither, so grant the install user passwordless sudo up front (the VM
-  # equivalent of a real Mac's password/Touch-ID prompt; the same thing CI runners do).
-  # The password is supplied on stdin for `sudo -S` (used only if the VM actually requires
-  # one); the sudoers CONTENT is passed as an argv parameter ($1), never on stdin, so this
-  # is correct whether or not the VM already has passwordless sudo. umask 337 makes the
-  # drop-in mode 0440, as sudoers requires.
-  log "Granting passwordless sudo in the VM (needed for an unattended install)"
+  # install.sh runs sudo repeatedly across a multi-minute install. Crucially its keepalive
+  # calls `sudo -v`, which RE-AUTHENTICATES — and NOPASSWD does NOT cover `sudo -v`, so a
+  # headless SSH session (no tty) would die at "Privileged setup". Install a sudoers drop-in
+  # that disables authentication for the install user entirely (the VM equivalent of a real
+  # Mac's password/Touch-ID prompt; the same thing CI runners do). The password is supplied
+  # on stdin for `sudo -S` (used only if the VM actually needs one to write the file); the
+  # username is passed via argv ($1). umask 337 makes the drop-in mode 0440, as sudoers wants.
+  log "Disabling sudo authentication in the VM (needed for an unattended install)"
   if ! printf '%s\n' "$VM_SMOKE_PASS" | ssh_vm \
-    "sudo -S -p '' bash -c 'umask 337; echo \"\$1\" >/etc/sudoers.d/dotfiles-vm-smoke' _ '$VM_USER ALL=(ALL) NOPASSWD: ALL'"; then
-    printf 'vm-smoke.sh: could not configure passwordless sudo in the VM (wrong VM_SMOKE_PASS?).\n' >&2
+    "sudo -S -p '' bash -c 'umask 337; { echo \"Defaults:\$1 !authenticate\"; echo \"\$1 ALL=(ALL) NOPASSWD: ALL\"; } >/etc/sudoers.d/dotfiles-vm-smoke' _ '$VM_USER'"; then
+    printf 'vm-smoke.sh: could not write the sudoers drop-in in the VM (wrong VM_SMOKE_PASS?).\n' >&2
     return 1
   fi
-  if ! ssh_vm 'sudo -n true' >/dev/null 2>&1; then
-    printf 'vm-smoke.sh: passwordless sudo did not take in the VM — aborting before install.\n' >&2
+  # Verify the EXACT capability install.sh needs: `sudo -v` must not prompt. `-n` turns a
+  # would-be prompt into a failure, so this passes only if authentication is truly disabled.
+  if ! ssh_vm 'sudo -n -v' >/dev/null 2>&1; then
+    printf 'vm-smoke.sh: sudo still wants authentication in the VM — install.sh would hang. Diagnostics:\n' >&2
+    ssh_vm 'echo "[drop-in]"; sudo -n cat /etc/sudoers.d/dotfiles-vm-smoke 2>&1
+      echo "[includedir]"; sudo -n grep -i includedir /etc/sudoers 2>&1
+      echo "[sudo -n -v]"; sudo -n -v 2>&1' >&2 || true
     return 1
   fi
 
