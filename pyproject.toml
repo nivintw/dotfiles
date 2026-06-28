@@ -8,7 +8,7 @@
 [project]
 name = "dotfiles"
 # Decorative: package = false, so nothing builds/reads this. release-please tracks the
-# real version in .release-please-manifest.json + git tags and does NOT mirror it here
+# real version in .config/.release-please-manifest.json + git tags and does NOT mirror it here
 # (mirroring would drift uv.lock and red-light the Release PR). Safe to leave static.
 version = "1.9.1"
 requires-python = ">=3.14"

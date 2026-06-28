@@ -108,21 +108,21 @@ def _typos_shared_rules(path: pathlib.Path) -> dict[str, object]:
 
 
 def test_typos_configs_keep_shared_rules_in_sync() -> None:
-    """_typos.toml and home/.typos.toml carry an identical shared rule surface.
+    """.config/typos.toml and home/.typos.toml carry an identical shared rule surface.
 
     Both files are hand-maintained standalone copies (not a symlink — see each
     file's header), so their ignore-regex shapes and word whitelist can silently
     drift. That would break the stated guarantee that a token flags identically
-    under the repo hook / CI (_typos.toml) and under the personal ~/.typos.toml
+    under the repo hook / CI (.config/typos.toml) and under the personal ~/.typos.toml
     everywhere else. Only the genuinely repo-only keys are excluded from the
-    comparison by construction: _typos.toml's [files].extend-exclude (docs/ vendored
+    comparison by construction: .config/typos.toml's [files].extend-exclude (docs/ vendored
     + cast artifacts) and home/.typos.toml's empty [default.extend-identifiers]
     placeholder, neither of which is part of the shared surface.
     """
-    repo = _typos_shared_rules(REPO / "_typos.toml")
+    repo = _typos_shared_rules(REPO / ".config" / "typos.toml")
     home = _typos_shared_rules(REPO / "home" / ".typos.toml")
     assert repo == home, (
-        "typos shared rules drifted between _typos.toml and home/.typos.toml; "
+        "typos shared rules drifted between .config/typos.toml and home/.typos.toml; "
         "update both so local and CI flag identically (see each file's header)"
     )
 

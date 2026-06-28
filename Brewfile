@@ -192,7 +192,7 @@ vscode "ms-toolsai.jupyter" # Jupyter notebooks (pulls keymap/renderers as deps)
 
 # Config & markup
 vscode "tamasfe.even-better-toml"       # TOML support (same author/engine as taplo)
-vscode "rvben.rumdl"                    # Rust markdown linter/formatter (reads .rumdl.toml)
+vscode "rvben.rumdl"                    # Rust markdown linter/formatter (reads .config/rumdl.toml)
 vscode "samuelcolvin.jinjahtml"         # Jinja + HTML template syntax
 vscode "editorconfig.editorconfig"      # Apply per-project .editorconfig rules
 vscode "redhat.vscode-yaml"             # YAML language support
