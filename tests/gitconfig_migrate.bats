@@ -132,6 +132,38 @@ teardown() {
   grep -q "me@work.example" "$OVERLAY"
 }
 
+@test "non-UTF-8 bytes round-trip byte-faithfully into the overlay (don't corrupt exotic encodings)" {
+  # A real-world ~/.gitconfig can carry non-UTF-8 bytes — e.g. a name in a legacy
+  # Latin-1 encoding. Here the value holds a raw 0xE9 ('é' in ISO-8859-1), which is
+  # an INVALID standalone UTF-8 byte. The migration streams the file through awk to
+  # strip any self-include; under a UTF-8 locale awk decodes the input and mangles
+  # such bytes (BSD awk aborts the record, gawk substitutes), silently corrupting the
+  # user's config. The helper forces LC_ALL=C so awk is byte-oriented and the bytes
+  # survive verbatim. This pins that contract.
+  #
+  # The corruption ONLY manifests when awk runs under a UTF-8 locale, so pin one for
+  # this test — otherwise the guard silently evaporates when the suite runs from a
+  # C-locale shell (or CI), where even the unfixed code would pass.
+  #
+  # The `|| true` keeps each pick errexit/pipefail-safe: a no-match grep exits non-zero,
+  # which under pipefail would propagate and abort the test in the command substitution
+  # before the `|| skip` fallback runs. With `|| true` an empty result simply falls through.
+  utf8_locale="$(locale -a 2>/dev/null | grep -iE '\.(utf-?8)$' | grep -iE '^(en_US|C)\.' | head -n1 || true)"
+  [ -n "$utf8_locale" ] || utf8_locale="$(locale -a 2>/dev/null | grep -iE '\.(utf-?8)$' | head -n1 || true)"
+  [ -n "$utf8_locale" ] || skip "no UTF-8 locale available to exercise awk's decode path"
+  export LC_ALL="$utf8_locale" LANG="$utf8_locale"
+  printf '[user]\n\tname = Jos\xe9\n' > "$TARGET"
+  run gitconfig_migrate "$TARGET" "$OVERLAY" "$BASELINE"
+  [ "$status" -eq 0 ]
+  # Extract the migrated name line from the overlay and compare it BYTE-for-byte to
+  # the original. LC_ALL=C on grep is essential here too: under a UTF-8 locale grep
+  # can't match a line carrying an invalid byte (the same trap the fix addresses), so
+  # without it this extraction would spuriously find nothing even on a correct overlay.
+  printf '\tname = Jos\xe9\n' > "$TMP/expected"
+  LC_ALL=C grep 'name = Jos' "$OVERLAY" > "$TMP/got"
+  cmp "$TMP/expected" "$TMP/got"
+}
+
 @test "an unwritable overlay fails loudly and leaves the original in place (no data loss)" {
   # The fold happens BEFORE the original is moved aside, so a write failure must
   # abort with the user's ~/.gitconfig untouched — never destroyed-and-unmigrated.
