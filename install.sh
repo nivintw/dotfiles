@@ -924,19 +924,26 @@ ui_ok "iTerm2 pointed at tracked preferences ($DOTFILES/iterm2)"
 # --- 9. Python CLI tools (uv) -----------------------------------------------
 # Each non-comment line of uv_tools.txt is an argument list for uv tool install.
 ui_step "Python CLI tools (uv)"
-# set -f (noglob) for the loop: lines are split on IFS intentionally, but a
-# token like reuse[charset-normalizer] would otherwise glob-expand against the
-# caller's CWD. The subshell keeps noglob from leaking into the rest of install.
-(
-  set -f
-  while IFS= read -r tool; do
-    case "$tool" in '' | \#*) continue ;; esac
-    # shellcheck disable=SC2086  # intentional split: line holds tool + --with args
-    retry "uv tool install $tool" 3 uv tool install $tool ||
-      ui_warn "uv tool install failed for: $tool (re-run install.sh to retry)"
-  done <"$DOTFILES/uv_tools.txt"
-)
-ui_ok "uv tools installed"
+# set -f (noglob) for the loop: lines are split on IFS intentionally, but a token like
+# reuse[charset-normalizer] would otherwise glob-expand against the caller's CWD. Scope it
+# with `set +f` rather than a subshell, so a failing tool's ui_warn lands in the global
+# WARNINGS summary (a subshell's mutations wouldn't propagate) and we can report OK vs WARN.
+set -f
+uv_tool_failures=0
+while IFS= read -r tool; do
+  case "$tool" in '' | \#*) continue ;; esac
+  # shellcheck disable=SC2086  # intentional split: line holds tool + --with args
+  retry "uv tool install $tool" 3 uv tool install $tool || {
+    ui_warn "uv tool install failed for: $tool (re-run install.sh to retry)"
+    uv_tool_failures=$((uv_tool_failures + 1))
+  }
+done <"$DOTFILES/uv_tools.txt"
+set +f
+if [ "$uv_tool_failures" -eq 0 ]; then
+  ui_ok "uv tools installed"
+else
+  ui_warn "$uv_tool_failures uv tool(s) failed to install (see above) — re-run install.sh to retry"
+fi
 
 # uv drops tool shims into ~/.local/bin. Put it on PATH now so the later
 # `command -v` checks (prek, claude) find them even when uv was already present

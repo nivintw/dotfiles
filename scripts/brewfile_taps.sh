@@ -18,6 +18,7 @@
 # non-blank character is #) are skipped.
 
 brewfile_taps() {
+  local file
   file="${1:?usage: brewfile_taps <brewfile>}"
   [ -f "$file" ] || return 0
   # ^[space]* tap [space]+ "(...)"  — anchoring on `tap` as the first token excludes
