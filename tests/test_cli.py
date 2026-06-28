@@ -5,21 +5,40 @@
 
 from __future__ import annotations
 
+import subprocess
 from typing import TYPE_CHECKING
 
+import pytest
 from typer.testing import CliRunner
 
-from dotfiles_install import cli
+from dotfiles_install import cli, commands
 from dotfiles_install.cli import app, discover_bundles
 from dotfiles_install.os_detect import OS
 
 if TYPE_CHECKING:
-    import pytest
+    from pathlib import Path
 
 runner = CliRunner()
 
 USAGE_ERROR_EXIT = 2
 RUNTIME_ERROR_EXIT = 1
+
+
+@pytest.fixture
+def _no_real_installs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Neutralize the ported phase 0-1 bodies: stub command execution and isolate ``$HOME``.
+
+    The macOS walk now runs the real bootstrap + brew-bundle phases, so ``commands.which``
+    reports every tool present (skipping installs) and ``commands.run`` is a no-op success;
+    ``$HOME`` is redirected to a tmp dir so the bundle-selection file never touches the real one.
+    """
+
+    def _ok(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess([], returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(commands, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(commands, "run", _ok)
+    monkeypatch.setenv("HOME", str(tmp_path))
 
 
 def test_discover_bundles_matches_the_repo() -> None:
@@ -87,18 +106,21 @@ def test_run_on_unsupported_platform_exits_one_cleanly(monkeypatch: pytest.Monke
     assert "macOS" in result.output
 
 
-def test_run_on_macos_walks_stub_phases(monkeypatch: pytest.MonkeyPatch) -> None:
-    """On macOS the run completes, reporting each phase as not-yet-ported."""
+@pytest.mark.usefixtures("_no_real_installs")
+def test_run_on_macos_walks_all_phases(monkeypatch: pytest.MonkeyPatch) -> None:
+    """On macOS the run completes; the still-unported phases report not-yet-ported."""
     monkeypatch.setattr(cli, "current_os", lambda: OS.MACOS)
     result = runner.invoke(app, [])
     assert result.exit_code == 0
     assert "dotfiles bootstrap" in result.output
+    # Phases 2-17 are still stubs, so the not-yet-ported notice is still emitted.
     assert "not yet ported" in result.output
-    # Every phase header is printed.
+    # Every phase header is printed, including the now-ported phase 0.
     assert "[0] Bootstrap toolchain (Homebrew + uv)" in result.output
     assert "[17] Verification & summary" in result.output
 
 
+@pytest.mark.usefixtures("_no_real_installs")
 def test_valid_bundle_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
     """A known ``--bundle`` value passes validation and the run proceeds."""
     monkeypatch.setattr(cli, "current_os", lambda: OS.MACOS)
