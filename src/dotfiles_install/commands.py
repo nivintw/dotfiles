@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from dotfiles_install.ui import UI
 
 _RETRY_DELAY_SECONDS = 3.0
+_COMMAND_NOT_FOUND = 127  # conventional shell exit code for a missing executable
 
 
 def which(name: str) -> str | None:
@@ -43,16 +44,27 @@ def run(
     With ``env`` the mapping is layered over the inherited environment (not a replacement).
     ``capture`` collects stdout/stderr as text; otherwise they stream to the terminal.
     ``input_text`` is fed to stdin (used to pipe a captured installer script into ``sh``).
+    A missing executable is reported as exit ``127`` (like a shell's "command not found")
+    rather than raising, so ``retry`` and the hard post-checks treat it as a failed attempt.
     """
     merged = {**os.environ, **env} if env is not None else None
-    return subprocess.run(  # noqa: S603 — installer runs trusted, repo-defined commands
-        list(argv),
-        env=merged,
-        capture_output=capture,
-        text=True,
-        input=input_text,
-        check=False,
-    )
+    try:
+        return subprocess.run(
+            list(argv),
+            env=merged,
+            capture_output=capture,
+            text=True,
+            input=input_text,
+            check=False,
+        )
+    except FileNotFoundError:
+        empty = "" if capture else None
+        return subprocess.CompletedProcess(
+            list(argv),
+            returncode=_COMMAND_NOT_FOUND,
+            stdout=empty,
+            stderr=empty,
+        )
 
 
 def run_ok(

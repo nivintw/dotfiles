@@ -215,6 +215,29 @@ def test_brew_bundle_non_core_installs_the_file_directly(
     assert captured["argv"] == ["brew", "bundle", "install", f"--file={brewfile}"]
 
 
+def test_brew_bundle_tolerates_non_utf8_brewfile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-UTF-8 byte in a Brewfile does not crash the (designed non-fatal) install."""
+    brewfile = tmp_path / "Brewfile"
+    # A lone Latin-1 0xe9 byte in a kept comment line — invalid UTF-8.
+    brewfile.write_bytes(b'brew "git"  # raw byte \xe9\ncask "firefox"\n')
+    monkeypatch.setattr(brew_bundle, "_trust_taps", lambda _ctx, _text: None)
+    seen: dict[str, bytes] = {}
+
+    def _run(argv: Sequence[str], **_kw: object) -> subprocess.CompletedProcess[str]:
+        bundled = Path(list(argv)[-1].split("=", 1)[1])
+        seen["bytes"] = bundled.read_bytes()
+        return subprocess.CompletedProcess(list(argv), 0)
+
+    monkeypatch.setattr(commands, "run", _run)
+    ctx, _out = _ctx(core=True)
+    assert brew_bundle._brew_bundle(ctx, brewfile) is True
+    # Cask stripped; the stray 0xe9 byte on the kept line round-tripped faithfully (not crashed).
+    assert seen["bytes"] == b'brew "git"  # raw byte \xe9\n'
+
+
 def test_brew_bundle_core_bundles_a_cask_stripped_copy(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

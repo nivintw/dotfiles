@@ -77,6 +77,9 @@ convention = "google"
 # verify_install shells out to fixed git/bioutil commands (resolved via shutil.which, so
 # no partial-path S607); the argv is constant with no user input, so the S603 audit is moot.
 "src/dotfiles_install/verify_install.py" = ["S603"]
+# commands.py is the installer's subprocess seam — it deliberately runs repo-defined commands
+# (brew, curl, fzf); the S603 "untrusted input" audit is the whole point of centralizing here.
+"src/dotfiles_install/commands.py" = ["S603"]
 # Typer models CLI flags as boolean parameters with boolean defaults — the idiomatic Typer
 # surface, not the boolean-trap FBT guards against — so silence them for the CLI module.
 "src/dotfiles_install/cli.py" = ["FBT001", "FBT002"]
