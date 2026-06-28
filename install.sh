@@ -1181,17 +1181,45 @@ else
   ui_warn "skipping Claude Code settings (jq not installed — see Brewfile; re-run install.sh)"
 fi
 
-# --- 14. Ollama model for GitLens' local AI ---------------------------------
-# The stowed VS Code settings point GitLens' AI features at a local Ollama model
-# (gitlens.ai.model = "ollama:qwen2.5-coder:7b"), so commit-message generation
-# and explain-commit run offline — no cloud key, no Copilot. ollama-app (Brewfile
-# cask) ships both the `ollama` CLI and a menu-bar app that serves the API on
-# :11434 and auto-starts on login. Make sure the server is up and the model is
-# pulled. Idempotent: re-launching a running app is a no-op and the (~4.7GB) pull
-# is skipped when the model already exists; a failed pull is non-fatal.
-OLLAMA_MODEL="qwen2.5-coder:7b"
+# --- 14. Ollama models for local AI -----------------------------------------
+# Two consumers, two models:
+#  • GitLens (stowed VS Code settings: gitlens.ai.model = "ollama:qwen2.5-coder:7b")
+#    runs commit-message generation / explain-commit offline — no cloud key, no
+#    Copilot. This is the baseline model, pulled on every capable machine.
+#  • Claude bulk-offload (see ~/.config/dotfiles/CLAUDE.local.md) prefers the faster,
+#    higher-quality MLX model qwen3.5:35b-a3b-coding-nvfp4. It runs on Ollama's MLX
+#    engine, which needs Apple Silicon + >32GB unified memory, so it is GATED — other
+#    machines are unaffected and keep just the 7b (also the non-MLX fallback).
+#
+# ollama-app (Brewfile cask) ships both the `ollama` CLI and a menu-bar app serving
+# the API on :11434 (auto-starts on login). We make sure the server is up, then pull.
+# Idempotent: re-launching a running app is a no-op and a pull is skipped when the
+# model already exists; a failed pull is non-fatal.
+#
+# ⚠️ qwen3.5-a3b is a REASONING model: programmatic callers must send "think": false,
+# or the token budget is spent on hidden thinking and the response comes back empty.
+# That is why GitLens — which can't set think:false — stays on the 7b, not this model.
+OLLAMA_MODEL="qwen2.5-coder:7b"                 # GitLens + universal fallback (~4.7GB)
+OLLAMA_MLX_MODEL="qwen3.5:35b-a3b-coding-nvfp4" # Claude offload, gated (~21GB)
+
+# ollama_pull_model MODEL SIZE — idempotent (skip if already present) and non-fatal
+# (a failed pull degrades to a warning + re-run hint, never aborts the install).
+ollama_pull_model() {
+  local model="$1" size="$2"
+  if ollama list 2>/dev/null | awk 'NR>1 {print $1}' | grep -qx "$model"; then
+    ui_ok "Ollama model $model already present"
+  else
+    ui_active "pulling Ollama model $model ($size, one-time)"
+    if ollama pull "$model"; then
+      ui_ok "Ollama model $model pulled"
+    else
+      ui_warn "Ollama pull failed for $model (network?); re-run install.sh to retry."
+    fi
+  fi
+}
+
 if command -v ollama >/dev/null 2>&1; then
-  ui_step "Ollama model for GitLens ($OLLAMA_MODEL)"
+  ui_step "Ollama models for local AI ($OLLAMA_MODEL + gated MLX)"
   if ! curl -fsS -m 2 http://localhost:11434/api/tags >/dev/null 2>&1; then
     ui_active "starting Ollama (server + login auto-start)"
     # Prefer the GUI app (it also registers the login item). `open -a` returns as
@@ -1208,15 +1236,15 @@ if command -v ollama >/dev/null 2>&1; then
         ui_warn "Ollama server didn't come up; start it and re-run to pull the model."
     fi
   fi
-  if ollama list 2>/dev/null | awk 'NR>1 {print $1}' | grep -qx "$OLLAMA_MODEL"; then
-    ui_ok "Ollama model $OLLAMA_MODEL already present"
+  # Baseline model — every capable machine.
+  ollama_pull_model "$OLLAMA_MODEL" "~4.7GB"
+  # Gated MLX model — Apple Silicon + >32GB unified memory (32 GiB = 34359738368
+  # bytes; require strictly more so exactly-32GB machines fall back to just the 7b).
+  if [ "$(uname -m)" = "arm64" ] &&
+    [ "$(sysctl -n hw.memsize 2>/dev/null || echo 0)" -gt 34359738368 ]; then
+    ollama_pull_model "$OLLAMA_MLX_MODEL" "~21GB"
   else
-    ui_active "pulling Ollama model $OLLAMA_MODEL (~4.7GB, one-time)"
-    if ollama pull "$OLLAMA_MODEL"; then
-      ui_ok "Ollama model $OLLAMA_MODEL pulled"
-    else
-      ui_warn "Ollama pull failed (network?); re-run install.sh to retry."
-    fi
+    ui_detail "skipping MLX model $OLLAMA_MLX_MODEL (needs Apple Silicon + >32GB RAM)"
   fi
 else
   ui_warn "skipping Ollama setup (ollama not installed; see Brewfile 'ollama-app')"
