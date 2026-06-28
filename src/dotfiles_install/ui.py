@@ -90,10 +90,12 @@ class UI:
         self._print(self.console, f"   {message}", "dim")
 
     def summary(self, verified: list[str], problems: list[str]) -> None:
-        """Print the closing summary: verified items, then problems unioned with warnings."""
+        """Print the closing summary: verified items, then problems then the collected warnings."""
         self.step("Verified")
         for item in verified:
             self.ok(item)
+        # Concatenate (no dedup), matching install.sh's `attention=(problems warnings)`: the two
+        # come from different sources (verify failures vs the runtime ledger), so rarely overlap.
         attention = [*problems, *self.warnings]
         self.step("Needs attention")
         if not attention:
