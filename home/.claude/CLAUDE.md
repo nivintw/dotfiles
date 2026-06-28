@@ -47,6 +47,17 @@ Do not add Claude attribution to commits or PR descriptions. No Co-Authored-By l
 
 Follow the conventional-commit format. Capitalize the first word of the description. In the body, explain WHY over HOW.
 
+## Referencing GitHub issues, PRs & discussions
+
+When you mention a GitHub issue, PR, or discussion, never leave a bare `#46` — it's ambiguous and not clickable. Every reference must:
+
+- **Name the type.** "issue #46", "PR #46", "discussion #46" — never a bare number.
+- **Be a clickable link.** Render the `#46` as a markdown link to the thing itself — `[#46](https://github.com/owner/repo/issues/46)` (PRs use `/pull/46`, discussions `/discussions/46`). Claude Code renders these in the terminal, so I can click straight through.
+- **Tell me what it is.** Don't assume I remember the ticket — add a short title or one-line gloss: `PR [#46](https://github.com/owner/repo/pull/46) (add release-please gate)`. If you don't know the title, look it up (GitHub MCP) rather than referencing it blind.
+- **Qualify cross-repo refs.** When it lives in a different repo than the one we're working in, repo-qualify the visible text but still link to the item itself — `[owner/repo#46](https://github.com/owner/repo/issues/46)` — so it's unambiguous which repo without losing the click-through.
+
+Mention status — open / closed / merged / draft — when it bears on the point.
+
 ## Local model offload
 
 When a task is **bulk and mechanical** — and a local model is available on this machine — prefer routing it to that local model to conserve Claude tokens, rather than doing the grunt work inline. Pick the tier by stakes and latency: a fast small model for high-volume, low-stakes work (classification, log/diff triage, quick summaries, simple boilerplate); a larger local model when quality matters more than speed (non-trivial codegen, careful summarization, first-pass analysis).
