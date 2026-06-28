@@ -80,6 +80,18 @@ def test_run_without_env_inherits_the_environment(monkeypatch: pytest.MonkeyPatc
     assert captured["env"] is None
 
 
+def test_run_ok_reports_success_and_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``run_ok`` returns True only when the underlying run exits zero."""
+    codes = iter([0, 1])
+    monkeypatch.setattr(
+        commands,
+        "run",
+        lambda argv, **_kw: subprocess.CompletedProcess(list(argv), next(codes)),
+    )
+    assert commands.run_ok(["brew", "bundle"]) is True
+    assert commands.run_ok(["brew", "bundle"]) is False
+
+
 def test_fetch_returns_captured_script(monkeypatch: pytest.MonkeyPatch) -> None:
     """A successful, non-empty download returns its stdout."""
     monkeypatch.setattr(

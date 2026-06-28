@@ -12,22 +12,15 @@ still ``install.sh`` until the phase-port slices (#67-#72) land.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from dotfiles_install.context import InstallContext
+from dotfiles_install.layout import discover_bundles
 from dotfiles_install.os_detect import current_os
 from dotfiles_install.phases import phases_for
 from dotfiles_install.ui import UI
-
-DOTFILES = Path(__file__).resolve().parents[2]
-
-
-def discover_bundles(dotfiles: Path = DOTFILES) -> list[str]:
-    """Return the available opt-in bundle names (``Brewfile.d/<name>.brewfile`` basenames)."""
-    return sorted(path.stem for path in (dotfiles / "Brewfile.d").glob("*.brewfile"))
 
 
 def _help_epilog() -> str:
