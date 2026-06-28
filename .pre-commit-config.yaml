@@ -58,8 +58,10 @@ repos:
       - id: check-json
         name: "🗂️ config · Validate JSON"
         files: '\.json$'
-        # VS Code settings.json is JSONC (comments + trailing commas) — skip it.
-        exclude: '^home/Library/Application Support/Code/User/settings\.json$'
+        # VS Code JSON is JSONC (comments + trailing commas) — valid for VS Code but not
+        # strict JSON, so check-json can't parse it. Skip the stowed user settings.json and
+        # any .vscode/*.json (at any depth).
+        exclude: '(^home/Library/Application Support/Code/User/settings\.json$|(^|/)\.vscode/)'
       - id: check-toml
         name: "🗂️ config · Validate TOML"
 
@@ -167,7 +169,10 @@ repos:
         # auto-corrects and exits 0, violating this repo's never-auto-write typos
         # policy (home/.typos.toml header). Drop --write-changes; keep --force-exclude.
         # Config is .config/typos.toml (mirrors home/.typos.toml) for CI parity.
-        args: ["--force-exclude", "--config", ".config/typos.toml"]
+        # Scan `.` plus `.config` explicitly: typos skips hidden dirs by default, so the
+        # configs relocated under .config/ go unchecked unless named (an explicit path
+        # overrides the hidden-skip). .git/.venv stay unscanned — they aren't listed.
+        args: ["--force-exclude", "--config", ".config/typos.toml", ".", ".config"]
         pass_filenames: false
 
   # -------------------------------- 🐍 Python Tools --------------------------------- #

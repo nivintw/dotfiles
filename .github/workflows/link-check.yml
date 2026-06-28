@@ -10,6 +10,11 @@ name: link-check
 
 on:
   pull_request:
+    # lychee only crawls Markdown, so a PR touching no docs gains nothing from running it —
+    # and re-crawling every PR needlessly exposes them to third-party-uptime flakiness.
+    # `**/*.md` covers any subdirectory depth; `*.md` covers root-level files — together
+    # they match every Markdown file regardless of how the filter engine treats `**`.
+    paths: ['**/*.md', '*.md']
   workflow_dispatch:
 
 permissions:
@@ -26,13 +31,17 @@ jobs:
       - name: Check links (lychee)
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
         with:
-          # Exclude this repo's own URL — it 404s until the repo is pushed/public. (lychee
-          # excludes mailto: links by default.) Scope to Markdown so LICENSES/lockfiles aren't crawled.
+          # --max-retries/--timeout keep a slow-but-valid host (a single transient TIMEOUT)
+          # from reddening the check. Self-referential links are otherwise validated (the repo
+          # exists on GitHub and GITHUB_TOKEN authenticates even a private repo's own URLs), with
+          # one exception: this repo's own /compare/ URLs. release-please's generated CHANGELOG
+          # links to compare/<prev>...<next>, but the <next> tag isn't cut until the Release PR
+          # merges, so it 404s on every Release PR until then (then self-heals) — exclude it.
           # Also exclude gnu.org: it blackholes GitHub's runner IPs (the README's GNU Stow link
-          # TIMEOUTs even at --timeout 30 + 5 retries — a hard block, not slowness), which reddens
-          # this check on every PR. It's a stable canonical URL, safe to skip. LOCAL DIVERGENCE
-          # pending nivintw/copier-everything#65.
-          args: "--no-progress --exclude 'github\\.com/nivintw/dotfiles' --exclude 'gnu\\.org' '**/*.md'"
+          # TIMEOUTs even at --timeout 30 + 5 retries — a hard block, not slowness), a stable
+          # canonical URL safe to skip.
+          # (lychee excludes mailto: by default.) Scope to Markdown so LICENSES/lockfiles aren't crawled.
+          args: "--no-progress --max-retries 5 --timeout 30 --exclude 'github\\.com/nivintw/dotfiles/compare/' --exclude 'gnu\\.org' '**/*.md'"
           fail: true
         env:
           # Authenticated requests raise GitHub's rate limit, so github.com links don't flake.
