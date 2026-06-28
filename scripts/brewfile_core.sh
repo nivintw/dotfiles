@@ -2,25 +2,26 @@
 # SPDX-License-Identifier: MIT
 
 #
-# Pure filter: print a Brewfile's CORE subset — taps + CLI formulae, with the GUI app and
-# font casks stripped out. The --core install profile (install.sh) bundles this instead of
-# the full Brewfile, and verify_install checks against it, so a headless/minimal install can
-# skip the heavy GUI cask downloads (and, with them, the Ollama app + its multi-GB model
-# pull, which is gated on the ollama CLI a cask provides).
+# Pure filter: print a Brewfile's CORE subset — taps + CLI formulae only, with the GUI-bound
+# entries stripped out (app/font casks, VS Code extensions, Mac App Store apps). The --core
+# install profile (install.sh) bundles this instead of the full Brewfile, and verify_install
+# checks against it, so a headless/minimal install can skip the heavy GUI cask downloads
+# (and, with them, the Ollama app + its multi-GB model pull, gated on the ollama CLI a cask
+# provides) and the VS Code extensions (which need the VS Code app + `code` CLI to install).
 #
 # No brew, no network, no side effects — sourcing only defines the function — so it is
 # unit-tested by tests/brewfile_core.bats and kept bash 3.2-safe.
 #
-# "Core" == everything EXCEPT `cask "..."` declarations. tap and brew lines (and comments)
-# are kept verbatim; only cask lines are dropped. A commented-out cask line already starts
-# with # and is left as-is (brew bundle ignores it either way).
+# "Core" keeps tap and brew lines (and comments) verbatim and drops every other install
+# directive: cask, vscode, mas, whalebrew. A commented-out line already starts with # and is
+# left as-is (brew bundle ignores it either way).
 
 brewfile_core() {
   file="${1:?usage: brewfile_core <brewfile>}"
   [ -f "$file" ] || return 0
-  # Delete lines whose first non-space token is `cask`. sed always exits 0 (unlike grep -v,
-  # which would exit 1 for an all-cask file), so this is safe under the caller's set -e.
-  sed -E '/^[[:space:]]*cask[[:space:]]/d' "$file"
+  # Delete lines whose first non-space token is a GUI-bound directive. sed always exits 0
+  # (unlike grep -v, which exits 1 for an all-stripped file), so this is safe under set -e.
+  sed -E '/^[[:space:]]*(cask|vscode|mas|whalebrew)[[:space:]]/d' "$file"
 }
 
 # --- standalone entrypoint --------------------------------------------------
