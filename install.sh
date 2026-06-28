@@ -667,15 +667,23 @@ fi
 # the control file, README/LICENSE, etc.), so it never false-positives on files
 # stow wouldn't link anyway. This repo expects to own its paths in a clean $HOME;
 # the managed_files above are the known auto-generated exceptions, already cleared.
+#
+# --no-folding is essential: without it, stow "tree-folds" a target directory that doesn't
+# yet exist into a SINGLE symlink (e.g. on a fresh machine ~/.claude -> repo/home/.claude).
+# That breaks two things this repo relies on: per-file symlinks (so ~/.claude/CLAUDE.md is a
+# real symlink, not a file reached through a folded dir), and — worse — it would route a
+# GENERATED real file like ~/.claude/settings.json INTO the repo through the folded dir.
+# --no-folding makes stow always create real directories and link files individually, so the
+# result is identical whether or not the target dir already existed.
 ui_active "checking for conflicts (dry run)"
-if ! stow_plan="$(stow -n -v --dir="$DOTFILES" --target="$HOME" home 2>&1)"; then
+if ! stow_plan="$(stow --no-folding -n -v --dir="$DOTFILES" --target="$HOME" home 2>&1)"; then
   ui_err "these files already exist in \$HOME and would be replaced by this repo's versions, so aborting."
   ui_detail "Back them up and/or merge their contents into the repo, then re-run install.sh:"
   printf '%s\n' "$stow_plan" | grep -E 'cannot stow' >&2 || printf '%s\n' "$stow_plan" >&2
   exit 1
 fi
 
-stow --dir="$DOTFILES" --target="$HOME" home
+stow --no-folding --dir="$DOTFILES" --target="$HOME" home
 ui_ok "dotfiles symlinked (stow, 0 conflicts)"
 
 # --- 4. Machine-local overlay files -----------------------------------------
