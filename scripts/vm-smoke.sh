@@ -102,8 +102,14 @@ main() {
   local IMAGE="${VM_SMOKE_IMAGE:-ghcr.io/cirruslabs/macos-sequoia-base:latest}"
   local VM_USER="${VM_SMOKE_USER:-admin}"
   local INSTALL_TIMEOUT="${VM_SMOKE_INSTALL_TIMEOUT:-1800}"
-  local KEEP=0 ONCE=0 NEGATIVE=0
+  local ONCE=0 NEGATIVE=0
   local VM_IP=""
+  # KEEP, VM_NAME and WORK are read by the EXIT trap (cleanup), which can fire after main's
+  # locals have gone out of scope — so they are deliberately GLOBAL, not local. They are
+  # assigned only inside main, so sourcing the file for tests never sets them.
+  KEEP=0
+  VM_NAME=""
+  WORK=""
   # Exported (not local) so the SSH_ASKPASS helper child process inherits it. Keeping
   # the password out of argv is the whole reason for the askpass dance.
   export VM_SMOKE_PASS="${VM_SMOKE_PASS:-admin}"
@@ -137,7 +143,6 @@ main() {
   DOTFILES="$(cd "${BASH_SOURCE[0]%/*}/.." && pwd)"
 
   # Scratch dir for the askpass helper + the `tart run` console log. Cleaned up on exit.
-  local WORK
   WORK="$(mktemp -d -t vm-smoke)"
   local ASKPASS="$WORK/askpass" RUN_LOG="$WORK/run.log"
   cat >"$ASKPASS" <<'ASK'
@@ -146,16 +151,18 @@ printf '%s\n' "${VM_SMOKE_PASS:-admin}"
 ASK
   chmod 700 "$ASKPASS"
 
-  local VM_NAME="dotfiles-smoke-$$"
+  VM_NAME="dotfiles-smoke-$$"
 
+  # Defensive `${...:-}` reads: the trap can fire from anywhere, and under `set -u` a bare
+  # reference to an unset global would itself abort the trap before the VM is deleted.
   cleanup() {
-    if [ "$KEEP" -eq 1 ]; then
-      log "Leaving VM '$VM_NAME' in place (--keep). Delete with: tart delete $VM_NAME"
-    else
+    if [ "${KEEP:-0}" -eq 1 ]; then
+      log "Leaving VM '${VM_NAME:-?}' in place (--keep). Delete with: tart delete ${VM_NAME:-}"
+    elif [ -n "${VM_NAME:-}" ]; then
       tart stop "$VM_NAME" >/dev/null 2>&1 || true
       tart delete "$VM_NAME" >/dev/null 2>&1 || true
     fi
-    rm -rf "$WORK"
+    if [ -n "${WORK:-}" ]; then rm -rf "$WORK"; fi
   }
   trap cleanup EXIT
 
@@ -252,12 +259,22 @@ REMOTE
   log "Waiting for SSH"
   wait_for "SSH" 180 ssh_vm true
 
-  # install.sh runs `sudo -v` early; a VM user without passwordless sudo would hang or
-  # abort it with a confusing tty error. Fail fast with a clear message instead.
-  log "Checking passwordless sudo in the VM"
+  # install.sh runs sudo repeatedly across a multi-minute install — including `sudo -v` to
+  # keep its timestamp warm — which needs either a tty or passwordless sudo. A headless SSH
+  # session has neither, so grant the install user passwordless sudo up front (the VM
+  # equivalent of a real Mac's password/Touch-ID prompt; the same thing CI runners do).
+  # The password is supplied on stdin for `sudo -S` (used only if the VM actually requires
+  # one); the sudoers CONTENT is passed as an argv parameter ($1), never on stdin, so this
+  # is correct whether or not the VM already has passwordless sudo. umask 337 makes the
+  # drop-in mode 0440, as sudoers requires.
+  log "Granting passwordless sudo in the VM (needed for an unattended install)"
+  if ! printf '%s\n' "$VM_SMOKE_PASS" | ssh_vm \
+    "sudo -S -p '' bash -c 'umask 337; echo \"\$1\" >/etc/sudoers.d/dotfiles-vm-smoke' _ '$VM_USER ALL=(ALL) NOPASSWD: ALL'"; then
+    printf 'vm-smoke.sh: could not configure passwordless sudo in the VM (wrong VM_SMOKE_PASS?).\n' >&2
+    return 1
+  fi
   if ! ssh_vm 'sudo -n true' >/dev/null 2>&1; then
-    printf 'vm-smoke.sh: VM user "%s" lacks passwordless sudo — install.sh would hang on sudo -v.\n' \
-      "$VM_USER" >&2
+    printf 'vm-smoke.sh: passwordless sudo did not take in the VM — aborting before install.\n' >&2
     return 1
   fi
 
@@ -266,14 +283,20 @@ REMOTE
   git -C "$DOTFILES" archive --format=tar HEAD |
     ssh_vm 'rm -rf "$HOME/dotfiles" && mkdir -p "$HOME/dotfiles" && tar -x -C "$HOME/dotfiles"'
 
-  run_install "install (1/$([ "$ONCE" -eq 1 ] && echo 1 || echo 2))"
+  if ! run_install "install (1/$([ "$ONCE" -eq 1 ] && echo 1 || echo 2))"; then
+    log "Install FAILED."
+    return 1
+  fi
   if ! verify_gate "verify"; then
     log "Verification FAILED after the first install."
     return 1
   fi
 
   if [ "$ONCE" -eq 0 ]; then
-    run_install "idempotency re-run (2/2)"
+    if ! run_install "idempotency re-run (2/2)"; then
+      log "Idempotency re-run FAILED — install.sh is not cleanly re-runnable."
+      return 1
+    fi
     if ! verify_gate "re-verify"; then
       log "Verification FAILED after the idempotency re-run — install.sh is not cleanly re-runnable."
       return 1
