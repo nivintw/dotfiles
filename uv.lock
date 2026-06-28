@@ -63,7 +63,7 @@ wheels = [
 
 [[package]]
 name = "dotfiles"
-version = "1.11.0"
+version = "1.11.1"
 source = { virtual = "." }
 
 [package.dev-dependencies]

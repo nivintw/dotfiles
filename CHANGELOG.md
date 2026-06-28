@@ -7,6 +7,13 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.11.1](https://github.com/nivintw/dotfiles/compare/v1.11.0...v1.11.1) (2026-06-28)
+
+
+### Bug Fixes
+
+* **install:** Authenticate sudo once, after the bundle (not across it) ([3e6954e](https://github.com/nivintw/dotfiles/commit/3e6954e1d9d452ef1c28ce28cea674ed47571e84)), closes [#62](https://github.com/nivintw/dotfiles/issues/62)
+
 ## [1.11.0](https://github.com/nivintw/dotfiles/compare/v1.10.0...v1.11.0) (2026-06-28)
 
 
