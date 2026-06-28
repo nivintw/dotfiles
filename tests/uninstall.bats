@@ -13,6 +13,10 @@
 #
 # Run:  bats tests/uninstall.bats
 
+# Tests set run-state globals (DRY_RUN, ASSUME_YES) that the sourced uninstall.sh functions
+# read; shellcheck lints this file without following the source, so it can't see those uses.
+# shellcheck disable=SC2034
+
 setup() {
   LIB="$BATS_TEST_DIRNAME/../uninstall.sh"
   # shellcheck source=../uninstall.sh disable=SC1091
@@ -129,4 +133,43 @@ teardown() {
     run un_is_yes "$a"
     [ "$status" -ne 0 ]
   done
+}
+
+# --- do_or_echo / offer: the safety-contract control flow -------------------
+# These pin the headline guarantees: dry-run mutates nothing, a failed reversal is
+# recorded (not silently dropped), and offers default to no under --dry-run / --yes.
+# Called directly (not via `run`) where a ledger mutation must persist in the test shell.
+
+@test "do_or_echo: --dry-run announces and executes nothing" {
+  DRY_RUN=1 REMOVED=() FAILED=()
+  do_or_echo "create sentinel" touch "$TMP/sentinel" >/dev/null
+  [ ! -e "$TMP/sentinel" ]
+  [ "${#REMOVED[@]}" -eq 0 ]
+  [ "${#FAILED[@]}" -eq 0 ]
+}
+
+@test "do_or_echo: real success records REMOVED, not FAILED" {
+  DRY_RUN=0 REMOVED=() FAILED=()
+  do_or_echo "noop" true >/dev/null
+  [ "${#REMOVED[@]}" -eq 1 ]
+  [ "${#FAILED[@]}" -eq 0 ]
+}
+
+@test "do_or_echo: real failure records FAILED, not REMOVED (never silently dropped)" {
+  DRY_RUN=0 REMOVED=() FAILED=()
+  do_or_echo "boom" false >/dev/null 2>&1
+  [ "${#REMOVED[@]}" -eq 0 ]
+  [ "${#FAILED[@]}" -eq 1 ]
+}
+
+@test "offer: returns no in --dry-run (announces, never prompts)" {
+  DRY_RUN=1 ASSUME_YES=0
+  run offer "do the thing?"
+  [ "$status" -ne 0 ]
+}
+
+@test "offer: returns no under --yes (the safe default for offers)" {
+  DRY_RUN=0 ASSUME_YES=1
+  run offer "do the thing?"
+  [ "$status" -ne 0 ]
 }

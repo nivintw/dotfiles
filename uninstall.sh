@@ -13,9 +13,10 @@
 # is the point: you always know what changed and what is left to do by hand.
 #
 # Tiers:
-#   1. auto      — provably ours + reversible: stow -D, TPM clone, MCP registrations,
-#                  the iTerm2 prefs pointer (only if it still points at this repo).
-#   2. offer     — created/enumerable, default NO: uv-managed CLI tools, Ollama models.
+#   1. auto      — provably ours + reversible: stow -D, MCP registrations, the iTerm2
+#                  prefs pointer (only if it still points at this repo).
+#   2. offer     — created/enumerable, default NO: the TPM clone (install.sh reuses a
+#                  pre-existing one, so we can't prove ownership), uv tools, Ollama models.
 #   3. ask       — lossy system changes: login shell, /etc/pam.d/sudo_local (only if
 #                  its contents are the ones we wrote).
 #   4. report    — never touched, with how-to: Homebrew/uv/Claude CLI, atuin's DB,
@@ -64,7 +65,9 @@ un_uv_tool_name() {
 # install.sh writes (a pam_tid `sufficient` line, optionally preceded by a
 # pam_reattach `optional` line) AND the pam_tid line is present. Matching by shape
 # rather than an exact string keeps it robust to the machine-specific brew prefix in
-# the pam_reattach path, so we never delete a sudo_local file we did not author.
+# the pam_reattach path. This is also Apple's documented Touch-ID-for-sudo content, so a
+# user's hand-rolled file can match too — which is why removal is always gated behind an
+# explicit prompt (never automatic), and we still reject anything with an unknown line.
 un_pam_is_ours() {
   local content="$1" line have_tid=0
   while IFS= read -r line; do
@@ -112,10 +115,14 @@ REMOVED=()  # things actually reversed
 DECLINED=() # offers the user (or non-interactive default) said no to
 LEFT=()     # deliberately not touched, with the reason
 MANUAL=()   # copy-paste commands to finish by hand
+FAILED=()   # reversals attempted that errored — surfaced so the summary can't hide a failure
 rec_removed() { REMOVED+=("$1"); }
-rec_declined() { DECLINED+=("$1"); }
+# In a dry run an offer isn't truly "declined" (it was never asked), so don't log it as one —
+# the inline "[dry-run] would ask:" lines already show what would be prompted.
+rec_declined() { [ "$DRY_RUN" = 1 ] || DECLINED+=("$1"); }
 rec_left() { LEFT+=("$1"); }
 rec_manual() { MANUAL+=("$1"); }
+rec_failed() { FAILED+=("$1"); }
 
 # proceed_gate — one confirmation before any mutation. --dry-run and --yes pass; a
 # non-interactive run without --yes refuses rather than destroying state unattended.
@@ -160,7 +167,14 @@ do_or_echo() {
     return 0
   fi
   ui_active "$desc"
-  if "$@"; then rec_removed "$desc"; else ui_warn "failed: $desc (continuing)"; fi
+  if "$@"; then
+    rec_removed "$desc"
+  else
+    # Non-fatal, but never silent: a failed reversal is exactly "left to finish by hand", so
+    # record it (with the command to retry) into the ledger the closing summary surfaces.
+    ui_warn "failed: $desc (continuing)"
+    rec_failed "$desc — retry by hand: $*"
+  fi
 }
 
 # --- Tier 1: auto-reverse the provably-ours, reversible state ----------------------
@@ -177,14 +191,6 @@ tier1_unstow() {
     stow --no-folding -D --dir="$DOTFILES" --target="$HOME" home
 }
 
-tier1_tpm() {
-  local tpm_dir="$HOME/.config/tmux/plugins/tpm"
-  [ -d "$tpm_dir" ] || return 0
-  ui_step "Removing TPM (tmux plugin manager)"
-  do_or_echo "remove TPM clone ($tpm_dir)" rm -rf "$tpm_dir"
-  rec_left "tmux plugins under ~/.config/tmux/plugins/ (installed by TPM; left in place)"
-}
-
 tier1_mcp() {
   command -v claude >/dev/null 2>&1 || return 0
   local base="$DOTFILES/claude_mcp.json"
@@ -197,7 +203,17 @@ tier1_mcp() {
   local name
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    do_or_echo "deregister MCP server '$name'" claude mcp remove "$name" --scope user
+    if [ "$DRY_RUN" = 1 ]; then
+      ui_detail "[dry-run] would deregister MCP server '$name' (if registered)"
+    elif claude mcp remove "$name" --scope user >/dev/null 2>&1; then
+      ui_active "deregister MCP server '$name'"
+      rec_removed "deregister MCP server '$name'"
+    else
+      # `claude mcp remove` exits non-zero when the server isn't registered — the common
+      # re-run or install-skipped case. That IS the desired end state, so report it as a
+      # no-op (left), not a failure; mirrors install.sh's own `|| true` on this call.
+      rec_left "MCP server '$name' not registered (nothing to remove)"
+    fi
   done < <(un_mcp_names "$base" "$HOME/.config/dotfiles/claude_mcp.local.json")
 }
 
@@ -216,6 +232,20 @@ tier1_iterm2() {
 }
 
 # --- Tier 2: offer to remove the created/enumerable artifacts (default no) ---------
+tier2_tpm() {
+  local tpm_dir="$HOME/.config/tmux/plugins/tpm"
+  [ -d "$tpm_dir" ] || return 0
+  ui_step "TPM (tmux plugin manager)"
+  # install.sh clones TPM to the standard path but REUSES one that's already there, so a
+  # present dir doesn't prove we put it there — offer rather than auto-remove.
+  if offer "Remove the TPM clone at $tpm_dir? (skip if you had TPM before these dotfiles)"; then
+    do_or_echo "remove TPM clone ($tpm_dir)" rm -rf "$tpm_dir"
+  else
+    rec_declined "TPM left in place ($tpm_dir)"
+  fi
+  rec_left "tmux plugins under ~/.config/tmux/plugins/ (installed by TPM; left in place)"
+}
+
 tier2_uv_tools() {
   command -v uv >/dev/null 2>&1 || return 0
   local list="$DOTFILES/uv_tools.txt"
@@ -244,14 +274,19 @@ tier2_ollama_models() {
     return 0
   }
   # The model names come from the same shared fragment install.sh provisions from, so we
-  # always offer to remove exactly what it pulls — no drift if a model tag changes.
+  # always offer to remove exactly what it pulls — no drift if a model tag changes. Guard the
+  # source: if it fails the vars are unset, and dereferencing them under set -u would abort
+  # the whole run before the summary prints — so degrade to a manual hint instead.
   # shellcheck source=scripts/ollama_models.sh disable=SC1091
-  . "$DOTFILES/scripts/ollama_models.sh"
+  if ! . "$DOTFILES/scripts/ollama_models.sh" 2>/dev/null || [ -z "${OLLAMA_MODEL:-}" ]; then
+    rec_manual "couldn't load the model list; remove models by hand: ollama list, then ollama rm <model>"
+    return 0
+  fi
   local present model
   present="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')"
   ui_step "Ollama models provisioned by this repo"
   for model in "$OLLAMA_MODEL" "$OLLAMA_MLX_MODEL"; do
-    printf '%s\n' "$present" | grep -qx "$model" || continue
+    printf '%s\n' "$present" | grep -qxF "$model" || continue
     if offer "Remove Ollama model $model?"; then
       do_or_echo "ollama rm $model" ollama rm "$model"
     else
@@ -346,6 +381,7 @@ print_summary() {
   _print_section "Removed:" "$C_GREEN" ${REMOVED[@]+"${REMOVED[@]}"}
   _print_section "You declined:" "$C_DIM" ${DECLINED[@]+"${DECLINED[@]}"}
   _print_section "Left in place:" "$C_YELLOW" ${LEFT[@]+"${LEFT[@]}"}
+  _print_section "Failed — finish by hand:" "$C_RED" ${FAILED[@]+"${FAILED[@]}"}
   _print_section "To finish manually:" "$C_BOLD" ${MANUAL[@]+"${MANUAL[@]}"}
   printf '\n'
 }
@@ -395,9 +431,9 @@ main() {
   proceed_gate
 
   tier1_unstow
-  tier1_tpm
   tier1_mcp
   tier1_iterm2
+  tier2_tpm
   tier2_uv_tools
   tier2_ollama_models
   tier3_login_shell

@@ -130,9 +130,9 @@ only inside work repos:
 
 `~/dotfiles/uninstall.sh` is the safe reverse of the install. Preview it with
 `--dry-run` (it changes nothing), then run it for real. It removes only what the
-installer demonstrably owns (stow symlinks, the TPM clone, MCP registrations, the
-iTerm2 pointer), _offers_ to remove created artifacts (uv tools, Ollama models),
-_asks_ before lossy system changes (login shell, the Touch-ID PAM file), and never
+installer demonstrably owns (stow symlinks, MCP registrations, the iTerm2 pointer),
+_offers_ to remove things it can't prove it owns (the TPM clone, uv tools, Ollama
+models), _asks_ before lossy system changes (login shell, the Touch-ID PAM file), and never
 deletes your machine-local data — it lists what it leaves behind with copy-paste
 commands to finish by hand.
 
