@@ -891,7 +891,10 @@ TPM_DIR="$HOME/.config/tmux/plugins/tpm"
 # rm -rf before each clone attempt so a retry after a partial clone can't fail on a
 # non-empty target directory.
 _clone_tpm() { rm -rf "$TPM_DIR" && git clone --depth 1 https://github.com/tmux-plugins/tpm "$TPM_DIR"; }
-if [ ! -d "$TPM_DIR" ]; then
+# Key the (re)clone off the actual entrypoint, not just the directory: a previous run could
+# have left a partial/corrupt checkout (dir present but bin/install_plugins missing), which a
+# bare `-d` test would skip — leaving plugins silently uninstalled. _clone_tpm rm -rf's first.
+if [ ! -x "$TPM_DIR/bin/install_plugins" ]; then
   ui_active "installing TPM (tmux plugin manager)"
   retry "TPM clone" 3 _clone_tpm ||
     ui_warn "TPM clone failed (network?) — tmux plugins not installed; re-run install.sh to retry"
