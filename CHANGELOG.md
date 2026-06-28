@@ -7,6 +7,13 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.12.0](https://github.com/nivintw/dotfiles/compare/v1.11.1...v1.12.0) (2026-06-28)
+
+
+### Features
+
+* **install:** Add Python orchestrator skeleton (registry, Typer CLI, Rich UI) ([39f57be](https://github.com/nivintw/dotfiles/commit/39f57be287afca44abc96fc048e588d1bcb82ef6)), closes [#53](https://github.com/nivintw/dotfiles/issues/53)
+
 ## [1.11.1](https://github.com/nivintw/dotfiles/compare/v1.11.0...v1.11.1) (2026-06-28)
 
 
