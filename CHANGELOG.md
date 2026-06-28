@@ -7,6 +7,22 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.14.0](https://github.com/nivintw/dotfiles/compare/v1.13.0...v1.14.0) (2026-06-28)
+
+
+### Features
+
+* Add scoped, idempotent uninstall.sh ([c24161b](https://github.com/nivintw/dotfiles/commit/c24161b871245cd9e2ba60a2efa4cf85fd10ba41)), closes [#36](https://github.com/nivintw/dotfiles/issues/36)
+* **install:** Provision gated Ollama MLX model for Claude offload ([8392218](https://github.com/nivintw/dotfiles/commit/83922185d5de3f37e72d45ae7f5035dcaf31e249)), closes [#57](https://github.com/nivintw/dotfiles/issues/57)
+
+
+### Bug Fixes
+
+* Harden install non-fatality and uninstall failure honesty ([5ddd8a0](https://github.com/nivintw/dotfiles/commit/5ddd8a002898092905c50ef2ee3e981c0feecf16))
+* **install:** Gate the MLX model pull on macOS 13+ too ([3f642bf](https://github.com/nivintw/dotfiles/commit/3f642bf5e8c0c566db12f87c37703a353364b602))
+* **uninstall:** Correct --help to list TPM under OFFERS, not auto-removed ([d35548c](https://github.com/nivintw/dotfiles/commit/d35548c598edf6e1b2de151c8ee5a7901cb7049f))
+* **uninstall:** Shell-escape the retry-by-hand hint in failed-step records ([15cd848](https://github.com/nivintw/dotfiles/commit/15cd848a5176495c1f0ee4647c73fa78ec21e0e6))
+
 ## [1.13.0](https://github.com/nivintw/dotfiles/compare/v1.12.1...v1.13.0) (2026-06-28)
 
 
