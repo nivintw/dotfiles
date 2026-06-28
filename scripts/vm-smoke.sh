@@ -217,12 +217,17 @@ ASK
     log "$label: launching install.sh --no-bundles --core (detached) in the VM"
     # --core: CLI formulae only — skip the heavy GUI app/font casks and the Ollama model
     # pull, which a headless smoke VM doesn't need and which would dominate the run time.
+    # Run the preconditions (cd) in the FOREGROUND so a launch failure propagates as a
+    # non-zero SSH exit and fails fast here — rather than only surfacing later as an rc-marker
+    # timeout. Only the install itself is backgrounded.
     # shellcheck disable=SC2016
-    ssh_vm 'cd "$HOME/dotfiles" \
-      && rm -f .install.rc .install.log \
-      && nohup sh -c "./install.sh --no-bundles --core >.install.log 2>&1; echo \$? >.install.rc" \
-           >/dev/null 2>&1 < /dev/null & \
-      exit 0'
+    if ! ssh_vm 'cd "$HOME/dotfiles" || exit 1
+      rm -f .install.rc .install.log
+      nohup sh -c "./install.sh --no-bundles --core >.install.log 2>&1; echo \$? >.install.rc" >/dev/null 2>&1 </dev/null &
+      exit 0'; then
+      log "$label: failed to launch install.sh in the VM"
+      return 1
+    fi
     log "$label: waiting for install to finish (timeout ${INSTALL_TIMEOUT}s)"
     # shellcheck disable=SC2016
     if ! wait_for "install to finish" "$INSTALL_TIMEOUT" 15 \

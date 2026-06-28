@@ -31,7 +31,9 @@
 # harness path (which sources only verify_install.sh) still finds it. Defines a function
 # only — no other side effect.
 # shellcheck source=brewfile_core.sh disable=SC1091
-command -v brewfile_core >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/brewfile_core.sh"
+# `declare -F` (a defined function), not `command -v` (which would also match an unrelated
+# brewfile_core executable on PATH and then skip sourcing the real helper).
+declare -F brewfile_core >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/brewfile_core.sh"
 
 # --- pure predicates (no system state; unit-tested) -------------------------
 
@@ -127,10 +129,10 @@ verify_install() {
       brewfile_core "$dotfiles/Brewfile" >"$core_bf"
       if brew bundle check --file="$core_bf" >/dev/null 2>&1; then
         ok "Homebrew core (CLI formulae) packages all installed"
+        rm -f "$core_bf" # only on success — keep it on failure so the re-check command below works
       else
-        bad "Homebrew core packages missing — run: DOTFILES_CORE=1 brew bundle check --verbose --file=$core_bf"
+        bad "Homebrew core packages missing — re-check: brew bundle check --verbose --file=$core_bf (kept for inspection)"
       fi
-      rm -f "$core_bf"
     elif brew bundle check --file="$dotfiles/Brewfile" >/dev/null 2>&1; then
       ok "Homebrew baseline packages all installed"
     else
