@@ -102,12 +102,12 @@ repos:
     hooks:
       - id: zizmor
         name: "🔒 ci · Audit workflows for security issues (zizmor)"
-        # --offline keeps the gate deterministic and token-free: the AST audits (template
-        # injection, excessive permissions, artipacked, …) run without network, locally and
-        # in CI. The network audits (known-vulnerable-actions, ref-confusion) need a GH
-        # token and are NOT run anywhere yet — add a separate online `zizmor` step with a
-        # token if you want them. Overriding args drops the upstream default, so re-add
-        # --no-progress.
+        # --offline keeps THIS hook deterministic and token-free: the AST audits (template
+        # injection, excessive permissions, artipacked, …) run offline everywhere. The
+        # network audits (known-vulnerable-actions, ref-confusion) need a GH token, so they
+        # don't run in this hook — CI runs the FULL zizmor audit (online) as a dedicated
+        # step that SKIPs this hook (see ci.yml). Overriding args drops the upstream
+        # default, so re-add --no-progress.
         args: ["--no-progress", "--offline"]
 
   # ------------------------------- 🔒 Security Tools -------------------------------- #
@@ -138,14 +138,14 @@ repos:
         pass_filenames: false
 
   # --------------------------- ⚖️ Licensing & Compliance ---------------------------- #
-  # hawkeye adds/maintains the SPDX headers (config: licenserc.toml); reuse verifies
+  # hawkeye adds/maintains the SPDX headers (config: .config/licenserc.toml); reuse verifies
   # overall REUSE compliance (headers + REUSE.toml). hawkeye is local/system because
   # installing it via prek compiles from source (slow); it's in the Brewfile.
   - repo: local
     hooks:
       - id: hawkeye-format
         name: "⚖️ license · Add/format SPDX headers with hawkeye"
-        entry: hawkeye format
+        entry: hawkeye format --config .config/licenserc.toml
         language: system
         pass_filenames: false
         require_serial: true
@@ -166,10 +166,8 @@ repos:
         # CHECK-ONLY: the hook default is [--write-changes, --force-exclude] — it
         # auto-corrects and exits 0, violating this repo's never-auto-write typos
         # policy (home/.typos.toml header). Drop --write-changes; keep --force-exclude.
-        args: ["--force-exclude"]
-        # Directory scan (skips hidden paths, so home/.config/git/ignore — under the
-        # hidden .config/ — isn't scanned). Config is _typos.toml (mirrors
-        # home/.typos.toml) for CI parity.
+        # Config is .config/typos.toml (mirrors home/.typos.toml) for CI parity.
+        args: ["--force-exclude", "--config", ".config/typos.toml"]
         pass_filenames: false
 
   # -------------------------------- 🐍 Python Tools --------------------------------- #
@@ -189,13 +187,23 @@ repos:
         name: "🐍 python · Validate pyproject.toml"
         additional_dependencies: ["validate-pyproject-schema-store[all]"]
 
-  # -------------------------------- 📝 Markdown / TOML ------------------------------ #
+  # --------------------------------- 📐 YAML ---------------------------------------- #
+  # check-yaml (above) only checks that YAML *parses*; yamllint enforces style — indentation,
+  # key duplicates, truthy values, … (config: .config/yamllint.yaml). pip-backed → self-bootstraps.
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        name: "📐 yaml · Lint YAML style with yamllint"
+        args: ["-c", ".config/yamllint.yaml"]
+
+  # -------------------------------- 📝 Markdown ------------------------------------- #
   - repo: https://github.com/rvben/rumdl-pre-commit
     rev: v0.2.17
     hooks:
       - id: rumdl
         name: "📝 markdown · Lint/format with rumdl"
-        args: [--fix] # config in .rumdl.toml (MD013 off, fenced code blocks)
+        args: [--fix, --config, .config/rumdl.toml] # MD013 off, fenced code blocks
 
   # ----------------------------- ⚙️ Environment Management -------------------------- #
   # Keep uv.lock in sync with pyproject.toml so CI's `uv sync` never drifts.

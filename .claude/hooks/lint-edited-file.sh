@@ -14,7 +14,7 @@ f=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null ||
 # Lint-on-save is project-scoped: only act on files inside the repo. Files edited
 # elsewhere (e.g. Claude's auto-memory under ~/.claude/projects/.../memory) aren't
 # project content, and the linters resolve their config from the file's own tree —
-# not this repo's .rumdl.toml — so checking them just surfaces rules the project
+# not this repo's .config/rumdl.toml — so checking them just surfaces rules the project
 # has turned off (MD013, etc.). Skip anything not under the project root. Only
 # enforce this when CLAUDE_PROJECT_DIR is known; if it's unset (a bare harness)
 # fall through to the original behavior rather than hard-failing.

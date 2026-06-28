@@ -6,7 +6,7 @@
 # Discovery: typos walks UP the directory tree from the files it checks and
 # uses the first config it finds. Since this lives at ~/.typos.toml (stowed),
 # it's the default for every repo under $HOME that does NOT ship its own typos
-# config. A repo-local _typos.toml shadows this entirely — project rules should
+# config. A repo-local .config/typos.toml shadows this entirely — project rules should
 # win — and `typos --isolated` ignores ancestors (including this) altogether.
 #
 # Philosophy: treat typos as a CHECK-ONLY signal. Do NOT wire `--write-changes`

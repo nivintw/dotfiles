@@ -10,7 +10,7 @@
 # additions use the untracked ~/.config/dotfiles/Brewfile.local instead.
 #
 # The two-line SPDX header above is inserted and maintained by hawkeye via the
-# `brewfile` extension mapping in licenserc.toml — no need to hand-write it.
+# `brewfile` extension mapping in .config/licenserc.toml — no need to hand-write it.
 
 # --- Media & gaming --------------------------------------------------------
 cask "discord"               # Discord

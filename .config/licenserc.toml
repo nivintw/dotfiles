@@ -20,6 +20,8 @@ SPDX-License-Identifier: {{ props["spdxLicenseIdentifier"] }}
 # Jekyll/Hugo), so markdown stays in hawkeye's default excludes (a line-1 SPDX comment
 # would break the frontmatter) and is licensed via REUSE.toml instead. Note hawkeye
 # can't re-exclude a file once an include (`!`) matches it, so there's no `!**/*.md`.
+# For the same reason the markdown-header mapping (additionalHeaders + MARKDOWN_CUSTOM)
+# is omitted below — it would never fire — and markdown-header.toml isn't shipped.
 excludes = [
   "LICENSE",
   "LICENSES/**",
@@ -40,11 +42,6 @@ excludes = [
   "docs/assets/asciinema-player.*",
 ]
 
-# NB: markdown is NOT headered inline by hawkeye here — this project has frontmatter-first
-# markdown, so .md stays in hawkeye's default excludes and is licensed via REUSE.toml
-# instead (see the comment on `excludes` above). Hence no `additionalHeaders`/MARKDOWN_CUSTOM
-# mapping: they'd never fire. (markdown-header.toml is unused as a result.)
-
 # '#'-comment files hawkeye doesn't map by default: fish/bats/uv_tools.txt and the
 # Brewfile.d/*.brewfile bundles by extension, plus dotfiles and the baseline Brewfile
 # (Ruby DSL) matched by exact filename (no extension), and the git template post-checkout
@@ -54,6 +51,7 @@ extensions = ["txt", "fish", "bats", "brewfile"]
 filenames = [
   ".gitignore",
   ".envrc",
+  ".dockerignore",
   "Brewfile",
   ".gitconfig",
   "ignore",

@@ -4,7 +4,7 @@
 version = 1
 
 # Files that can't carry an SPDX header (no comment syntax / generated). Everything
-# else gets a real header from hawkeye (see licenserc.toml).
+# else gets a real header from hawkeye (see .config/licenserc.toml).
 # Markdown is included here (not headered inline by hawkeye) because this project has
 # frontmatter-first markdown where a line-1 SPDX comment would break the YAML.
 # The .claude/ tree is annotated wholesale (SPDX headers break Claude Code's frontmatter
@@ -28,7 +28,7 @@ SPDX-License-Identifier = "MIT"
 
 # Vendored, unmodified third-party — the asciinema terminal-cast player, fetched from
 # npm (asciinema-player). Apache-2.0, © Marcin Kulik & contributors. Excluded from
-# hawkeye (licenserc.toml) so it isn't restamped with the repo's MIT header.
+# hawkeye (.config/licenserc.toml) so it isn't restamped with the repo's MIT header.
 [[annotations]]
 path = [
   "docs/assets/asciinema-player.min.js",

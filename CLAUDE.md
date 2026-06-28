@@ -61,7 +61,7 @@ bats tests/            # fish/shell behavior (needs bats-core + fish, both in th
   parse a leading emoji, so don't prepend one. (The joyful emoji labels live on the
   prek hooks, not in commit messages.)
 - **Releases:** release-please drives versioning and `CHANGELOG.md` (manifest mode). The
-  version-of-record is `.release-please-manifest.json` + the `vX.Y.Z` git tags — **not**
+  version-of-record is `.config/.release-please-manifest.json` + the `vX.Y.Z` git tags — **not**
   `pyproject.toml` (its `[project].version` is decorative under `package = false`, so it's
   deliberately not mirrored; that also stops `uv.lock` from drifting on a release). On push
   to `main`, release-please maintains a Release PR (CHANGELOG + manifest) that auto-merges
