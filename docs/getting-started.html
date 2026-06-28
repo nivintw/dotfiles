@@ -197,6 +197,22 @@ brew bundle install --file=~/dotfiles/Brewfile.d/personal.brewfile</code></pre>
           <div><h3>New opt-in bundle</h3><p>Drop a <code>Brewfile.d/&lt;name&gt;.brewfile</code> — <a href="https://github.com/korandoru/hawkeye" rel="noopener">hawkeye</a> stamps its SPDX header automatically — then select it on machines that want it.</p></div>
         </div>
       </section>
+
+      <section class="wrap" id="uninstalling">
+        <h2><span class="hash">#</span>Uninstalling</h2>
+        <div class="feature">
+          <span class="feature__mark">−</span>
+          <div><h3>Preview first</h3><p><code>~/dotfiles/uninstall.sh --dry-run</code> prints exactly what it would remove and what it would leave, changing nothing. Drop <code>--dry-run</code> to do it (one confirmation), or add <code>--yes</code> to skip that prompt — the per-item offers still default to the safe choice, so <code>--yes</code> never removes anything you weren't asked about.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">−</span>
+          <div><h3>Reverses only what it owns</h3><p>It auto-removes the provably-ours, reversible setup — <a href="https://www.gnu.org/software/stow/" rel="noopener">stow</a> symlinks, the TPM clone, the Claude MCP registrations, the iTerm2 prefs pointer — then <em>offers</em> (default no) to remove created artifacts like the uv tools and Ollama models, and <em>asks</em> before lossy system changes: your login shell, and <code>/etc/pam.d/sudo_local</code> (removed only when its contents are the ones the installer wrote, so it never deletes a file it didn't author).</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">−</span>
+          <div><h3>Your data is never deleted</h3><p>Machine-local data — <code>~/.config/dotfiles/</code> overlays, <code>*.pre-stow.bak</code> backups, the generated <code>~/.claude/settings.json</code> — and genuinely irreversible setup (<code>macos.sh</code> defaults, the Dock, Homebrew itself) is left in place and listed in a closing summary, each with a copy-paste command to finish by hand if you want to.</p></div>
+        </div>
+      </section>
     </main>
 
     <footer class="site-footer">
