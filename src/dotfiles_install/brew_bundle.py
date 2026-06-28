@@ -50,11 +50,6 @@ def _selection_file() -> Path:
     return _config_dir() / "bundles"
 
 
-def _legacy_selection_file() -> Path:
-    """Return the pre-rename selection file (``~/.config/dotfiles/brewfiles``)."""
-    return _config_dir() / "brewfiles"
-
-
 def _brewfile_local() -> Path:
     """Return the machine-private ``Brewfile.local`` path (``~/.config/dotfiles``)."""
     return _config_dir() / "Brewfile.local"
@@ -155,7 +150,7 @@ def _available_bundles() -> list[str]:
 
 def _migrate_legacy_selection(ctx: InstallContext, sel: Path) -> None:
     """Adopt a legacy ``brewfiles`` selection as ``bundles`` once, if ``bundles`` is absent."""
-    legacy = _legacy_selection_file()
+    legacy = sel.with_name("brewfiles")  # the pre-rename sibling of the bundles file
     if not sel.exists() and legacy.exists():
         shutil.copyfile(legacy, sel)
         ctx.ui.detail("migrated selection from legacy ~/.config/dotfiles/brewfiles")
