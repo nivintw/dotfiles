@@ -33,19 +33,22 @@ UNTESTED_FUNCTIONS = {
     " pubkey's bats tests",
 }
 
-# Shell scripts without a behavior test. These mutate the host (stow, chsh, brew,
-# macOS defaults, the Dock), so the realistic safety net is shellcheck + the
-# consistency tests + a manual run on a throwaway VM, not a headless harness.
+# Shell scripts without a UNIT (bats) test. These mutate the host (stow, chsh, brew, macOS
+# defaults, the Dock), so the realistic safety net is shellcheck + the consistency tests +
+# the opt-in end-to-end VM smoke harness (scripts/vm-smoke.sh / tests/test_vm_smoke.py),
+# which boots a clean Tart VM and runs install.sh — and with it macos.sh and dock.sh — from
+# scratch. That harness is the behavior coverage for these; they stay listed here because the
+# coverage gate looks for a bats reference, which the heavy opt-in harness deliberately isn't.
 UNTESTED_SCRIPTS = {
     "install.sh": "orchestrates host-mutating steps (stow/chsh/brew/firewall/defaults). The"
     " bundle round-trip and fzf pre-seed logic is factored into scripts/bundle_select.sh and"
     " tested there; the CLI arg parsing (--help/--bundle/--no-bundles/--keep-bundles) and the"
     " interactive"
     " SELECTION wiring around it (legacy migration, discovery, non-interactive fallback) are"
-    " not yet extracted and ride on shellcheck + manual VM runs; the rest is host-mutating"
-    " glue guarded by shellcheck + the consistency tests",
-    "macos.sh": "writes macOS defaults; covered by shellcheck + manual VM runs",
-    "dock.sh": "rebuilds the Dock via dockutil; covered by shellcheck + manual VM runs",
+    " not yet extracted and ride on shellcheck; the rest is host-mutating glue exercised"
+    " end-to-end by the opt-in VM smoke harness and guarded by shellcheck + the consistency tests",
+    "macos.sh": "writes macOS defaults; covered by shellcheck + the opt-in VM smoke harness",
+    "dock.sh": "rebuilds the Dock via dockutil; covered by shellcheck + the VM smoke harness",
 }
 
 

@@ -19,6 +19,9 @@ bats tests/          # fish behavior  (needs bats-core + fish, both in the Brewf
 uv run pytest        # config validity (uv handles the Python env from pyproject.toml)
 ```
 
+The heavyweight end-to-end VM smoke test is **opt-in** and never part of the above — see
+[End-to-end VM smoke test](#end-to-end-vm-smoke-test-opt-in) below.
+
 ## bats — fish behavior
 
 - **`git_prune_local.bats`** — the branch-pruning logic, the one function where a
@@ -78,3 +81,44 @@ This layers on top of the checks that already sweep *every* file: `fish -n`
 parses each function, `shellcheck` lints each script, and `test_data_files.py`
 parses each config. Inventory coverage answers the orthogonal question — does
 each thing that can break have *something* watching it?
+
+## End-to-end VM smoke test (opt-in)
+
+`scripts/vm-smoke.sh` boots a clean [Tart](https://tart.run) VM, ships the repo in with
+`git archive HEAD`, runs `install.sh --core` end-to-end inside it from scratch (by default
+**twice**, to prove idempotency), and gates on `verify_install`'s `OK`/`BAD` stream — the
+one thing the unit/config suites can't do: prove the installer works on a genuinely clean
+machine. It tolerates only the Touch-ID-no-sensor `BAD` (a VM has no biometric sensor); the
+application firewall and every other check stay strict, and a `VERIFY_DONE` sentinel makes a
+truncated SSH stream fail closed rather than read as a pass.
+
+It exercises the **`--core` profile** — CLI formulae only, with the GUI app/font casks and
+the Ollama model pull skipped — so a smoke run isn't dominated by multi-GB GUI cask
+downloads a headless VM doesn't need; `verify_install` runs core-aware (`DOTFILES_CORE=1`) to
+match. The full-baseline install (casks included) is still what a real machine runs and what
+the unit/config tests cover.
+
+It is **heavy and opt-in**: the first run pulls a multi-GB macOS base image and a full
+install takes many minutes, so it never runs in the default `uv run pytest`.
+
+**Prerequisite:** `tart` (in the Brewfile — `brew bundle` installs it) on an Apple Silicon
+host. SSH into the guest authenticates via `SSH_ASKPASS`, so no password ever lands in the
+process list.
+
+```bash
+# Directly:
+scripts/vm-smoke.sh                 # clone -> boot -> install x2 -> verify -> teardown
+scripts/vm-smoke.sh --once          # install only once (skip the idempotency re-run)
+scripts/vm-smoke.sh --negative      # self-test: break the firewall, assert the gate fails
+scripts/vm-smoke.sh --keep          # leave the VM in place to debug a failure
+scripts/vm-smoke.sh --image REF     # clone a different base image
+
+# Via pytest (opt-in gate — only runs with the env var set and tart present):
+DOTFILES_VM_SMOKE=1 uv run pytest -m integration
+```
+
+`tests/vm_smoke.bats` unit-tests the harness's arg-parsing, preflight, and the pure
+verify-gate helpers (`is_tolerated` / `evaluate_stream`) without booting a VM — the script is
+sourceable for exactly this. The boot-and-install path is covered by the opt-in pytest above.
+It targets the current bash installer today and is the verification gate for the Python
+installer rewrite (#53).

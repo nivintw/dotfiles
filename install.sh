@@ -63,6 +63,23 @@ ui_warn() {
 ui_err() { printf '%s%s%s %s\n' "$C_RED" "$G_ERR" "$C_RESET" "$1" >&2; }
 ui_detail() { printf '   %s%s%s\n' "$C_DIM" "$1" "$C_RESET"; }
 
+# retry DESC MAX CMD... — run CMD, retrying up to MAX times with a short backoff. Returns 0
+# on the first success, non-zero if every attempt fails. For network bootstraps (fisher,
+# TPM/git clones, curl|bash installers, package downloads) where a transient blip shouldn't
+# abort an otherwise idempotent install. Callers make it non-fatal with `|| ui_warn ...` so
+# a persistent failure degrades to a warning + re-run hint instead of killing the bootstrap.
+retry() {
+  local desc="$1" max="$2" n=1
+  shift 2
+  while :; do
+    if "$@"; then return 0; fi
+    [ "$n" -ge "$max" ] && return 1
+    ui_detail "$desc failed (attempt $n/$max) — retrying in 3s"
+    n=$((n + 1))
+    sleep 3
+  done
+}
+
 # --- Opt-in bundle discovery + CLI args -------------------------------------
 # Discover the available opt-in bundles (Brewfile.d/<name>.brewfile, basename
 # minus the suffix) up front because both --help (lists them) and --bundle
@@ -91,6 +108,9 @@ Options:
   --no-bundles     Opt into no bundles (baseline only); bypass the picker.
   --keep-bundles   Keep the saved selection as-is; skip the picker without
                    rewriting it. Can't be combined with --bundle/--no-bundles.
+  --core           Core profile: install CLI formulae only — skip the GUI app and
+                   font casks (and, with them, the Ollama app + its model pull). For
+                   headless/minimal installs and the VM smoke harness.
   -h, --help       Show this help and exit.
 
 Opt-in Brewfile bundles (Brewfile.d/<name>.brewfile):
@@ -134,11 +154,19 @@ add_requested_bundle() {
 requested_bundles=()
 bundles_from_flags=0
 keep_bundles=0
+# Core profile. Exported so it reaches _brew_bundle and the verify_install call at the end of
+# this run (and any sub-shell). The Ollama step isn't flag-driven: --core skips the ollama-app
+# cask, so its `command -v ollama` guard self-skips — a transitive effect, not a DOTFILES_CORE read.
+export DOTFILES_CORE=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
   -h | --help)
     usage
     exit 0
+    ;;
+  --core)
+    DOTFILES_CORE=1
+    shift
     ;;
   --no-bundles)
     bundles_from_flags=1
@@ -269,10 +297,20 @@ auth       sufficient     pam_tid.so"
 
 # --- 0. Bootstrap toolchain (Homebrew + uv) ---------------------------------
 # Everything else (fish, stow, the rest) comes from brew bundle below.
+# These two are network curl|bash bootstraps like the later fisher/Claude steps, so they get
+# the same retry treatment — a transient blip on the very first network op shouldn't kill the
+# whole install. Capture the installer script first (so a failed download actually fails the
+# attempt and triggers a retry — piping curl straight into a shell hides a fetch failure as an
+# empty no-op), then run it. A PERSISTENT failure still aborts via the command -v check below.
 if ! command -v brew >/dev/null 2>&1; then
   ui_step "Installing Homebrew"
-  NONINTERACTIVE=1 /bin/bash -c \
-    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  _install_brew() {
+    local script
+    script="$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || return 1
+    [ -n "$script" ] || return 1
+    NONINTERACTIVE=1 /bin/bash -c "$script"
+  }
+  retry "Homebrew install" 3 _install_brew || true
   # Put brew on PATH for the rest of this script (Apple Silicon vs Intel).
   for brew_bin in /opt/homebrew/bin/brew /usr/local/bin/brew; do
     [ -x "$brew_bin" ] && eval "$("$brew_bin" shellenv)" && break
@@ -285,7 +323,13 @@ command -v brew >/dev/null 2>&1 || {
 
 if ! command -v uv >/dev/null 2>&1; then
   ui_step "Installing uv"
-  curl -LsSf https://astral.sh/uv/install.sh | sh
+  _install_uv() {
+    local script
+    script="$(curl -LsSf https://astral.sh/uv/install.sh)" || return 1
+    [ -n "$script" ] || return 1
+    printf '%s\n' "$script" | sh
+  }
+  retry "uv install" 3 _install_uv || true
   # uv installs to ~/.local/bin (newer) or ~/.cargo/bin (older); cover both.
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
@@ -295,6 +339,50 @@ command -v uv >/dev/null 2>&1 || {
 }
 
 # --- 1. Homebrew formulae + casks -------------------------------------------
+
+# Homebrew refuses to load a formula/cask from an UNTRUSTED third-party tap, which aborts
+# `brew bundle` outright on a clean machine (e.g. terraform-linters/tap for tflint,
+# cirruslabs/cli for tart). So before bundling from any Brewfile, trust the taps it declares.
+# `brew trust` changes Homebrew's trusted-tap set, so this is explicit (not silent) and only
+# attempted where the subcommand exists — older Homebrew has no trust gate. Non-fatal: a
+# failed trust is a warning; the closing `brew bundle check` still reports anything missing.
+# brewfile_taps()/brewfile_core() are the pure, unit-tested Brewfile parsers
+# (scripts/brewfile_taps.sh, scripts/brewfile_core.sh).
+# shellcheck source=/dev/null
+. "$DOTFILES/scripts/brewfile_taps.sh"
+# shellcheck source=/dev/null
+. "$DOTFILES/scripts/brewfile_core.sh"
+_trust_brewfile_taps() {
+  brew commands 2>/dev/null | grep -qx trust || return 0
+  while IFS= read -r _tap; do
+    [ -n "$_tap" ] || continue
+    brew tap "$_tap" >/dev/null 2>&1 || true
+    if brew trust "$_tap" >/dev/null 2>&1; then
+      ui_detail "trusted tap: $_tap"
+    else
+      ui_warn "could not trust tap $_tap — its packages may fail to install (retry: brew trust $_tap)"
+    fi
+  done <<EOF
+$(brewfile_taps "$1")
+EOF
+}
+# Every bundle install goes through here: trust the file's declared taps, then bundle. Under
+# the --core profile (DOTFILES_CORE=1) bundle a casks-stripped copy so only CLI formulae land.
+_brew_bundle() {
+  _trust_brewfile_taps "$1"
+  if [ "${DOTFILES_CORE:-0}" != "1" ]; then
+    brew bundle install --file="$1"
+    return
+  fi
+  local core_bf rc
+  core_bf="$(mktemp -t brewfile-core)"
+  brewfile_core "$1" >"$core_bf"
+  brew bundle install --file="$core_bf"
+  rc=$?
+  rm -f "$core_bf"
+  return "$rc"
+}
+
 # Acquire sudo ONCE and keep it warm for the bundle + privileged block, instead of
 # the old string of typed-password prompts scattered through brew bundle. Enabling
 # Touch ID up front means every prompt after the first is a fingerprint tap — so a
@@ -311,7 +399,7 @@ enable_touch_id_sudo # pam_tid now; the pam_reattach (tmux) line is added in ste
 # (the rest is idempotent and re-runnable). The closing summary runs `brew bundle
 # check` and lists precisely what's still missing, so you don't scroll back.
 ui_step "Homebrew packages (brew bundle)"
-if brew bundle install --file="$DOTFILES/Brewfile"; then
+if _brew_bundle "$DOTFILES/Brewfile"; then
   ui_ok "Homebrew packages installed"
 else
   ui_warn "some baseline Homebrew packages failed to install (see output above) — the summary lists what's still missing; re-run install.sh to retry"
@@ -422,7 +510,7 @@ while IFS= read -r bundle; do
     ui_active "installing opt-in bundle: $bundle"
     # Non-fatal (as with the baseline above): the summary's brew bundle check
     # surfaces anything that didn't land.
-    brew bundle install --file="$bundle_file" ||
+    _brew_bundle "$bundle_file" ||
       ui_warn "opt-in bundle '$bundle' had install failures (see output above) — the summary lists what's missing"
     installed_bundles=(${installed_bundles[@]+"${installed_bundles[@]}"} "$bundle")
   else
@@ -441,7 +529,7 @@ fi
 brew_local="$HOME/.config/dotfiles/Brewfile.local"
 if [ -f "$brew_local" ]; then
   ui_step "Machine-private Brewfile additions (Brewfile.local)"
-  if brew bundle install --file="$brew_local"; then
+  if _brew_bundle "$brew_local"; then
     ui_ok "machine-private additions installed"
   else
     ui_warn "some Brewfile.local packages failed to install (see output above) — the summary lists what's missing"
@@ -596,15 +684,23 @@ fi
 # the control file, README/LICENSE, etc.), so it never false-positives on files
 # stow wouldn't link anyway. This repo expects to own its paths in a clean $HOME;
 # the managed_files above are the known auto-generated exceptions, already cleared.
+#
+# --no-folding is essential: without it, stow "tree-folds" a target directory that doesn't
+# yet exist into a SINGLE symlink (e.g. on a fresh machine ~/.claude -> repo/home/.claude).
+# That breaks two things this repo relies on: per-file symlinks (so ~/.claude/CLAUDE.md is a
+# real symlink, not a file reached through a folded dir), and — worse — it would route a
+# GENERATED real file like ~/.claude/settings.json INTO the repo through the folded dir.
+# --no-folding makes stow always create real directories and link files individually, so the
+# result is identical whether or not the target dir already existed.
 ui_active "checking for conflicts (dry run)"
-if ! stow_plan="$(stow -n -v --dir="$DOTFILES" --target="$HOME" home 2>&1)"; then
+if ! stow_plan="$(stow --no-folding -n -v --dir="$DOTFILES" --target="$HOME" home 2>&1)"; then
   ui_err "these files already exist in \$HOME and would be replaced by this repo's versions, so aborting."
   ui_detail "Back them up and/or merge their contents into the repo, then re-run install.sh:"
   printf '%s\n' "$stow_plan" | grep -E 'cannot stow' >&2 || printf '%s\n' "$stow_plan" >&2
   exit 1
 fi
 
-stow --dir="$DOTFILES" --target="$HOME" home
+stow --no-folding --dir="$DOTFILES" --target="$HOME" home
 ui_ok "dotfiles symlinked (stow, 0 conflicts)"
 
 # --- 4. Machine-local overlay files -----------------------------------------
@@ -773,25 +869,40 @@ ui_ok "overlay files ready"
 # --- 5. Fish plugins (fisher) -----------------------------------------------
 # fisher update installs everything listed in the now-symlinked fish_plugins.
 ui_step "Fish plugins (fisher)"
-fish -c '
-  if not functions -q fisher
-    curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source
-    fisher install jorgebucaran/fisher
-  end
-  fisher update
-'
-ui_ok "fish plugins installed"
+_install_fisher() {
+  fish -c '
+    if not functions -q fisher
+      curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source
+      fisher install jorgebucaran/fisher
+    end
+    fisher update
+  '
+}
+if retry "fisher (fish plugins)" 3 _install_fisher; then
+  ui_ok "fish plugins installed"
+else
+  ui_warn "fisher bootstrap failed (network?) — fish plugins not installed; re-run install.sh to retry"
+fi
 
 # --- 6. tmux plugins (TPM) --------------------------------------------------
 # Clone TPM if missing, then install the plugins declared in the stowed tmux.conf.
 ui_step "tmux plugins (TPM)"
 TPM_DIR="$HOME/.config/tmux/plugins/tpm"
-if [ ! -d "$TPM_DIR" ]; then
+# rm -rf before each clone attempt so a retry after a partial clone can't fail on a
+# non-empty target directory.
+_clone_tpm() { rm -rf "$TPM_DIR" && git clone --depth 1 https://github.com/tmux-plugins/tpm "$TPM_DIR"; }
+# Key the (re)clone off the actual entrypoint, not just the directory: a previous run could
+# have left a partial/corrupt checkout (dir present but bin/install_plugins missing), which a
+# bare `-d` test would skip — leaving plugins silently uninstalled. _clone_tpm rm -rf's first.
+if [ ! -x "$TPM_DIR/bin/install_plugins" ]; then
   ui_active "installing TPM (tmux plugin manager)"
-  git clone --depth 1 https://github.com/tmux-plugins/tpm "$TPM_DIR"
+  retry "TPM clone" 3 _clone_tpm ||
+    ui_warn "TPM clone failed (network?) — tmux plugins not installed; re-run install.sh to retry"
 fi
-"$TPM_DIR/bin/install_plugins" >/dev/null 2>&1 || true
-ui_ok "tmux plugins installed"
+if [ -x "$TPM_DIR/bin/install_plugins" ]; then
+  "$TPM_DIR/bin/install_plugins" >/dev/null 2>&1 || true
+  ui_ok "tmux plugins installed"
+fi
 
 # --- 7. atuin history import ------------------------------------------------
 # atuin starts with an empty database and only records commands run after it's
@@ -816,18 +927,26 @@ ui_ok "iTerm2 pointed at tracked preferences ($DOTFILES/iterm2)"
 # --- 9. Python CLI tools (uv) -----------------------------------------------
 # Each non-comment line of uv_tools.txt is an argument list for uv tool install.
 ui_step "Python CLI tools (uv)"
-# set -f (noglob) for the loop: lines are split on IFS intentionally, but a
-# token like reuse[charset-normalizer] would otherwise glob-expand against the
-# caller's CWD. The subshell keeps noglob from leaking into the rest of install.
-(
-  set -f
-  while IFS= read -r tool; do
-    case "$tool" in '' | \#*) continue ;; esac
-    # shellcheck disable=SC2086  # intentional split: line holds tool + --with args
-    uv tool install $tool
-  done <"$DOTFILES/uv_tools.txt"
-)
-ui_ok "uv tools installed"
+# set -f (noglob) for the loop: lines are split on IFS intentionally, but a token like
+# reuse[charset-normalizer] would otherwise glob-expand against the caller's CWD. Scope it
+# with `set +f` rather than a subshell, so a failing tool's ui_warn lands in the global
+# WARNINGS summary (a subshell's mutations wouldn't propagate) and we can report OK vs WARN.
+set -f
+uv_tool_failures=0
+while IFS= read -r tool; do
+  case "$tool" in '' | \#*) continue ;; esac
+  # shellcheck disable=SC2086  # intentional split: line holds tool + --with args
+  retry "uv tool install $tool" 3 uv tool install $tool || {
+    ui_warn "uv tool install failed for: $tool (re-run install.sh to retry)"
+    uv_tool_failures=$((uv_tool_failures + 1))
+  }
+done <"$DOTFILES/uv_tools.txt"
+set +f
+if [ "$uv_tool_failures" -eq 0 ]; then
+  ui_ok "uv tools installed"
+else
+  ui_warn "$uv_tool_failures uv tool(s) failed to install (see above) — re-run install.sh to retry"
+fi
 
 # uv drops tool shims into ~/.local/bin. Put it on PATH now so the later
 # `command -v` checks (prek, claude) find them even when uv was already present
@@ -876,9 +995,13 @@ fi
 # step below so a first-run bootstrap can register servers without a re-run.
 if ! command -v claude >/dev/null 2>&1; then
   ui_step "Installing Claude Code CLI (native installer)"
-  curl -fsSL https://claude.ai/install.sh | bash
-  export PATH="$HOME/.local/bin:$PATH"
-  ui_ok "Claude Code CLI installed"
+  _install_claude() { curl -fsSL https://claude.ai/install.sh | bash; }
+  if retry "Claude Code install" 3 _install_claude; then
+    export PATH="$HOME/.local/bin:$PATH"
+    ui_ok "Claude Code CLI installed"
+  else
+    ui_warn "Claude Code install failed (network?) — skipping; re-run install.sh to retry"
+  fi
 fi
 
 # --- 12. Claude Code user-scope MCP servers ---------------------------------
@@ -958,7 +1081,8 @@ if command -v claude >/dev/null 2>&1; then
     fi ;;
     esac
     claude mcp remove "$name" --scope user >/dev/null 2>&1 || true
-    claude mcp add-json "$name" "$json" --scope user >/dev/null
+    claude mcp add-json "$name" "$json" --scope user >/dev/null ||
+      ui_warn "failed to register MCP server '$name' (re-run install.sh to retry)"
   done < <(printf '%s' "$resolved_mcp" | jq -r 'to_entries[] | "\(.key)\t\(.value | tojson)"')
   ui_ok "MCP servers registered"
 else
@@ -1116,8 +1240,14 @@ fi
 # step here, it converges unconditionally (the pinned set is small, so the
 # replacement is cheap). Run dock.sh yourself any time to re-apply.
 ui_step "Dock layout (dock.sh)"
-bash "$DOTFILES/dock.sh"
-ui_ok "Dock layout applied"
+# Non-fatal (like macos.sh above): the Dock rebuild can fail without a GUI/Dock session
+# (e.g. a headless VM), and that must not abort the run right before the verification
+# summary. dock.sh is idempotent, so a re-run reapplies it.
+if bash "$DOTFILES/dock.sh"; then
+  ui_ok "Dock layout applied"
+else
+  ui_warn "dock.sh exited non-zero — continuing (the Dock may need a GUI session; re-run install.sh)"
+fi
 
 # --- 17. Verification & summary ---------------------------------------------
 # Deterministic post-install check (scripts/verify_install.sh — also runnable

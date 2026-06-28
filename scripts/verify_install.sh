@@ -25,6 +25,16 @@
 # plainly. Keeping render OUT of this function is what lets install.sh fold the BAD
 # lines into the same "needs attention" list as its collected runtime warnings.
 
+# Under the --core install profile (DOTFILES_CORE=1) the baseline check below verifies the
+# casks-stripped subset, so source the pure brewfile_core() filter. Guarded so it's a no-op
+# when install.sh already sourced it; sourced relative to this file so the standalone /
+# harness path (which sources only verify_install.sh) still finds it. Defines a function
+# only — no other side effect.
+# shellcheck source=brewfile_core.sh disable=SC1091
+# `declare -F` (a defined function), not `command -v` (which would also match an unrelated
+# brewfile_core executable on PATH and then skip sourcing the real helper).
+declare -F brewfile_core >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/brewfile_core.sh"
+
 # --- pure predicates (no system state; unit-tested) -------------------------
 
 # Abbreviate a leading $HOME to ~ for display. The ~ lives in the REPLACEMENT half
@@ -111,9 +121,19 @@ verify_install() {
   ok() { printf 'OK\t%s\n' "$1"; }
   bad() { printf 'BAD\t%s\n' "$1"; }
 
-  # 1. Baseline Homebrew packages all installed.
+  # 1. Baseline Homebrew packages all installed. Under the --core profile (DOTFILES_CORE=1),
+  #    check the casks-stripped subset instead, since the GUI casks were never installed.
   if command -v brew >/dev/null 2>&1; then
-    if brew bundle check --file="$dotfiles/Brewfile" >/dev/null 2>&1; then
+    if [ "${DOTFILES_CORE:-0}" = "1" ]; then
+      core_bf="$(mktemp -t brewfile-core)"
+      brewfile_core "$dotfiles/Brewfile" >"$core_bf"
+      if brew bundle check --file="$core_bf" >/dev/null 2>&1; then
+        ok "Homebrew core (CLI formulae) packages all installed"
+        rm -f "$core_bf" # only on success — keep it on failure so the re-check command below works
+      else
+        bad "Homebrew core packages missing — re-check: brew bundle check --verbose --file=$core_bf (kept for inspection)"
+      fi
+    elif brew bundle check --file="$dotfiles/Brewfile" >/dev/null 2>&1; then
       ok "Homebrew baseline packages all installed"
     else
       bad "Homebrew baseline packages missing — run: brew bundle check --verbose --file=$dotfiles/Brewfile"

@@ -52,7 +52,7 @@ _converges_ the machine to the declared state rather than clobbering what's ther
 | 🔗 **GNU Stow** | `home/` mirrors `$HOME` via symlinks — editing `~/.config/fish/config.fish` edits the repo file directly. |
 | ♻️ **Idempotent bootstrap** | Re-run `install.sh` anytime; it adopts existing packages and symlinks instead of clobbering them. |
 | 🧩 **Machine-local overlays** | One branch across every machine — work box, homelab, personal — with nothing machine-specific leaking into the public repo. |
-| ✅ **Quality gate** | A prek hook suite (lint, format, license, spelling) plus bats and pytest — run identically by you locally and by CI on every PR. |
+| ✅ **Quality gate** | A prek hook suite (lint, format, license, spelling) plus bats and pytest — run identically by you locally and by CI on every PR — and an opt-in Tart VM smoke test that runs `install.sh --core` end-to-end on a clean macOS VM. |
 | 🎬 **Live demos** | asciinema casts of the fish functions actually running, embedded on the docs site. |
 
 ---
