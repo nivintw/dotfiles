@@ -72,7 +72,7 @@
 <div class="line out">        │         lint · secret scan · syntax           │  <a href="https://github.com/crate-ci/typos" rel="noopener">typos</a>, <a href="https://github.com/gitleaks/gitleaks" rel="noopener">gitleaks</a>, <a href="https://taplo.tamasfe.dev/" rel="noopener">taplo</a></div>
 <div class="line out">        ├─ Layer 2 · Unit + config tests (CI) ───────────┤  <a href="https://github.com/bats-core/bats-core" rel="noopener">bats</a>: fish behavior</div>
 <div class="line out">        │         logic + declarative-config checks      │  <a href="https://docs.pytest.org/" rel="noopener">pytest</a>: config validity</div>
-<div class="line out">        ├─ Layer 3 · Integration (CI dry-run + manual VM)┤  stow -n, brew check,</div>
+<div class="line out">        ├─ Layer 3 · Integration (CI dry-run + smoke run)┤  stow -n, brew check,</div>
 <div class="line out">  few   └─        idempotency · real bootstrap ──────────┘  install.sh on a VM</div>
           </div>
         </div>
@@ -129,7 +129,7 @@ uv run pytest      # config validity &amp; cross-file consistency</code></pre>
 
       <section class="wrap">
         <h2><span class="hash">#</span>Layer 3 &amp; CI</h2>
-        <p>The bootstrap mutates the system, needs sudo/Touch&nbsp;ID, and drives GUI apps — so full automation isn't worth it. CI does the cheap, high-value parts; the honest end-to-end test is a manual run on a throwaway macOS VM (run it <em>twice</em> — the second run is the real idempotency check).</p>
+        <p>The bootstrap mutates the system, needs sudo/Touch&nbsp;ID, and drives GUI apps — so it can't run in the cheap CI job. CI does the cheap, high-value parts; the honest end-to-end test is <code>scripts/vm-smoke.sh</code>, which boots a clean <a href="https://tart.run">Tart</a> VM, runs <code>install.sh --core</code> from scratch <em>twice</em> (the second run is the real idempotency check), and gates on <code>verify_install</code> — tolerating only the no-Touch-ID-sensor case, firewall and the rest strict. It's heavy and opt-in (a multi-GB base image plus a full install), so it runs on demand — <code>scripts/vm-smoke.sh</code> or <code>DOTFILES_VM_SMOKE=1 uv run pytest -m integration</code> — never in the default suite.</p>
         <div class="note">
           <div class="note__title">CI — one fast job</div>
           A single <code>ubuntu-latest</code> job runs the <strong>same prek hooks</strong> (not a parallel set of actions), plus <code>bats tests/</code> and <code>uv run pytest</code>. It pre-installs the few <code>language: system</code> tools it needs (fish, bats, ripgrep); taplo and hawkeye are skipped in CI, and everything else self-bootstraps. Kept green-fast so it runs on every push.
