@@ -6,9 +6,9 @@
 Each :class:`Phase` declares its display name, the operating systems it applies to (for
 per-phase gating), and whether it needs root. :data:`REGISTRY` mirrors ``install.sh``'s
 phases 0-17 in order. Phase *bodies* are ported one slice at a time (#67-#72): phases 0-1
-(bootstrap toolchain + brew bundle) carry a ``run`` callable; the rest are still ``None``
-stubs. Until the cutover (#72) the live installer remains ``install.sh`` and running this
-registry drives nothing privileged.
+(bootstrap toolchain + brew bundle) carry a ``run`` callable and **execute real installs**;
+the rest are still ``None`` stubs. ``install.sh`` stays the default entry point until the
+cutover (#72), but running the ported phases via this registry performs real work now.
 """
 
 from __future__ import annotations

@@ -80,6 +80,19 @@ def test_run_without_env_inherits_the_environment(monkeypatch: pytest.MonkeyPatc
     assert captured["env"] is None
 
 
+def test_run_treats_missing_executable_as_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A missing executable is reported as a non-zero exit, not raised (so retry/abort work)."""
+
+    def _missing(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError
+
+    monkeypatch.setattr(commands.subprocess, "run", _missing)
+    result = commands.run(["definitely-not-a-real-binary"], capture=True)
+    assert result.returncode != 0
+    assert result.stdout == ""  # captured callers (.split()/.splitlines()) must not hit None
+    assert commands.run_ok(["definitely-not-a-real-binary"]) is False
+
+
 def test_run_ok_reports_success_and_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     """``run_ok`` returns True only when the underlying run exits zero."""
     codes = iter([0, 1])

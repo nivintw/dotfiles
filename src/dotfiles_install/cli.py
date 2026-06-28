@@ -5,9 +5,10 @@
 
 Reproduces ``install.sh``'s flag surface (``--bundle`` / ``--no-bundles`` / ``--keep-bundles`` /
 ``--core`` / ``--help``) and its exit codes — 0 on success or help, 2 on a usage error, 1 on a
-runtime precondition (non-macOS) — then walks the phase registry. Phase bodies are stubs, so a
-run performs nothing privileged: it reports each phase as not-yet-ported. The live installer is
-still ``install.sh`` until the phase-port slices (#67-#72) land.
+runtime precondition (non-macOS) — then walks the phase registry. Phases 0-1 (bootstrap toolchain
++ brew bundle) now execute **real installs**; the remaining phases are stubs that report as
+not-yet-ported. ``install.sh`` stays the default entry point until the cutover (#72), so running
+this module directly today runs only the ported phases for real.
 """
 
 from __future__ import annotations

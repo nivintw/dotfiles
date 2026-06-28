@@ -28,13 +28,12 @@ from typing import TYPE_CHECKING
 from dotfiles_install import commands
 from dotfiles_install.brewfile import brewfile_core, brewfile_taps
 from dotfiles_install.bundle_select import fzf_preselect_bind, parse_bundles, write_bundles
-from dotfiles_install.layout import DOTFILES, discover_bundles
+from dotfiles_install.layout import BUNDLES_DIR, DOTFILES, discover_bundles
 
 if TYPE_CHECKING:
     from dotfiles_install.context import InstallContext
 
 _BREWFILE = DOTFILES / "Brewfile"
-_BUNDLES_DIR = DOTFILES / "Brewfile.d"
 
 
 # Home-based paths are resolved lazily (not module constants) so they honor ``$HOME`` at call
@@ -84,7 +83,10 @@ def _brew_bundle(ctx: InstallContext, brewfile: Path) -> bool:
     Returns whether the bundle install succeeded. The single chokepoint shared by the baseline
     Brewfile, each opt-in bundle, and ``Brewfile.local``.
     """
-    text = brewfile.read_text(encoding="utf-8")
+    # surrogateescape, not strict: the bash original is byte-oriented (sed/grep) and never
+    # decodes, so a stray non-UTF-8 byte in a hand-edited Brewfile must not crash the (designed
+    # non-fatal) install — and round-trips faithfully back to the temp file under --core.
+    text = brewfile.read_text(encoding="utf-8", errors="surrogateescape")
     _trust_taps(ctx, text)
     if not ctx.core:
         return _bundle_install(brewfile)
@@ -103,6 +105,7 @@ def _bundle_install_core(core_text: str) -> bool:
         prefix="brewfile-core",
         delete=False,
         encoding="utf-8",
+        errors="surrogateescape",  # faithfully round-trip any non-UTF-8 bytes read above
     ) as handle:
         handle.write(core_text)
         temp = Path(handle.name)
@@ -212,7 +215,7 @@ def _run_picker(ctx: InstallContext, available: list[str], sel: Path) -> None:
         "--border",
         "--prompt=bundles> ",
         "--header=opt-in Brewfile bundles — TAB to toggle, ENTER to confirm",
-        f"--preview=cat '{_BUNDLES_DIR}'/{{}}.brewfile",
+        f"--preview=cat '{BUNDLES_DIR}'/{{}}.brewfile",
         "--preview-window=right,60%",
     ]
     if preseed:
@@ -231,7 +234,7 @@ def _run_selected_bundles(ctx: InstallContext, sel: Path) -> None:
     """Install each selected opt-in bundle; warn (non-fatal) on a missing or failing bundle."""
     installed: list[str] = []
     for bundle in parse_bundles(sel):
-        bundle_file = _BUNDLES_DIR / f"{bundle}.brewfile"
+        bundle_file = BUNDLES_DIR / f"{bundle}.brewfile"
         if not bundle_file.is_file():
             ctx.ui.warn(f"skipping opt-in bundle '{bundle}' (no {bundle_file})")
             continue

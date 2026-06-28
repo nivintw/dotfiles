@@ -15,8 +15,10 @@ from pathlib import Path
 
 # Repo root: src/dotfiles_install/layout.py → parents[2] is the dotfiles checkout.
 DOTFILES = Path(__file__).resolve().parents[2]
+# Where opt-in bundles live; the one place the ``Brewfile.d`` location is spelled.
+BUNDLES_DIR = DOTFILES / "Brewfile.d"
 
 
-def discover_bundles(dotfiles: Path = DOTFILES) -> list[str]:
+def discover_bundles(bundles_dir: Path = BUNDLES_DIR) -> list[str]:
     """Return the opt-in bundle names (``Brewfile.d/<name>.brewfile`` basenames), sorted."""
-    return sorted(path.stem for path in (dotfiles / "Brewfile.d").glob("*.brewfile"))
+    return sorted(path.stem for path in bundles_dir.glob("*.brewfile"))
