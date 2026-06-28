@@ -95,6 +95,7 @@
               <tr><td><strong>App firewall + stealth</strong></td><td>Enabled during the bootstrap; the Mac stops answering pings/port scans</td></tr>
               <tr><td><strong>Touch ID for sudo</strong></td><td>Via <code>/etc/pam.d/sudo_local</code> (survives OS updates) + <a href="https://github.com/fabianishere/pam_reattach" rel="noopener">pam_reattach</a> for <a href="https://github.com/tmux/tmux" rel="noopener">tmux</a></td></tr>
               <tr><td><strong><code>transfer.fsckObjects</code></strong></td><td>git validates object integrity on every fetch — supply-chain hygiene</td></tr>
+              <tr><td><strong>Pinned CI binaries</strong></td><td>Every release binary CI downloads (osv-scanner, hawkeye, taplo) is checked against a committed SHA256 via <code>sha256sum -c</code> before it runs; <code>scripts/refresh-binary-checksums.sh</code> keeps the pins in step with version bumps and rejects a tampered asset whose version didn't change — supply-chain integrity for the toolchain</td></tr>
               <tr><td><strong>SSH commit signing</strong></td><td>Commits are signed with a 1Password-held SSH key (<code>op-ssh-sign</code>) by default; on a machine without 1Password, <code>install.sh</code> disables signing in <code>~/.gitconfig_local</code> so commits still succeed</td></tr>
             </tbody>
           </table>
