@@ -17,6 +17,7 @@
 # left as-is (brew bundle ignores it either way).
 
 brewfile_core() {
+  local file
   file="${1:?usage: brewfile_core <brewfile>}"
   [ -f "$file" ] || return 0
   # Delete lines whose first non-space token is a GUI-bound directive. sed always exits 0
