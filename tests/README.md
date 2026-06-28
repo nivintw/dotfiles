@@ -84,27 +84,35 @@ each thing that can break have *something* watching it?
 
 ## End-to-end VM smoke test (opt-in)
 
-`scripts/vm-smoke.sh` boots a clean [Tart](https://tart.run) VM, runs `install.sh`
-end-to-end inside it from scratch, and asserts `verify_install` reports healthy — the one
-thing the unit/config suites can't do: prove the installer works on a genuinely clean
-machine.
+`scripts/vm-smoke.sh` boots a clean [Tart](https://tart.run) VM, ships the repo in with
+`git archive HEAD`, runs `install.sh` end-to-end inside it from scratch (by default
+**twice**, to prove idempotency), and gates on `verify_install`'s `OK`/`BAD` stream — the
+one thing the unit/config suites can't do: prove the installer works on a genuinely clean
+machine. It tolerates only the Touch-ID-no-sensor `BAD` (a VM has no biometric sensor); the
+application firewall and every other check stay strict, and a `VERIFY_DONE` sentinel makes a
+truncated SSH stream fail closed rather than read as a pass.
 
 It is **heavy and opt-in**: the first run pulls a multi-GB macOS base image and a full
 install takes many minutes, so it never runs in the default `uv run pytest`.
 
-**Prerequisite:** `tart` and `sshpass` (both in the Brewfile — `brew bundle` installs them);
-Tart needs Apple Silicon.
+**Prerequisite:** `tart` (in the Brewfile — `brew bundle` installs it) on an Apple Silicon
+host. SSH into the guest authenticates via `SSH_ASKPASS`, so no password ever lands in the
+process list.
 
 ```bash
 # Directly:
-scripts/vm-smoke.sh                 # clone -> boot -> install -> verify -> teardown
-scripts/vm-smoke.sh --keep          # leave the VM running to debug a failure
+scripts/vm-smoke.sh                 # clone -> boot -> install x2 -> verify -> teardown
+scripts/vm-smoke.sh --once          # install only once (skip the idempotency re-run)
+scripts/vm-smoke.sh --negative      # self-test: break the firewall, assert the gate fails
+scripts/vm-smoke.sh --keep          # leave the VM in place to debug a failure
 scripts/vm-smoke.sh --image REF     # clone a different base image
 
 # Via pytest (opt-in gate — only runs with the env var set and tart present):
 DOTFILES_VM_SMOKE=1 uv run pytest -m integration
 ```
 
-`tests/vm_smoke.bats` unit-tests the harness's arg-parsing and preflight (no VM boot); the
-boot-and-install path is covered by the opt-in pytest above. It targets the current bash
-installer today and is the verification gate for the Python installer rewrite (#53).
+`tests/vm_smoke.bats` unit-tests the harness's arg-parsing, preflight, and the pure
+verify-gate helpers (`is_tolerated` / `evaluate_stream`) without booting a VM — the script is
+sourceable for exactly this. The boot-and-install path is covered by the opt-in pytest above.
+It targets the current bash installer today and is the verification gate for the Python
+installer rewrite (#53).

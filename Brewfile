@@ -30,7 +30,6 @@
 # ---------------------------------------------------------------------------
 tap "terraform-linters/tap"   # Source for the tflint cask below
 tap "cirruslabs/cli"          # Source for tart (VM smoke-test harness)
-tap "hudochenkov/sshpass"     # Source for sshpass (non-interactive VM ssh)
 
 # ===========================================================================
 # Formulae (CLI tools)
@@ -84,7 +83,6 @@ brew "hawkeye"          # SPDX license-header formatter (pre-commit; REUSE compl
 brew "hyperfine"        # Command-line benchmarking tool
 brew "osv-scanner"      # Dependency CVE scanner (pre-commit hook; see .pre-commit-config.yaml)
 brew "shellcheck"       # Static analysis for shell scripts
-brew "hudochenkov/sshpass/sshpass" # Non-interactive ssh password auth — drives vm-smoke.sh
 brew "taplo"            # TOML toolkit
 brew "cirruslabs/cli/tart" # Boot macOS/Linux VMs on Apple Silicon — drives scripts/vm-smoke.sh
 brew "typos-cli"        # Source-code spell checker
