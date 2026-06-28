@@ -142,6 +142,15 @@ main() {
     return 1
   fi
 
+  # VM_USER is interpolated into a remote sudo command string below; require a plain username
+  # so it can't break out of that quoting. Operator-set, so this is defense-in-depth.
+  case "$VM_USER" in
+  '' | *[!A-Za-z0-9_-]*)
+    printf 'vm-smoke.sh: VM_SMOKE_USER must be a plain username ([A-Za-z0-9_-]); got: %s\n' "$VM_USER" >&2
+    return 2
+    ;;
+  esac
+
   # Repo root, resolved with builtins so the preflight above works under a stripped PATH.
   local DOTFILES
   DOTFILES="$(cd "${BASH_SOURCE[0]%/*}/.." && pwd)"
@@ -252,6 +261,26 @@ printf 'VERIFY_DONE\t%s\n' "$?"
 REMOTE
   }
 
+  # assert_install_outputs — gate coverage for the install steps this harness's own hardening
+  # made NON-FATAL (fisher, TPM, uv tools, the Claude CLI). verify_install asserts system state
+  # (brew/shell/firewall/symlinks/settings) but not these, so without this a swallowed bootstrap
+  # failure — exactly what `retry` degrades to a warning — would slip through a green gate. Each
+  # output is deterministic in a --core install with network; MCP is excluded (it needs the
+  # 1Password/PAT secrets a clean VM lacks). Reuses evaluate_stream: any BAD fails the gate.
+  assert_install_outputs() {
+    log "checking deterministic install outputs (Claude CLI, uv tools, TPM, fisher)"
+    ssh_vm 'bash -s' <<'REMOTE' | evaluate_stream
+say() { printf '%s\t%s\n' "$1" "$2"; }
+command -v claude >/dev/null 2>&1 && say OK "Claude CLI installed" || say BAD "Claude CLI missing (native installer step failed)"
+command -v prek   >/dev/null 2>&1 && say OK "uv tool prek installed" || say BAD "uv tool prek missing (uv tools step failed)"
+command -v rumdl  >/dev/null 2>&1 && say OK "uv tool rumdl installed" || say BAD "uv tool rumdl missing (uv tools step failed)"
+[ -d "$HOME/.config/tmux/plugins/tpm" ] && say OK "TPM installed" || say BAD "TPM missing (tmux plugin step failed)"
+fish -c 'functions -q fisher' >/dev/null 2>&1 && say OK "fisher installed" || say BAD "fisher missing (fish plugin bootstrap failed)"
+fish -c 'functions -q tide' >/dev/null 2>&1 && say OK "fish_plugins installed (tide)" || say BAD "fish_plugins missing (fisher update failed)"
+printf 'VERIFY_DONE\t0\n'
+REMOTE
+  }
+
   log "Cloning ${IMAGE} -> ${VM_NAME} (pulls the base image on first run; multi-GB)"
   tart clone "$IMAGE" "$VM_NAME"
 
@@ -293,6 +322,11 @@ REMOTE
     return 1
   fi
 
+  # git archive ships committed state only — warn if the working tree has uncommitted edits so
+  # nobody iterates on an install.sh change and reads a green run that tested the OLD code.
+  if [ -n "$(git -C "$DOTFILES" status --porcelain 2>/dev/null)" ]; then
+    log "WARNING: working tree has uncommitted changes — git archive HEAD tests the COMMITTED state, not them."
+  fi
   log "Shipping the repo into the VM (git archive HEAD)"
   # shellcheck disable=SC2016  # $HOME must expand in the guest, not here
   git -C "$DOTFILES" archive --format=tar HEAD |
@@ -304,6 +338,10 @@ REMOTE
   fi
   if ! verify_gate "verify"; then
     log "Verification FAILED after the first install."
+    return 1
+  fi
+  if ! assert_install_outputs; then
+    log "Install-output check FAILED — a non-fatal bootstrap step (fisher/TPM/uv tools/Claude CLI) didn't complete."
     return 1
   fi
 
