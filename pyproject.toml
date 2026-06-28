@@ -29,8 +29,10 @@ dev = [
   "pytest>=9.1.0",
   "pytest-playwright>=0.8.0",
   "pyyaml>=6.0.3",
+  "rich>=15.0.0",
   "ruff>=0.15.17",
   "ty>=0.0.49",
+  "typer>=0.26.8",
 ]
 
 [tool.uv]
@@ -74,6 +76,9 @@ convention = "google"
 # verify_install shells out to fixed git/bioutil commands (resolved via shutil.which, so
 # no partial-path S607); the argv is constant with no user input, so the S603 audit is moot.
 "src/dotfiles_install/verify_install.py" = ["S603"]
+# Typer models CLI flags as boolean parameters with boolean defaults — the idiomatic Typer
+# surface, not the boolean-trap FBT guards against — so silence them for the CLI module.
+"src/dotfiles_install/cli.py" = ["FBT001", "FBT002"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

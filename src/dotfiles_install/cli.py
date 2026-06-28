@@ -1,0 +1,112 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+"""Typer entry point for the dotfiles installer (skeleton).
+
+Reproduces ``install.sh``'s flag surface (``--bundle`` / ``--no-bundles`` / ``--keep-bundles`` /
+``--core`` / ``--help``) and its exit codes — 0 on success or help, 2 on a usage error, 1 on a
+runtime precondition (non-macOS) — then walks the phase registry. Phase bodies are stubs, so a
+run performs nothing privileged: it reports each phase as not-yet-ported. The live installer is
+still ``install.sh`` until the phase-port slices (#67-#72) land.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated
+
+import typer
+
+from dotfiles_install.context import InstallContext
+from dotfiles_install.os_detect import current_os
+from dotfiles_install.phases import phases_for
+from dotfiles_install.ui import UI
+
+DOTFILES = Path(__file__).resolve().parents[2]
+
+
+def discover_bundles(dotfiles: Path = DOTFILES) -> list[str]:
+    """Return the available opt-in bundle names (``Brewfile.d/<name>.brewfile`` basenames)."""
+    return sorted(path.stem for path in (dotfiles / "Brewfile.d").glob("*.brewfile"))
+
+
+def _help_epilog() -> str:
+    """Build the ``--help`` epilog listing the discovered opt-in bundles."""
+    names = discover_bundles()
+    listing = "\n".join(f"  {name}" for name in names) if names else "  (none found)"
+    return f"Opt-in Brewfile bundles (Brewfile.d/<name>.brewfile):\n{listing}"
+
+
+app = typer.Typer(add_completion=False, rich_markup_mode=None)
+
+
+@app.command(epilog=_help_epilog())
+def main(
+    bundle: Annotated[
+        list[str] | None,
+        typer.Option("--bundle", help="Opt into a Brewfile bundle and persist it; repeatable."),
+    ] = None,
+    no_bundles: Annotated[
+        bool,
+        typer.Option("--no-bundles", help="Baseline only; bypass the bundle picker."),
+    ] = False,
+    keep_bundles: Annotated[
+        bool,
+        typer.Option("--keep-bundles", help="Keep the saved selection; skip the picker."),
+    ] = False,
+    core: Annotated[
+        bool,
+        typer.Option("--core", help="Core profile: CLI formulae only, skip casks."),
+    ] = False,
+) -> None:
+    """Converge this Mac to the state declared in the repo (dotfiles bootstrap)."""
+    requested = tuple(bundle or ())
+    _validate_bundles(requested, no_bundles=no_bundles, keep_bundles=keep_bundles)
+    ui = UI()
+    ctx = InstallContext(
+        ui=ui,
+        core=core,
+        no_bundles=no_bundles,
+        keep_bundles=keep_bundles,
+        requested_bundles=requested,
+    )
+    _run(ctx)
+
+
+def _validate_bundles(
+    requested: tuple[str, ...],
+    *,
+    no_bundles: bool,
+    keep_bundles: bool,
+) -> None:
+    """Reject mutually exclusive bundle flags and unknown bundle names (exit code 2)."""
+    if keep_bundles and (requested or no_bundles):
+        msg = "--keep-bundles can't be combined with --bundle/--no-bundles"
+        raise typer.BadParameter(msg)
+    available = set(discover_bundles())
+    for name in requested:
+        if name not in available:
+            msg = f"unknown bundle: {name!r}"
+            raise typer.BadParameter(msg)
+
+
+def _run(ctx: InstallContext) -> None:
+    """Walk the OS-gated phase registry, reporting each not-yet-ported phase as skipped."""
+    ui = ctx.ui
+    ui.banner("dotfiles bootstrap")
+    try:
+        target = current_os()
+    except RuntimeError as exc:
+        ui.err(f"{exc}; the installer targets macOS")
+        raise typer.Exit(code=1) from exc
+    applicable = phases_for(target)
+    if not applicable:
+        ui.err(f"no install phases apply to {target.value}; macOS only for now")
+        raise typer.Exit(code=1)
+    for phase in applicable:
+        ui.step(f"[{phase.number}] {phase.name}")
+        if phase.run is not None:
+            phase.run(ctx)
+        else:
+            ui.warn(f"phase '{phase.name}' is not yet ported (skipped)")
+    ui.summary(verified=[], problems=[])
