@@ -304,9 +304,9 @@ REMOTE
   log "Waiting for SSH"
   wait_for "SSH" 180 2 ssh_vm true
 
-  # install.sh runs sudo repeatedly across a multi-minute install. Crucially its keepalive
-  # calls `sudo -v`, which RE-AUTHENTICATES — and NOPASSWD does NOT cover `sudo -v`, so a
-  # headless SSH session (no tty) would die at "Privileged setup". Install a sudoers drop-in
+  # install.sh acquires sudo with `sudo -v` for its privileged block, which
+  # RE-AUTHENTICATES — and NOPASSWD does NOT cover `sudo -v`, so a headless SSH session
+  # (no tty) would die at "Privileged setup". Install a sudoers drop-in
   # that disables authentication for the install user entirely (the VM equivalent of a real
   # Mac's password/Touch-ID prompt; the same thing CI runners do). The password is supplied
   # on stdin for `sudo -S` (used only if the VM actually needs one to write the file); the
