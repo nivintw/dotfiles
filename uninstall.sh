@@ -391,9 +391,9 @@ usage() {
 Usage: uninstall.sh [--dry-run] [--yes] [--help]
 
 Safe, idempotent reverse of install.sh. Removes the provably-ours setup (stow
-symlinks, TPM, MCP registrations, the iTerm2 pointer), OFFERS to remove created
-artifacts (uv tools, Ollama models), ASKS about lossy system changes (login shell,
-Touch-ID PAM), and REPORTS everything it leaves alone with how to finish by hand.
+symlinks, MCP registrations, the iTerm2 pointer), OFFERS to remove what it can't prove
+it owns (the TPM clone, uv tools, Ollama models), ASKS about lossy system changes
+(login shell, Touch-ID PAM), and REPORTS everything it leaves alone with how to finish.
 
   -n, --dry-run   Show what would happen; change nothing.
   -y, --yes       Skip the top confirmation. Tier-2/3 prompts still default to the
