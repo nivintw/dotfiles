@@ -175,6 +175,50 @@ def test_tmux_plugins_warns_when_clone_fails(
     assert "tmux plugins installed" not in out.getvalue()
 
 
+def test_tmux_clone_runs_real_closure_and_asserts_argv(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Real _clone closure executes; git clone argv is exact; ok('tmux plugins installed')."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    tpm_dir = tmp_path / ".config" / "tmux" / "plugins" / "tpm"
+    install_plugins = tpm_dir / "bin" / "install_plugins"
+
+    run_ok_argvs: list[list[str]] = []
+
+    def _run_ok(argv: list[str], **_kwargs: object) -> bool:
+        run_ok_argvs.append(list(argv))
+        if argv[:2] == ["git", "clone"]:
+            install_plugins.parent.mkdir(parents=True, exist_ok=True)
+            install_plugins.write_text("#!/bin/sh\n", encoding="utf-8")
+            install_plugins.chmod(0o755)
+        return True
+
+    run_argvs: list[list[str]] = []
+
+    def _run(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        run_argvs.append(list(argv))
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(commands, "retry", _fake_retry_once)
+    monkeypatch.setattr(commands, "run_ok", _run_ok)
+    monkeypatch.setattr(commands, "run", _run)
+    ctx, out = _ctx()
+
+    post_stow.install_tmux_plugins(ctx)
+
+    expected_clone = [
+        "git",
+        "clone",
+        "--depth",
+        "1",
+        "https://github.com/tmux-plugins/tpm",
+        str(tpm_dir),
+    ]
+    assert expected_clone in run_ok_argvs
+    assert "tmux plugins installed" in out.getvalue()
+
+
 # --- import_atuin_history (phase 7) -----------------------------------------------------------
 
 
@@ -248,6 +292,21 @@ def test_configure_iterm2_records_two_defaults_write_calls(
     assert "true" in load_calls[0]
 
     assert "iTerm2 pointed at tracked preferences" in out.getvalue()
+
+
+def test_configure_iterm2_warns_when_defaults_write_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Defaults write failure emits 'couldn't point iTerm2' warning; success line absent."""
+    monkeypatch.setattr(post_stow, "DOTFILES", tmp_path)
+    monkeypatch.setattr(commands, "run_ok", lambda *_a, **_k: False)
+    ctx, out = _ctx()
+
+    post_stow.configure_iterm2(ctx)
+
+    assert any("couldn't point iTerm2 at the tracked prefs" in w for w in ctx.ui.warnings)
+    assert "iTerm2 pointed at tracked preferences" not in out.getvalue()
 
 
 # --- install_uv_tools (phase 9) ---------------------------------------------------------------
