@@ -7,6 +7,13 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.17.0](https://github.com/nivintw/dotfiles/compare/v1.16.0...v1.17.0) (2026-06-29)
+
+
+### Features
+
+* **installer:** Port the verify-install summary to Python (phase 17) + dotfiles-doctor ([514811d](https://github.com/nivintw/dotfiles/commit/514811df6bf1892f81dce1adc6f7e2039aa7538d)), closes [#39](https://github.com/nivintw/dotfiles/issues/39) [#83](https://github.com/nivintw/dotfiles/issues/83)
+
 ## [1.16.0](https://github.com/nivintw/dotfiles/compare/v1.15.0...v1.16.0) (2026-06-29)
 
 
