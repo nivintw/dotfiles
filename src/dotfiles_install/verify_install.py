@@ -43,9 +43,15 @@ def is_json_object(path: Path) -> bool:
     """Report whether ``path`` exists and contains a JSON object."""
     if not path.is_file():
         return False
+    # Separate single-exception clauses rather than a tuple: the parenthesis-free PEP 758 form
+    # ruff would enforce (`except A, B:`) reads like the Python-2 `except E, name:` bug.
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except OSError, UnicodeDecodeError, json.JSONDecodeError:
+    except OSError:
+        return False
+    except UnicodeDecodeError:
+        return False
+    except json.JSONDecodeError:
         return False
     return isinstance(value, dict)
 
