@@ -87,7 +87,18 @@ def _resolve_secrets(ctx: InstallContext, merged: dict[str, JSONValue]) -> dict[
     if commands.which("op") is not None and commands.run_ok(["op", "whoami"], capture=True):
         injected = commands.run(["op", "inject"], input_text=json.dumps(merged), capture=True)
         if injected.returncode == 0:
-            return json.loads(injected.stdout)
+            try:
+                resolved = json.loads(injected.stdout)
+            except json.JSONDecodeError:
+                # op inject succeeded but emitted nothing parseable — degrade to the unresolved
+                # doc so the per-server op:// guard skips secret servers (bash tolerates this too).
+                ctx.ui.warn(
+                    "1Password 'op inject' returned no parseable output — skipping "
+                    "secret-backed servers; re-run after 'op signin'.",
+                )
+                return merged
+            if isinstance(resolved, dict):
+                return resolved
         return merged
     resolved = copy.deepcopy(merged)
     gh_pat = _github_pat()

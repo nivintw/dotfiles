@@ -27,11 +27,12 @@ RUNTIME_ERROR_EXIT = 1
 
 @pytest.fixture
 def _no_real_installs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Neutralize the ported phase 0-1 bodies: stub command execution and isolate ``$HOME``.
+    """Neutralize the ported phase 0-13 bodies: stub command execution and isolate ``$HOME``.
 
-    The macOS walk now runs the real bootstrap + brew-bundle phases, so ``commands.which``
-    reports every tool present (skipping installs) and ``commands.run`` is a no-op success;
-    ``$HOME`` is redirected to a tmp dir so the bundle-selection file never touches the real one.
+    The macOS walk now runs the real bootstrap through Claude-settings phases, so
+    ``commands.which`` reports every tool present (skipping installs) and ``commands.run`` is a
+    no-op success; ``$HOME`` is redirected to a tmp dir so the stow/overlay/settings phases write
+    only into a throwaway home and never touch the real one.
     """
 
     def _ok(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -123,7 +124,7 @@ def test_run_on_macos_walks_all_phases(monkeypatch: pytest.MonkeyPatch) -> None:
     result = runner.invoke(app, [])
     assert result.exit_code == 0
     assert "dotfiles bootstrap" in result.output
-    # Phases 3-17 are still stubs, so the not-yet-ported notice is still emitted.
+    # Phases 14-17 are still stubs, so the not-yet-ported notice is still emitted.
     assert "not yet ported" in result.output
     # Every phase header is printed, including the now-ported phase 0.
     assert "[0] Bootstrap toolchain (Homebrew + uv)" in result.output
