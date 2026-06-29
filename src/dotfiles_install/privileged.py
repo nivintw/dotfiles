@@ -115,13 +115,10 @@ def _desired_pam_content() -> str:
 
 def _pam_reattach_path() -> str | None:
     """Return the installed ``pam_reattach.so`` path under ``brew --prefix``, or None if absent."""
-    result = commands.run(["brew", "--prefix"], capture=True)
-    if result.returncode:
-        return None
-    prefix = result.stdout.strip()
+    prefix = commands.fetch(["brew", "--prefix"])  # None when brew is missing or prints nothing
     if not prefix:
         return None
-    candidate = Path(prefix) / "lib" / "pam" / "pam_reattach.so"
+    candidate = Path(prefix.strip()) / "lib" / "pam" / "pam_reattach.so"
     return str(candidate) if candidate.is_file() else None
 
 
