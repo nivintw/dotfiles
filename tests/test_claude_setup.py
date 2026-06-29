@@ -41,7 +41,7 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from dotfiles_install import claude_setup, commands
+from dotfiles_install import claude_setup, commands, settings_merge
 from dotfiles_install.context import InstallContext
 from dotfiles_install.ui import UI
 
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
     import pytest
 
-    from dotfiles_install.claude_settings_merge import JSONValue
+    from dotfiles_install.settings_merge import JSONValue
 
 
 # ── shared helpers ────────────────────────────────────────────────────────────────────────────
@@ -227,6 +227,29 @@ def test_mcp_malformed_overlay_falls_back_to_baseline_only(
     ctx, _ = _ctx()
 
     claude_setup.register_mcp_servers(ctx)
+
+    registered_names = {c.argv[3] for c in _add_json_calls(calls)}
+    assert registered_names == {"http_only"}
+    assert any("registering baseline servers only" in w for w in ctx.ui.warnings)
+
+
+def test_mcp_non_utf8_overlay_degrades_not_crashes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A non-UTF-8 overlay must warn-and-fall-back, not abort the phase with UnicodeDecodeError."""
+    baseline = {"http_only": {"type": "http", "url": "https://example.com"}}
+    _setup(monkeypatch, tmp_path, mcp_json=baseline)
+    calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(commands, "run", _fake_run(calls))
+
+    cfg_dir = tmp_path / "home" / ".config" / "dotfiles"
+    cfg_dir.mkdir(parents=True)
+    # Invalid UTF-8 bytes (a lone 0xFF) would raise UnicodeDecodeError on a strict read.
+    (cfg_dir / "claude_mcp.local.json").write_bytes(b"\xff\xfe not json")
+    ctx, _ = _ctx()
+
+    claude_setup.register_mcp_servers(ctx)  # must NOT raise
 
     registered_names = {c.argv[3] for c in _add_json_calls(calls)}
     assert registered_names == {"http_only"}
@@ -832,14 +855,14 @@ def test_settings_write_failure_warns_not_crash(
 ) -> None:
     """settings.json write failure warns and continues; overlay is already written."""
     _setup(monkeypatch, tmp_path, settings_json={"theme": "dark"})
-    real = claude_setup._atomic_write
+    real = settings_merge._atomic_write
 
     def _fail_on_settings(path: Path, value: JSONValue) -> None:
         if path.name == "settings.json":
             raise OSError(28, "No space left on device")
         real(path, value)
 
-    monkeypatch.setattr(claude_setup, "_atomic_write", _fail_on_settings)
+    monkeypatch.setattr(settings_merge, "_atomic_write", _fail_on_settings)
     ctx, _ = _ctx()
 
     claude_setup.write_user_settings(ctx)  # must NOT raise
