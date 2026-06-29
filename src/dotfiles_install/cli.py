@@ -17,6 +17,7 @@ from typing import Annotated
 
 import typer
 
+from dotfiles_install import commands
 from dotfiles_install.context import InstallContext
 from dotfiles_install.layout import discover_bundles
 from dotfiles_install.os_detect import current_os
@@ -98,10 +99,18 @@ def _run(ctx: InstallContext) -> None:
     if not applicable:
         ui.err(f"no install phases apply to {target.value}; macOS only for now")
         raise typer.Exit(code=1)
-    for phase in applicable:
-        ui.step(f"[{phase.number}] {phase.name}")
-        if phase.run is not None:
-            phase.run(ctx)
-        else:
-            ui.warn(f"phase '{phase.name}' is not yet ported (skipped)")
+    try:
+        for phase in applicable:
+            ui.step(f"[{phase.number}] {phase.name}")
+            if phase.run is not None:
+                phase.run(ctx)
+            else:
+                ui.warn(f"phase '{phase.name}' is not yet ported (skipped)")
+    finally:
+        # Backstop the sudo ticket drop, mirroring install.sh's global `trap 'sudo -k' EXIT`.
+        # The privileged phase drops the ticket at the end of its own block, but an earlier
+        # privileged step (phase 1's pre-bundle Touch-ID enable) also warms one, and an abort
+        # (Ctrl-C / unexpected error) could exit before the privileged phase runs. Dropping here
+        # ensures no warm passwordless sudo ticket survives the run, whatever happened above.
+        commands.run(["sudo", "-k"])
     ui.summary(verified=[], problems=[])

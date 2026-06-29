@@ -14,7 +14,7 @@ must not cost the user their symlinks).
 :func:`enable_touch_id_sudo` is shared with the pre-bundle call site in phase 1
 (:mod:`dotfiles_install.brew_bundle`): the same helper writes pam_tid-only before the bundle
 (``pam_reattach.so`` isn't installed yet) and the pam_reattach+pam_tid pair after it. The PAM
-content and whitespace match what ``scripts/uninstall.sh`` recognizes as ours.
+content and whitespace match what ``uninstall.sh`` recognizes as ours.
 
 Ported from ``install.sh`` phase 2 (the privileged block) and its shared ``enable_touch_id_sudo``.
 """
@@ -37,7 +37,7 @@ _PAM_SUDO_LOCAL = Path("/etc/pam.d/sudo_local")
 _ETC_SHELLS = Path("/etc/shells")
 
 # The PAM lines, whitespace-for-whitespace identical to install.sh's `enable_touch_id_sudo` and
-# recognized by `scripts/uninstall.sh` (un_pam_is_ours). pam_reattach MUST precede pam_tid so
+# recognized by `uninstall.sh` (un_pam_is_ours). pam_reattach MUST precede pam_tid so
 # Touch ID keeps working inside tmux/screen.
 _PAM_TID_LINE = "auth       sufficient     pam_tid.so"
 _PAM_REATTACH_TEMPLATE = "auth       optional       {path}"
@@ -59,9 +59,10 @@ def privileged_setup(ctx: InstallContext) -> None:
         _set_fish_login_shell(ctx)
         _enable_firewall(ctx)
     finally:
-        # Drop the ticket so nothing downstream (the fisher/Claude curl|bash installers) runs
-        # with a warm sudo timestamp — even if a step above raised. Replaces install.sh's global
-        # `trap 'sudo -k' EXIT`; sufficient because phase 2 is the run's only sudo acquirer.
+        # Drop the ticket promptly so nothing downstream (the fisher/Claude curl|bash installers,
+        # in phases 5+) runs with a warm sudo timestamp — even if a step above raised. The CLI's
+        # run-level finally (cli._run) is the global backstop for an abort before this phase runs;
+        # this drop is the mirror of install.sh's in-block `sudo -k` at the end of the block.
         commands.run(["sudo", "-k"])
     ctx.ui.ok("privileged setup complete")
 
@@ -130,19 +131,31 @@ def _set_fish_login_shell(ctx: InstallContext) -> None:
         return
     if fish_bin not in _read_text(_ETC_SHELLS).splitlines():
         ctx.ui.active(f"registering {fish_bin} in /etc/shells")
-        commands.run(
+        if not commands.run_ok(
             ["sudo", "tee", "-a", str(_ETC_SHELLS)],
             input_text=fish_bin + "\n",
             capture=True,  # swallow tee's stdout echo
-        )
-    if os.environ.get("SHELL") != fish_bin:
-        ctx.ui.active("setting fish as the default shell (chsh)")
-        # chsh via sudo: root sets the login shell without a second password prompt, keeping
-        # this inside the single sudo session (a bare `chsh` would prompt on its own).
-        commands.run(["sudo", "chsh", "-s", fish_bin, _current_username()])
+        ):
+            # No point running chsh against a shell that isn't registered — warn and stop here.
+            ctx.ui.warn(
+                f"couldn't register {fish_bin} in /etc/shells; leaving the default shell unchanged",
+            )
+            return
+    if os.environ.get("SHELL") == fish_bin:
+        ctx.ui.ok("fish already the default shell")
+        return
+    ctx.ui.active("setting fish as the default shell (chsh)")
+    # chsh via sudo: root sets the login shell without a second password prompt, keeping this
+    # inside the single sudo session (a bare `chsh` would prompt on its own). Gate the success
+    # message on the exit code — chsh fails on directory-service-managed (MDM/AD) accounts, and
+    # claiming success there would be a lie.
+    if commands.run_ok(["sudo", "chsh", "-s", fish_bin, _current_username()]):
         ctx.ui.ok("fish set as the default shell")
     else:
-        ctx.ui.ok("fish already the default shell")
+        ctx.ui.warn(
+            "couldn't set fish as the default shell (chsh failed — a managed account?); "
+            "set it manually with `chsh -s` once you can",
+        )
 
 
 def _enable_firewall(ctx: InstallContext) -> None:
@@ -175,8 +188,14 @@ def _current_username() -> str:
 
 
 def _read_text(path: Path) -> str:
-    """Read ``path`` as text, returning '' if it's missing (bash ``cat ... 2>/dev/null``)."""
+    """Read ``path`` as text, returning '' on any read error (bash ``cat ... 2>/dev/null``).
+
+    Catches ``OSError`` broadly — not just missing-file — to match the bash original's
+    degrade-to-empty: a missing, unreadable (e.g. a hardened root-only ``sudo_local``), or
+    not-a-directory path must read as empty and let the caller continue, never abort the run
+    (the phase-1 pre-bundle caller has no try/except around it).
+    """
     try:
         return path.read_text(encoding="utf-8")
-    except FileNotFoundError, NotADirectoryError:
+    except OSError:
         return ""

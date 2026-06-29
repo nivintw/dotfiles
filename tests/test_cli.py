@@ -11,9 +11,10 @@ from typing import TYPE_CHECKING
 import pytest
 from typer.testing import CliRunner
 
-from dotfiles_install import cli, commands
+from dotfiles_install import cli, commands, privileged
 from dotfiles_install.cli import app, discover_bundles
 from dotfiles_install.os_detect import OS
+from dotfiles_install.phases import Phase
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -39,6 +40,15 @@ def _no_real_installs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(commands, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(commands, "run", _ok)
     monkeypatch.setenv("HOME", str(tmp_path))
+    # Phase 2 (privileged) now runs in the walk; repoint its /etc touchpoints at tmp files so the
+    # CLI tests never read the host's real /etc/pam.d/sudo, sudo_local, or /etc/shells.
+    pam_sudo = tmp_path / "sudo"
+    pam_sudo.write_text("auth  include  sudo_local\n", encoding="utf-8")
+    monkeypatch.setattr(privileged, "_PAM_SUDO", pam_sudo)
+    monkeypatch.setattr(privileged, "_PAM_SUDO_LOCAL", tmp_path / "sudo_local")
+    etc_shells = tmp_path / "shells"
+    etc_shells.write_text("/bin/zsh\n", encoding="utf-8")
+    monkeypatch.setattr(privileged, "_ETC_SHELLS", etc_shells)
 
 
 def test_discover_bundles_matches_the_repo() -> None:
@@ -113,11 +123,35 @@ def test_run_on_macos_walks_all_phases(monkeypatch: pytest.MonkeyPatch) -> None:
     result = runner.invoke(app, [])
     assert result.exit_code == 0
     assert "dotfiles bootstrap" in result.output
-    # Phases 2-17 are still stubs, so the not-yet-ported notice is still emitted.
+    # Phases 3-17 are still stubs, so the not-yet-ported notice is still emitted.
     assert "not yet ported" in result.output
     # Every phase header is printed, including the now-ported phase 0.
     assert "[0] Bootstrap toolchain (Homebrew + uv)" in result.output
     assert "[17] Verification & summary" in result.output
+
+
+def test_run_drops_the_sudo_ticket_when_a_phase_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The run-level finally drops the sudo ticket (bash's EXIT-trap analog) even on an abort."""
+    monkeypatch.setattr(cli, "current_os", lambda: OS.MACOS)
+    calls: list[list[str]] = []
+
+    def _record(argv: list[str], **_kw: object) -> subprocess.CompletedProcess[str]:
+        calls.append(list(argv))
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(commands, "run", _record)
+
+    def _boom(_ctx: object) -> None:
+        msg = "phase exploded"
+        raise RuntimeError(msg)
+
+    raising = Phase(0, "boom", frozenset({OS.MACOS}), run=_boom)
+    monkeypatch.setattr(cli, "phases_for", lambda _target=None: [raising])
+
+    result = runner.invoke(app, [])
+
+    assert result.exit_code != 0  # the abort surfaces
+    assert ["sudo", "-k"] in calls  # ...but the ticket was still dropped
 
 
 @pytest.mark.usefixtures("_no_real_installs")
