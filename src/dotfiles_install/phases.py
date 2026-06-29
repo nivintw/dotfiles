@@ -7,12 +7,10 @@ Each :class:`Phase` declares its display name, the operating systems it applies 
 per-phase gating), and a ``privileged`` flag. That flag marks the **dedicated sudo-gated
 block** (phase 2) — the one that acquires and drops a sudo ticket — not merely "any phase that
 may invoke sudo": phase 1 also makes an optional ``sudo`` call (the pre-bundle Touch-ID enable)
-yet is not ``privileged``. :data:`REGISTRY` mirrors ``install.sh``'s
-phases 0-17 in order. Phase *bodies* are ported one slice at a time (#67-#72): phases 0-13
-(bootstrap toolchain through the Claude Code MCP servers + user settings) and phase 17
-(verification & summary, #39) carry a ``run`` callable and **execute real work**; phases 14-16
-are still ``None`` stubs. ``install.sh`` stays the default entry point until the cutover (#72),
-but running the ported phases via this registry performs real work now.
+yet is not ``privileged``. :data:`REGISTRY` mirrors ``install.sh``'s phases 0-17 in order.
+Every phase now carries a ``run`` callable and **executes real work** — the port is complete
+(#67-#72) and this registry, driven by ``dotfiles-install``, is the installer; ``install.sh`` is
+a thin stub that hands off to it.
 """
 
 from __future__ import annotations
@@ -23,6 +21,7 @@ from typing import TYPE_CHECKING
 from dotfiles_install.bootstrap import bootstrap_toolchain
 from dotfiles_install.brew_bundle import install_packages
 from dotfiles_install.claude_setup import register_mcp_servers, write_user_settings
+from dotfiles_install.ollama import install_ollama_models
 from dotfiles_install.os_detect import OS, current_os
 from dotfiles_install.overlays import seed_overlays
 from dotfiles_install.post_stow import (
@@ -36,6 +35,7 @@ from dotfiles_install.post_stow import (
 )
 from dotfiles_install.privileged import privileged_setup
 from dotfiles_install.stow import stow_dotfiles
+from dotfiles_install.system_setup import apply_dock_layout, apply_macos_defaults
 from dotfiles_install.verify_install import verify_and_summarize
 
 if TYPE_CHECKING:
@@ -48,13 +48,13 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class Phase:
-    """One install phase: its position, name, OS gating, privilege need, and (stub) body."""
+    """One install phase: its position, name, OS gating, body, and privilege need."""
 
     number: int
     name: str
     os: frozenset[OS]
+    run: PhaseRun
     privileged: bool = False
-    run: PhaseRun | None = None
 
     def applies(self, target: OS) -> bool:
         """Report whether this phase runs on ``target``."""
@@ -84,9 +84,9 @@ REGISTRY: tuple[Phase, ...] = (
     Phase(11, "Claude Code CLI", _MAC, run=install_claude_cli),
     Phase(12, "Claude Code MCP servers", _MAC, run=register_mcp_servers),
     Phase(13, "Claude Code user settings", _MAC, run=write_user_settings),
-    Phase(14, "Ollama model for GitLens", _MAC),
-    Phase(15, "macOS system defaults (macos.sh)", _MAC),
-    Phase(16, "Dock layout (dock.sh)", _MAC),
+    Phase(14, "Ollama model for GitLens", _MAC, run=install_ollama_models),
+    Phase(15, "macOS system defaults (macos.sh)", _MAC, run=apply_macos_defaults),
+    Phase(16, "Dock layout (dock.sh)", _MAC, run=apply_dock_layout),
     Phase(17, "Verification & summary", _MAC, run=verify_and_summarize),
 )
 

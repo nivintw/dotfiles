@@ -112,7 +112,11 @@ wheels = [
 [[package]]
 name = "dotfiles"
 version = "1.17.0"
-source = { virtual = "." }
+source = { editable = "." }
+dependencies = [
+    { name = "rich" },
+    { name = "typer" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -122,13 +126,15 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-playwright" },
     { name = "pyyaml" },
-    { name = "rich" },
     { name = "ruff" },
     { name = "ty" },
-    { name = "typer" },
 ]
 
 [package.metadata]
+requires-dist = [
+    { name = "rich", specifier = ">=15.0.0" },
+    { name = "typer", specifier = ">=0.26.8" },
+]
 
 [package.metadata.requires-dev]
 dev = [
@@ -138,10 +144,8 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-playwright", specifier = ">=0.8.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "rich", specifier = ">=15.0.0" },
     { name = "ruff", specifier = ">=0.15.17" },
     { name = "ty", specifier = ">=0.0.49" },
-    { name = "typer", specifier = ">=0.26.8" },
 ]
 
 [[package]]

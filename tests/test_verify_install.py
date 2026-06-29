@@ -571,3 +571,63 @@ def test_login_shell_queries_the_real_user_not_env(monkeypatch: pytest.MonkeyPat
     verify_install.login_shell()
     assert f"/Users/{real_user}" in captured["argv"]
     assert "bogus-env-user" not in " ".join(captured["argv"])
+
+
+def test_run_check_returns_problem_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``run_check`` renders the summary and returns the count of BAD records (the exit signal)."""
+    monkeypatch.setattr(
+        verify_install,
+        "iter_records",
+        lambda *_a, **_k: iter([("OK", "fine"), ("BAD", "broke one"), ("BAD", "broke two")]),
+    )
+    out = io.StringIO()
+    ui = UI(stdout=Console(file=out, width=200), stderr=Console(file=io.StringIO(), width=200))
+    problems = verify_install.run_check(InstallContext(ui=ui))
+    assert problems == 2  # noqa: PLR2004  # two BAD records above
+    assert "broke one" in out.getvalue()
+
+
+def test_run_check_returns_zero_when_all_clear(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A healthy machine yields a zero problem count (-> exit 0 in the CLI)."""
+    monkeypatch.setattr(
+        verify_install, "iter_records", lambda *_a, **_k: iter([("OK", "all good")])
+    )
+    out = io.StringIO()
+    ui = UI(stdout=Console(file=out, width=200), stderr=Console(file=io.StringIO(), width=200))
+    assert verify_install.run_check(InstallContext(ui=ui)) == 0
+
+
+def test_emit_stream_writes_raw_records_then_sentinel(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``emit_stream`` writes a record per line, closed by the BAD-count sentinel."""
+    monkeypatch.setattr(
+        verify_install,
+        "iter_records",
+        lambda *_a, **_k: iter([("OK", "fine"), ("BAD", "broke")]),
+    )
+    lines: list[str] = []
+    verify_install.emit_stream(core=False, write=lines.append)
+    # The sentinel carries the BAD count (1 here), not a hardcoded 0.
+    assert lines == ["OK\tfine", "BAD\tbroke", "VERIFY_DONE\t1"]
+
+
+def test_emit_stream_sentinel_is_zero_when_all_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A clean stream closes with a zero-count sentinel (no BAD records)."""
+    monkeypatch.setattr(
+        verify_install, "iter_records", lambda *_a, **_k: iter([("OK", "a"), ("OK", "b")])
+    )
+    lines: list[str] = []
+    verify_install.emit_stream(core=False, write=lines.append)
+    assert lines[-1] == "VERIFY_DONE\t0"
+
+
+def test_emit_stream_passes_core_flag_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The ``core`` flag reaches ``iter_records`` so the stream reflects the --core subset."""
+    captured: dict[str, object] = {}
+
+    def _iter(_dotfiles: object, *, core: bool) -> object:
+        captured["core"] = core
+        return iter(())
+
+    monkeypatch.setattr(verify_install, "iter_records", _iter)
+    verify_install.emit_stream(core=True, write=lambda _line: None)
+    assert captured["core"] is True
