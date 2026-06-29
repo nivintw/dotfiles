@@ -7,6 +7,20 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.15.0](https://github.com/nivintw/dotfiles/compare/v1.14.0...v1.15.0) (2026-06-29)
+
+
+### Features
+
+* **installer:** Port the privileged block (phase 2) to Python ([1f581be](https://github.com/nivintw/dotfiles/commit/1f581be23e37ea9c943cb748b9a13e2af19a06ae)), closes [#68](https://github.com/nivintw/dotfiles/issues/68) [#65](https://github.com/nivintw/dotfiles/issues/65)
+
+
+### Bug Fixes
+
+* **installer:** Address Copilot review on the privileged port ([2a55dc6](https://github.com/nivintw/dotfiles/commit/2a55dc66ae9cfa46a5412acdaf7efa53b31d0d2f))
+* **installer:** Address review findings on the privileged port ([963c204](https://github.com/nivintw/dotfiles/commit/963c2047d2901b1bde257875ff6840fb2b9440dc))
+* **installer:** Silence the run-level sudo -k backstop ([081ea80](https://github.com/nivintw/dotfiles/commit/081ea80c6c3ad9025221968718618d46cb890c9b))
+
 ## [1.14.0](https://github.com/nivintw/dotfiles/compare/v1.13.0...v1.14.0) (2026-06-28)
 
 
