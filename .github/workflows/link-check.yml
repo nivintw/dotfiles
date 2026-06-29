@@ -40,8 +40,11 @@ jobs:
           # Also exclude gnu.org: it blackholes GitHub's runner IPs (the README's GNU Stow link
           # TIMEOUTs even at --timeout 30 + 5 retries — a hard block, not slowness), a stable
           # canonical URL safe to skip.
+          # And exclude api.reuse.software/info/: the README's REUSE badge links to its /info/
+          # page, which 404s until reuse.software has crawled this repo (the /badge/ SVG itself
+          # 200s and stays validated). Self-heals once registered.
           # (lychee excludes mailto: by default.) Scope to Markdown so LICENSES/lockfiles aren't crawled.
-          args: "--no-progress --max-retries 5 --timeout 30 --exclude 'github\\.com/nivintw/dotfiles/compare/' --exclude 'gnu\\.org' '**/*.md'"
+          args: "--no-progress --max-retries 5 --timeout 30 --exclude 'github\\.com/nivintw/dotfiles/compare/' --exclude 'gnu\\.org' --exclude 'api\\.reuse\\.software/info/' '**/*.md'"
           fail: true
         env:
           # Authenticated requests raise GitHub's rate limit, so github.com links don't flake.
