@@ -11,7 +11,7 @@ name = "dotfiles"
 # version-of-record (.config/.release-please-manifest.json + git tags) via extra-files — it
 # rewrites this AND uv.lock's dotfiles version together on each release, so uv-lock stays
 # green. Kept in step manually here so manifest = pyproject = uv.lock.
-version = "1.15.0"
+version = "1.16.0"
 requires-python = ">=3.14"
 description = "Tyler Nivin's dotfiles and config repo"
 authors = [{ name = "Tyler Nivin", email = "tyler@nivin.tech" }]

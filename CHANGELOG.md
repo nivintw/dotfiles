@@ -7,6 +7,19 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.16.0](https://github.com/nivintw/dotfiles/compare/v1.15.0...v1.16.0) (2026-06-29)
+
+
+### Features
+
+* **installer:** Port phases 3-13 to Python (modules + registry) ([32d2deb](https://github.com/nivintw/dotfiles/commit/32d2deb4047d9f75791fac8e6eda07885157b822))
+
+
+### Bug Fixes
+
+* **installer:** Address review findings on phases 3-13 ([6aec891](https://github.com/nivintw/dotfiles/commit/6aec8916a025f7aff199d5b5ffef766ddac0f3fc))
+* **installer:** Degrade gracefully when op inject yields no parseable JSON ([9a34db5](https://github.com/nivintw/dotfiles/commit/9a34db58e9e69015a59b00b9158cb49fecf85149)), closes [#71](https://github.com/nivintw/dotfiles/issues/71)
+
 ## [1.15.0](https://github.com/nivintw/dotfiles/compare/v1.14.0...v1.15.0) (2026-06-29)
 
 
