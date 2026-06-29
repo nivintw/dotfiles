@@ -22,9 +22,9 @@ machine-local drift and ``merge(baseline, that delta)`` reproduces the live sett
 Object keys always recurse and union (never deleted); scalars and any type mismatch take the
 overlay value, under either policy.
 
-Documented limitations carried over from ``scripts/claude_settings_merge.sh``: arrays and keys
-can only be added via the overlay, never removed; and a JSON ``null`` is indistinguishable from
-"no change" (``None`` is also the diff's no-delta sentinel).
+Documented limitations of the merge: arrays and keys can only be added via the overlay, never
+removed; and a JSON ``null`` is indistinguishable from "no change" (``None`` is also the diff's
+no-delta sentinel).
 """
 
 from __future__ import annotations

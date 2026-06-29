@@ -12,7 +12,8 @@ moved aside, so a write failure leaves the original untouched — never destroye
 A migrated ``[include]`` of the overlay itself is stripped to avoid an include loop. A
 symlinked or absent target is a strict no-op (already-managed machine).
 
-Ported from ``scripts/gitconfig_migrate.sh`` (behavior pinned by ``tests/gitconfig_migrate.bats``).
+Ported from install.sh's gitconfig migration (behavior pinned by
+``tests/test_gitconfig_migrate.py``).
 """
 
 from __future__ import annotations

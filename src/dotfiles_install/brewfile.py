@@ -9,9 +9,9 @@ phase trusts them first). ``brewfile_core`` returns the ``--core`` subset — ta
 formulae only, with the GUI-bound entries (casks, VS Code extensions, Mac App Store apps,
 whalebrew) stripped — so a headless/minimal install can skip the heavy cask downloads.
 
-Ported from ``scripts/brewfile_taps.sh`` and ``scripts/brewfile_core.sh`` (behavior pinned by
-``tests/brewfile_taps.bats`` / ``tests/brewfile_core.bats``); these operate on Brewfile *text*
-so the caller owns reading the file (and the "missing file is empty, not an error" guard).
+Ported from install.sh's Brewfile tap/core filtering (behavior pinned by
+``tests/test_brewfile.py``); these operate on Brewfile *text* so the caller owns reading the
+file (and the "missing file is empty, not an error" guard).
 """
 
 from __future__ import annotations

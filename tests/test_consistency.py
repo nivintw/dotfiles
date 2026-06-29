@@ -5,7 +5,7 @@
 
 These assert that what one file references actually exists in another: tools the
 scripts/hooks invoke are declared in the Brewfile, local hook scripts exist and
-are executable, and install.sh's managed-files list matches what's actually stowed.
+are executable, and the installer's managed-files list matches what's actually stowed.
 """
 
 import os
@@ -32,8 +32,8 @@ if TYPE_CHECKING:
 # but the hooks no longer depend on them being present.)
 REQUIRED_BREW_PACKAGES = {
     "fish": "default login shell + the fish pre-commit hooks",
-    "stow": "symlinking dotfiles in install.sh",
-    "jq": "MCP registration in install.sh",
+    "stow": "symlinking dotfiles in the installer",
+    "jq": "MCP registration in the installer",
     "dockutil": "dock.sh",
     "bats-core": "fish behavior tests (bats)",
 }
@@ -59,12 +59,14 @@ def test_local_hook_scripts_exist_and_are_executable() -> None:
     """Local hooks that shell out to scripts/ point at real, executable files."""
     cfg = yaml.safe_load((REPO / ".pre-commit-config.yaml").read_text())
     referenced = [
-        tok
+        # Strip shell punctuation: an entry like `bash -c '... exec scripts/vm-smoke.sh; ...'`
+        # tokenizes the path as `scripts/vm-smoke.sh;` — the trailing `;` isn't part of the path.
+        tok.strip("'\";")
         for repo in cfg.get("repos", [])
         if repo.get("repo") == "local"
         for hook in repo.get("hooks", [])
         for tok in hook.get("entry", "").split()
-        if tok.startswith("scripts/")
+        if tok.strip("'\";").startswith("scripts/")
     ]
     assert referenced, "expected at least one local hook to reference scripts/"
     for rel in referenced:
@@ -129,19 +131,6 @@ def test_typos_configs_keep_shared_rules_in_sync() -> None:
     )
 
 
-def _install_sh_managed_files() -> list[str]:
-    """Scrape the $HOME-relative paths from install.sh's ``managed_files=( ... )`` array.
-
-    Scope to the array, then pull paths out of its ``"$HOME/..."`` entries (don't match
-    ``$HOME`` elsewhere, e.g. ``PATH=``).
-    """
-    block = re.search(r"managed_files=\((.*?)\)", (REPO / "install.sh").read_text(), re.DOTALL)
-    assert block, "managed_files array not found in install.sh"
-    rels = re.findall(r'"\$HOME/([^"]+)"', block.group(1))
-    assert rels, "no managed_files entries found in install.sh"
-    return rels
-
-
 def test_install_managed_files_are_stowed() -> None:
     """Each file the stow phase relinks must have a tracked source under home/."""
     assert stow.MANAGED_FILES, "no managed files declared in dotfiles_install.stow"
@@ -150,24 +139,11 @@ def test_install_managed_files_are_stowed() -> None:
         assert source.exists(), f"stow manages $HOME/{rel} but home/{rel} isn't tracked"
 
 
-def test_install_sh_managed_files_match_python_constant() -> None:
-    """The bash ``managed_files=(...)`` array and ``stow.MANAGED_FILES`` stay in step.
-
-    The Python constant is the source of truth (the stow phase reads it), but ``install.sh``
-    keeps its own copy until the #72 cutover retires the bash. This parity test fails if the
-    two drift, so a managed-file change can't be made in one place and forgotten in the other.
-    """
-    assert _install_sh_managed_files() == list(stow.MANAGED_FILES), (
-        "install.sh managed_files and dotfiles_install.stow.MANAGED_FILES drifted; "
-        "update both (until install.sh is retired in #72)"
-    )
-
-
 def test_tracked_gitconfig_carries_no_personal_identity() -> None:
     """The public home/.gitconfig ships no [user] identity.
 
     Name, email, and signing key are machine-local: they live in the untracked
-    ~/.gitconfig_local overlay (Include-d last) and install.sh migrates a
+    ~/.gitconfig_local overlay (Include-d last) and the installer migrates a
     pre-existing ~/.gitconfig into it. Re-introducing a [user] block here would
     impose one person's identity (and leak an email) as the public default on every
     machine that adopts these dotfiles.
@@ -202,7 +178,7 @@ def test_claude_settings_hooks_point_at_executable_scripts() -> None:
     Code hooks: if a hook script is renamed or its path in settings drifts, the hook
     silently stops firing — this turns that into a red build. The hooks are project-
     scoped, so they live in the repo-root .claude/settings.json (distinct from the
-    user-scope claude_settings.json baseline that install.sh merges into
+    user-scope claude_settings.json baseline that the installer merges into
     ~/.claude/settings.json).
     """
     settings = json5.loads((REPO / ".claude" / "settings.json").read_text())
