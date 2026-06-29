@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     import pytest
 
 EXPECTED_PHASE_COUNT = 18  # install.sh phases 0-17 inclusive
-PORTED_PHASES = {0, 1}  # bootstrap toolchain + brew bundle carry a run callable (#67)
+PORTED_PHASES = {0, 1, 2}  # bootstrap, brew bundle, and the privileged block (#67, #68)
 
 
 def test_registry_mirrors_install_sh_phase_count() -> None:
@@ -41,7 +41,7 @@ def test_only_the_privileged_block_needs_root() -> None:
 
 
 def test_ported_phases_have_bodies_and_the_rest_are_stubs() -> None:
-    """Phases 0-1 carry a ``run`` callable (#67); every other phase is still a ``None`` stub."""
+    """Phases 0-2 carry a ``run`` callable (#67, #68); the rest are still ``None`` stubs."""
     for phase in REGISTRY:
         if phase.number in PORTED_PHASES:
             assert phase.run is not None, f"phase {phase.number} should be ported"

@@ -13,8 +13,9 @@ template). Every install failure here is non-fatal: it warns (and the warning is
 the closing summary) and the run continues.
 
 Ported from ``install.sh`` phase 1 (the "Homebrew formulae + casks" block). The pre-bundle
-Touch-ID-for-sudo enable is a privileged PAM write owned by the phase-2 block (#68); see
-:func:`_enable_touch_id_pre_bundle`.
+Touch-ID-for-sudo enable is the shared :func:`~dotfiles_install.privileged.enable_touch_id_sudo`
+(phase 2, #68), called here so a cask's ``.pkg`` password prompt becomes a fingerprint tap; at
+this point ``pam_reattach.so`` isn't installed yet, so it writes the pam_tid-only PAM line.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from dotfiles_install import commands
 from dotfiles_install.brewfile import brewfile_core, brewfile_taps
 from dotfiles_install.bundle_select import fzf_preselect_bind, parse_bundles, write_bundles
 from dotfiles_install.layout import BUNDLES_DIR, DOTFILES, discover_bundles
+from dotfiles_install.privileged import enable_touch_id_sudo
 
 if TYPE_CHECKING:
     from dotfiles_install.context import InstallContext
@@ -55,7 +57,9 @@ def _brewfile_local() -> Path:
 
 def install_packages(ctx: InstallContext) -> None:
     """Run the baseline bundle, the selected opt-in bundles, and any ``Brewfile.local``."""
-    _enable_touch_id_pre_bundle()
+    # Pre-bundle Touch-ID-for-sudo enable: turns a cask's .pkg password prompt into a
+    # fingerprint tap. The shared helper warns (never aborts) if auth is declined here (#65).
+    enable_touch_id_sudo(ctx)
     if _brew_bundle(ctx, _BREWFILE):
         ctx.ui.ok("Homebrew packages installed")
     else:
@@ -64,17 +68,6 @@ def install_packages(ctx: InstallContext) -> None:
         )
     _install_opt_in_bundles(ctx)
     _install_brewfile_local(ctx)
-
-
-def _enable_touch_id_pre_bundle() -> None:
-    """Call site for the pre-bundle Touch-ID-for-sudo enable — implementation owned by #68.
-
-    ``install.sh`` enables Touch ID for sudo *before* ``brew bundle`` so that a cask's ``.pkg``
-    password prompt becomes a fingerprint tap. That enable is a privileged PAM write, so it
-    lands with the phase-2 privileged block (#68); this hook marks the ordering without pulling
-    sudo into this slice. The bash installer performs the real enable until the cutover (#72),
-    so this is intentionally a no-op for now.
-    """
 
 
 def _brew_bundle(ctx: InstallContext, brewfile: Path) -> bool:
