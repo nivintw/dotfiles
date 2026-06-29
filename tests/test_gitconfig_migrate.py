@@ -167,11 +167,17 @@ def test_unwritable_overlay_fails_and_leaves_original(tmp_path: Path) -> None:
 
 
 def test_non_utf8_gitconfig_round_trips(tmp_path: Path) -> None:
-    """A non-UTF-8 ~/.gitconfig migrates without a decode crash, bytes preserved (byte-faithful)."""
+    """A non-UTF-8 ~/.gitconfig migrates without a decode crash, byte-for-byte (#83)."""
     target, overlay, baseline = _paths(tmp_path)
-    target.write_bytes(b"[user]\n\tname = \xe9\xe8\xea\n")  # latin-1 accented bytes, invalid UTF-8
+    original = b"[user]\n\tname = \xe9\xe8\xea\n"  # latin-1 accented bytes, invalid UTF-8
+    target.write_bytes(original)
     gitconfig_migrate(target, overlay, baseline)
-    assert b"\xe9\xe8\xea" in overlay.read_bytes()
+    # The whole original block survives byte-for-byte through the decode→str-ops→encode fold,
+    # not merely the accented bytes — surrogateescape must round-trip on both ends.
+    assert original in overlay.read_bytes()
+    # And the moved-aside backup preserves the original bytes exactly (never clobbered/corrupted).
+    backup = target.with_name(f"{target.name}.pre-stow.bak")
+    assert backup.read_bytes() == original
 
 
 def test_crlf_gitconfig_preserves_line_endings(tmp_path: Path) -> None:

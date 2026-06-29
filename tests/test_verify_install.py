@@ -1,20 +1,27 @@
 # SPDX-FileCopyrightText: © 2026 Tyler Nivin
 # SPDX-License-Identifier: MIT
 
-"""Behavior tests for the verify-install predicates.
+"""Behavior tests for the verify-install predicates, probes, and OK/BAD emitter.
 
-Ported from the predicate tests in ``tests/verify_install.bats`` — the path/JSON/include
-checks the post-install summary is built from. The summary *emitter* itself (which shells out
-to brew/firewall/dscl to read live machine state) is system-probe orchestration and lands
-with the orchestrator port (#53); only the unit-testable predicates are ported here.
+The path/JSON/include predicates (ported from ``tests/verify_install.bats``), the live-state
+probes (``pam_tid``, the firewall, the login shell), the :func:`iter_records` emitter, and the
+phase-17 :func:`verify_and_summarize` renderer.
 """
 
 from __future__ import annotations
 
+import io
 import os
+import pwd
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from rich.console import Console
+
+from dotfiles_install import commands, verify_install
+from dotfiles_install.context import InstallContext
+from dotfiles_install.ui import UI
 from dotfiles_install.verify_install import (
     gitconfig_includes,
     is_json_object,
@@ -25,6 +32,17 @@ from dotfiles_install.verify_install import (
 
 if TYPE_CHECKING:
     import pytest
+
+
+def _completed(stdout: str) -> subprocess.CompletedProcess[str]:
+    """A successful CompletedProcess with the given stdout (for stubbing ``commands.run``)."""
+    return subprocess.CompletedProcess([], returncode=0, stdout=stdout, stderr="")
+
+
+def _brew_present(name: str) -> str | None:
+    """A ``commands.which`` stub: brew present, everything else absent."""
+    return "/usr/local/bin/brew" if name == "brew" else None
+
 
 # --- symlink_into_repo ------------------------------------------------------
 
@@ -243,3 +261,313 @@ def test_touchid_count_zero_when_bioutil_absent(
     empty.mkdir()
     monkeypatch.setenv("PATH", str(empty))
     assert touchid_enrolled_count() == 0
+
+
+# --- live-state probes ------------------------------------------------------
+
+
+def test_pam_tid_enabled_detects_marker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Detects the pam_tid.so marker in sudo_local."""
+    sudo_local = tmp_path / "sudo_local"
+    sudo_local.write_text("auth       sufficient     pam_tid.so\n", encoding="utf-8")
+    monkeypatch.setattr(verify_install, "_SUDO_LOCAL", sudo_local)
+    assert verify_install.pam_tid_enabled()
+
+
+def test_pam_tid_disabled_without_marker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No marker → not enabled."""
+    sudo_local = tmp_path / "sudo_local"
+    sudo_local.write_text("auth       include         sudo_local\n", encoding="utf-8")
+    monkeypatch.setattr(verify_install, "_SUDO_LOCAL", sudo_local)
+    assert not verify_install.pam_tid_enabled()
+
+
+def test_pam_tid_disabled_when_file_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing sudo_local → not enabled (no crash)."""
+    monkeypatch.setattr(verify_install, "_SUDO_LOCAL", tmp_path / "absent")
+    assert not verify_install.pam_tid_enabled()
+
+
+def test_firewall_enabled_when_state_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``socketfilterfw --getglobalstate`` reporting enabled → True."""
+    fw = tmp_path / "socketfilterfw"
+    fw.write_text("#!/bin/sh\n", encoding="utf-8")
+    fw.chmod(0o755)
+    monkeypatch.setattr(verify_install, "_SOCKETFILTERFW", fw)
+    monkeypatch.setattr(
+        commands, "run", lambda *_a, **_k: _completed("Firewall is enabled. (State = 1)")
+    )
+    assert verify_install.application_firewall_enabled()
+
+
+def test_firewall_disabled_when_state_disabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A disabled global state → False."""
+    fw = tmp_path / "socketfilterfw"
+    fw.write_text("#!/bin/sh\n", encoding="utf-8")
+    fw.chmod(0o755)
+    monkeypatch.setattr(verify_install, "_SOCKETFILTERFW", fw)
+    monkeypatch.setattr(
+        commands, "run", lambda *_a, **_k: _completed("Firewall is disabled. (State = 0)")
+    )
+    assert not verify_install.application_firewall_enabled()
+
+
+def test_firewall_false_when_binary_not_executable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A present-but-non-executable socketfilterfw degrades to False (no PermissionError crash)."""
+    fw = tmp_path / "socketfilterfw"
+    fw.write_text("#!/bin/sh\n", encoding="utf-8")
+    fw.chmod(0o644)  # readable but NOT executable
+    monkeypatch.setattr(verify_install, "_SOCKETFILTERFW", fw)
+
+    def _boom(*_a: object, **_k: object) -> subprocess.CompletedProcess[str]:
+        msg = "commands.run must not be invoked for a non-executable firewall binary"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(commands, "run", _boom)
+    assert not verify_install.application_firewall_enabled()
+
+
+def test_firewall_false_when_binary_absent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing socketfilterfw binary → False (and never shells out)."""
+    monkeypatch.setattr(verify_install, "_SOCKETFILTERFW", tmp_path / "absent")
+    assert not verify_install.application_firewall_enabled()
+
+
+def test_login_shell_parses_dscl_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Parses the shell path from ``dscl ... UserShell`` output."""
+    monkeypatch.setattr(
+        commands, "run", lambda *_a, **_k: _completed("UserShell: /opt/homebrew/bin/fish\n")
+    )
+    assert verify_install.login_shell() == "/opt/homebrew/bin/fish"
+
+
+def test_login_shell_none_on_unexpected_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unparseable/empty dscl output → None (rather than an index error)."""
+    monkeypatch.setattr(commands, "run", lambda *_a, **_k: _completed(""))
+    assert verify_install.login_shell() is None
+
+
+# --- iter_records emitter ---------------------------------------------------
+
+
+def _set_system_probes(monkeypatch: pytest.MonkeyPatch, *, ok: bool) -> None:
+    """Stub the three non-brew system probes to uniformly passing or failing values."""
+    monkeypatch.setattr(verify_install, "pam_tid_enabled", lambda: ok)
+    monkeypatch.setattr(verify_install, "application_firewall_enabled", lambda: ok)
+    monkeypatch.setattr(
+        verify_install, "login_shell", lambda: "/usr/local/bin/fish" if ok else None
+    )
+
+
+def _all_probes(monkeypatch: pytest.MonkeyPatch, *, healthy: bool) -> None:
+    """Stub every live-state probe (the three system probes + brew + Touch ID) uniformly."""
+    _set_system_probes(monkeypatch, ok=healthy)
+    monkeypatch.setattr(verify_install, "_brew_bundle_check", lambda _bf: healthy)
+    monkeypatch.setattr(verify_install, "touchid_enrolled_count", lambda: 1 if healthy else 0)
+
+
+def _healthy_repo_and_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Build a repo + tmp HOME where every file/symlink check passes; return the repo path."""
+    repo = tmp_path / "repo"
+    home = tmp_path / "home"
+    repo.mkdir()
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    (repo / "Brewfile").write_text('brew "git"\n', encoding="utf-8")
+    for rel in (".gitconfig", ".config/fish/config.fish", ".claude/CLAUDE.md"):
+        src = repo / rel
+        src.parent.mkdir(parents=True, exist_ok=True)
+        src.write_text("x\n", encoding="utf-8")
+        dst = home / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.symlink_to(src)
+    # ~/.gitconfig is a symlink to repo/.gitconfig; put the overlay include there.
+    (repo / ".gitconfig").write_text(
+        f"[include]\n\tpath = {home}/.gitconfig_local\n", encoding="utf-8"
+    )
+    (home / ".claude" / "settings.json").write_text('{"theme":"dark"}\n', encoding="utf-8")
+    return repo
+
+
+def test_iter_records_all_ok_on_healthy_machine(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fully set-up machine yields only OK records (the nine baseline checks)."""
+    repo = _healthy_repo_and_home(tmp_path, monkeypatch)
+    monkeypatch.setattr(commands, "which", lambda name: f"/usr/local/bin/{name}")
+    _all_probes(monkeypatch, healthy=True)
+    records = list(verify_install.iter_records(repo, core=False))
+    bad = [msg for status, msg in records if status == "BAD"]
+    expected_checks = 9  # brew + login + touch-id + firewall + 3 symlinks + settings + gitconfig
+    assert bad == []
+    assert len(records) == expected_checks
+
+
+def test_iter_records_flags_problems_on_bare_machine(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bare machine (no brew, no symlinks) yields the expected BAD records."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.setattr(commands, "which", lambda _name: None)
+    _all_probes(monkeypatch, healthy=False)
+    records = list(verify_install.iter_records(repo, core=False))
+    bad = [msg for status, msg in records if status == "BAD"]
+    assert ("BAD", "Homebrew not found on PATH — the bundle step did not complete") in records
+    assert any("not symlinked into repo" in msg for msg in bad)
+    assert any("not a JSON object" in msg for msg in bad)
+
+
+def _disable_system_probes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the non-brew probes all fail, so a test can focus on the brew records."""
+    _set_system_probes(monkeypatch, ok=False)
+
+
+def test_iter_records_checks_selected_opt_in_bundles(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A selected opt-in bundle yields a record; comment/blank selection lines are skipped."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    repo = tmp_path / "repo"
+    (repo / "Brewfile.d").mkdir(parents=True)
+    (repo / "Brewfile").write_text("", encoding="utf-8")
+    (repo / "Brewfile.d" / "work.brewfile").write_text('brew "gh"\n', encoding="utf-8")
+    sel = home / ".config" / "dotfiles" / "bundles"
+    sel.parent.mkdir(parents=True)
+    sel.write_text("# a comment\nwork\n\n", encoding="utf-8")
+    monkeypatch.setattr(commands, "which", _brew_present)
+    monkeypatch.setattr(verify_install, "_brew_bundle_check", lambda bf: "work.brewfile" in str(bf))
+    _disable_system_probes(monkeypatch)
+    records = list(verify_install.iter_records(repo, core=False))
+    assert ("OK", "opt-in bundle 'work' installed") in records
+
+
+def test_iter_records_checks_machine_private_brewfile_local(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-empty Brewfile.local yields a record; an all-comment one is skipped."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "Brewfile").write_text("", encoding="utf-8")
+    local = home / ".config" / "dotfiles" / "Brewfile.local"
+    local.parent.mkdir(parents=True)
+    local.write_text('brew "fd"\n', encoding="utf-8")
+    monkeypatch.setattr(commands, "which", _brew_present)
+    monkeypatch.setattr(
+        verify_install, "_brew_bundle_check", lambda bf: "Brewfile.local" in str(bf)
+    )
+    _disable_system_probes(monkeypatch)
+    records = list(verify_install.iter_records(repo, core=False))
+    assert ("OK", "machine-private Brewfile.local installed") in records
+
+
+def test_touch_id_record_keeps_no_fingerprint_phrase(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The enrolled=0 message keeps the exact phrase vm-smoke's is_tolerated() matches."""
+    monkeypatch.setattr(verify_install, "pam_tid_enabled", lambda: True)
+    monkeypatch.setattr(verify_install, "touchid_enrolled_count", lambda: 0)
+    status, message = verify_install._touch_id_record()
+    assert status == "BAD"
+    assert "NO fingerprint is enrolled" in message
+
+
+def test_iter_records_core_strips_casks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Under --core the Brewfile checked is the casks-stripped subset."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "Brewfile").write_text('brew "git"\ncask "firefox"\n', encoding="utf-8")
+    monkeypatch.setattr(
+        commands, "which", lambda name: "/usr/local/bin/brew" if name == "brew" else None
+    )
+    captured: dict[str, str] = {}
+
+    def _check_text(text: str) -> tuple[bool, Path]:
+        captured["text"] = text
+        return True, tmp_path / "core.brewfile"
+
+    monkeypatch.setattr(verify_install, "_brew_bundle_check_text", _check_text)
+    _all_probes(monkeypatch, healthy=False)  # the rest can fail; we only assert the core record
+    records = list(verify_install.iter_records(repo, core=True))
+    assert 'cask "firefox"' not in captured["text"]
+    assert 'brew "git"' in captured["text"]
+    assert ("OK", "Homebrew core (CLI formulae) packages all installed") in records
+
+
+def test_verify_and_summarize_renders_partitioned_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 17 splits records into Verified / Needs-attention and closes with the bash hints."""
+    monkeypatch.setattr(
+        verify_install,
+        "iter_records",
+        lambda *_a, **_k: iter([("OK", "all good"), ("BAD", "something broke")]),
+    )
+    out = io.StringIO()
+    ui = UI(stdout=Console(file=out, width=200), stderr=Console(file=io.StringIO(), width=200))
+    verify_install.verify_and_summarize(InstallContext(ui=ui))
+    text = out.getvalue()
+    assert "all good" in text
+    assert "something broke" in text
+    # A problem was present → the retry hint shows; the restart reminder is unconditional.
+    assert "to retry" in text
+    assert "Restart your shell" in text
+
+
+def test_verify_and_summarize_no_retry_hint_when_all_clear(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With nothing wrong, only the unconditional restart reminder closes the summary."""
+    monkeypatch.setattr(
+        verify_install, "iter_records", lambda *_a, **_k: iter([("OK", "all good")])
+    )
+    out = io.StringIO()
+    ui = UI(stdout=Console(file=out, width=200), stderr=Console(file=io.StringIO(), width=200))
+    verify_install.verify_and_summarize(InstallContext(ui=ui))
+    text = out.getvalue()
+    assert "to retry" not in text
+    assert "Restart your shell" in text
+
+
+def test_login_shell_queries_the_real_user_not_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """login_shell resolves the account from the real uid, not a (possibly stale) $USER env."""
+    monkeypatch.setenv("USER", "bogus-env-user")
+    monkeypatch.setenv("LOGNAME", "bogus-env-user")
+    real_user = pwd.getpwuid(os.getuid()).pw_name
+    captured: dict[str, list[str]] = {}
+
+    def _capture(argv: list[str], **_k: object) -> subprocess.CompletedProcess[str]:
+        captured["argv"] = list(argv)
+        return _completed("UserShell: /opt/homebrew/bin/fish\n")
+
+    monkeypatch.setattr(commands, "run", _capture)
+    verify_install.login_shell()
+    assert f"/Users/{real_user}" in captured["argv"]
+    assert "bogus-env-user" not in " ".join(captured["argv"])

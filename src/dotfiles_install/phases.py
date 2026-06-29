@@ -9,10 +9,10 @@ block** (phase 2) — the one that acquires and drops a sudo ticket — not mere
 may invoke sudo": phase 1 also makes an optional ``sudo`` call (the pre-bundle Touch-ID enable)
 yet is not ``privileged``. :data:`REGISTRY` mirrors ``install.sh``'s
 phases 0-17 in order. Phase *bodies* are ported one slice at a time (#67-#72): phases 0-13
-(bootstrap toolchain through the Claude Code MCP servers + user settings) carry a ``run``
-callable and **execute real installs**; phases 14-17 are still ``None`` stubs. ``install.sh``
-stays the default entry point until the cutover (#72), but running the ported phases via this
-registry performs real work now.
+(bootstrap toolchain through the Claude Code MCP servers + user settings) and phase 17
+(verification & summary, #39) carry a ``run`` callable and **execute real work**; phases 14-16
+are still ``None`` stubs. ``install.sh`` stays the default entry point until the cutover (#72),
+but running the ported phases via this registry performs real work now.
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ from dotfiles_install.post_stow import (
 )
 from dotfiles_install.privileged import privileged_setup
 from dotfiles_install.stow import stow_dotfiles
+from dotfiles_install.verify_install import verify_and_summarize
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -86,7 +87,7 @@ REGISTRY: tuple[Phase, ...] = (
     Phase(14, "Ollama model for GitLens", _MAC),
     Phase(15, "macOS system defaults (macos.sh)", _MAC),
     Phase(16, "Dock layout (dock.sh)", _MAC),
-    Phase(17, "Verification & summary", _MAC),
+    Phase(17, "Verification & summary", _MAC, run=verify_and_summarize),
 )
 
 
