@@ -24,15 +24,15 @@ import copy
 import json
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from dotfiles_install import commands
-from dotfiles_install.claude_settings_merge import diff, is_object, merge
 from dotfiles_install.layout import DOTFILES
+from dotfiles_install.settings_merge import ArrayMerge, SettingsSpec, generate_settings, merge
 
 if TYPE_CHECKING:
-    from dotfiles_install.claude_settings_merge import JSONValue
     from dotfiles_install.context import InstallContext
+    from dotfiles_install.settings_merge import JSONValue
 
 _OP_REF = "op://"  # an unresolved 1Password secret reference marker
 
@@ -75,11 +75,11 @@ def _merged_mcp(ctx: InstallContext) -> dict[str, JSONValue]:
             "fix it and re-run",
         )
         return baseline
-    # Top-level merge of two objects is itself an object; recurse per key with the jq-`*` helper.
-    merged: dict[str, JSONValue] = dict(baseline)
-    for key, value in overlay.items():
-        merged[key] = _deep_merge(baseline[key], value) if key in baseline else value
-    return merged
+    # MCP merges with REPLACE (jq `*`) array semantics, NOT the settings consumer's UNION: a
+    # per-server overlay must fully redefine that server (its args/env arrays replace, not union).
+    merged = merge(baseline, overlay, arrays=ArrayMerge.REPLACE)
+    # both inputs are objects, so the merge yields an object (cast for the type checker)
+    return cast("dict[str, JSONValue]", merged)
 
 
 def _resolve_secrets(ctx: InstallContext, merged: dict[str, JSONValue]) -> dict[str, JSONValue]:
@@ -160,122 +160,32 @@ def _github_pat() -> str:
     return ""
 
 
-def _deep_merge(base: JSONValue, over: JSONValue) -> JSONValue:
-    """Merge ``over`` onto ``base`` with jq ``*`` semantics: recurse objects, else overlay wins.
-
-    Unlike :func:`claude_settings_merge.merge`, arrays are **replaced** (not unioned) — matching
-    how ``jq -s '.[0] * .[1]'`` merges the MCP overlay.
-    """
-    if isinstance(base, dict) and isinstance(over, dict):
-        result: dict[str, JSONValue] = dict(base)
-        for key, value in over.items():
-            result[key] = _deep_merge(base[key], value) if key in base else value
-        return result
-    return over
-
-
 # --- Phase 13: user settings -------------------------------------------------------------------
 
 
 def write_user_settings(ctx: InstallContext) -> None:
-    """Generate ``~/.claude/settings.json`` from baseline ⊕ overlay, folding in live drift."""
-    # Read via the degrade-to-empty helper so a missing/unreadable tracked baseline routes to the
-    # same warn-skip path as a non-object one (matching bash's `jq -e type==object` guard),
-    # rather than crashing the phase with an OSError.
-    baseline_text = commands.read_text_or_empty(DOTFILES / "claude_settings.json")
-    if not is_object(baseline_text):
-        ctx.ui.warn(
-            "claude_settings.json is missing or not a JSON object — skipping settings "
-            "generation (fix it and re-run)",
-        )
-        return
-    baseline_json = json.loads(baseline_text)
-
-    overlay_path = _config_dir() / "claude_settings.local.json"
-    settings_path = Path.home() / ".claude" / "settings.json"
-
-    current_json = _read_live_settings(ctx, settings_path)
-
-    # Compute BOTH outputs before writing either, so a mid-step failure can't desync them. The
-    # delta is the live drift beyond the baseline; fold it into the overlay so prefs accrue.
-    delta_json = diff(baseline_json, current_json)
-    overlay_json = _fold_overlay(ctx, overlay_path, delta_json)
-    merged_json = merge(baseline_json, overlay_json)
-
-    overlay_path.parent.mkdir(parents=True, exist_ok=True)
-    settings_path.parent.mkdir(parents=True, exist_ok=True)
-    # A write failure (disk full, perms, read-only FS) must not crash the final phase with a
-    # traceback that skips the run summary — warn and continue, per the warn-and-continue design.
-    try:
-        _atomic_write(overlay_path, overlay_json)
-    except OSError as exc:
-        ctx.ui.warn(f"couldn't write the settings overlay {overlay_path}: {exc}")
-        return
-    if settings_path.is_dir():
-        ctx.ui.warn(
-            "refusing to write: ~/.claude/settings.json is a directory (remove it and re-run)",
-        )
-        return
-    try:
-        _atomic_write(settings_path, merged_json)
-    except OSError as exc:
-        ctx.ui.warn(f"couldn't write ~/.claude/settings.json: {exc}")
-        return
-    ctx.ui.ok("Claude settings written (baseline + machine-local overlay)")
-
-
-def _read_live_settings(ctx: InstallContext, settings_path: Path) -> JSONValue:
-    """Return the live settings as a JSON object, or ``{}`` if missing/corrupt/non-object."""
-    # settings_path.exists() follows the link, so a dangling migration symlink reads as absent.
-    if not settings_path.exists():
-        return {}
-    raw = commands.read_text_or_empty(settings_path)
-    if is_object(raw):
-        return json.loads(raw)
-    ctx.ui.warn(
-        "existing ~/.claude/settings.json isn't a JSON object — ignoring it "
-        "(regenerating from baseline + overlay)",
+    """Generate ``~/.claude/settings.json`` from the Claude baseline ⊕ machine-local overlay."""
+    generate_settings(
+        ctx,
+        SettingsSpec(
+            baseline_path=DOTFILES / "claude_settings.json",
+            overlay_path=_config_dir() / "claude_settings.local.json",
+            output_path=Path.home() / ".claude" / "settings.json",
+            label="Claude settings",
+        ),
     )
-    return {}
-
-
-def _fold_overlay(ctx: InstallContext, overlay_path: Path, delta_json: JSONValue) -> JSONValue:
-    """Fold the live delta into the existing overlay; rebuild from the delta if it's non-object."""
-    if not overlay_path.exists():
-        return delta_json
-    raw = commands.read_text_or_empty(overlay_path)
-    if is_object(raw):
-        return merge(json.loads(raw), delta_json)
-    ctx.ui.warn(
-        f"ignoring {overlay_path} (not a JSON object) — rebuilding it from the live delta; "
-        "fix it and re-run",
-    )
-    return delta_json
-
-
-def _atomic_write(path: Path, value: JSONValue) -> None:
-    """Write ``value`` as pretty JSON to ``path`` via a temp file + atomic replace.
-
-    Raises ``OSError`` on a write/replace failure after removing the partial temp file, so the
-    caller can warn-and-continue without leaving an orphaned ``.tmp.<pid>`` behind.
-    """
-    tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
-    try:
-        tmp.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        tmp.replace(path)  # atomic; replaces a leftover real file or dangling symlink
-    except OSError:
-        tmp.unlink(missing_ok=True)
-        raise
 
 
 def _load_json_object(path: Path) -> dict[str, JSONValue] | None:
-    """Parse ``path`` and return it only if it is a JSON object, else ``None``."""
-    # Separate single-exception clauses rather than a tuple: the parenthesis-free PEP 758 form
-    # ruff would enforce (`except A, B:`) reads like the Python-2 `except E, name:` bug.
+    """Parse ``path`` and return it only if it is a JSON object, else ``None``.
+
+    Reads via ``read_text_or_empty`` (surrogateescape, "" on a missing/unreadable file) so a
+    non-UTF-8 overlay degrades to a parse failure (→ ``None`` → warn) instead of crashing the
+    MCP phase with an uncaught ``UnicodeDecodeError`` — the same robust read the settings engine
+    uses, rather than a second, stricter loader.
+    """
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except OSError:
-        return None
+        value = json.loads(commands.read_text_or_empty(path))
     except json.JSONDecodeError:
         return None
     return value if isinstance(value, dict) else None
