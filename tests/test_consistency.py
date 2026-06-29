@@ -18,6 +18,8 @@ import pytest
 import yaml
 from conftest import REPO
 
+from dotfiles_install import stow
+
 if TYPE_CHECKING:
     import pathlib
 
@@ -127,18 +129,38 @@ def test_typos_configs_keep_shared_rules_in_sync() -> None:
     )
 
 
-def test_install_managed_files_are_stowed() -> None:
-    """Each file install.sh relinks must have a tracked source under home/."""
-    text = (REPO / "install.sh").read_text()
-    # Scope to the managed_files=( ... ) array, then pull the home-relative paths
-    # out of its "$HOME/..." entries (don't match $HOME elsewhere, e.g. PATH=).
-    block = re.search(r"managed_files=\((.*?)\)", text, re.DOTALL)
+def _install_sh_managed_files() -> list[str]:
+    """Scrape the $HOME-relative paths from install.sh's ``managed_files=( ... )`` array.
+
+    Scope to the array, then pull paths out of its ``"$HOME/..."`` entries (don't match
+    ``$HOME`` elsewhere, e.g. ``PATH=``).
+    """
+    block = re.search(r"managed_files=\((.*?)\)", (REPO / "install.sh").read_text(), re.DOTALL)
     assert block, "managed_files array not found in install.sh"
     rels = re.findall(r'"\$HOME/([^"]+)"', block.group(1))
     assert rels, "no managed_files entries found in install.sh"
-    for rel in rels:
+    return rels
+
+
+def test_install_managed_files_are_stowed() -> None:
+    """Each file the stow phase relinks must have a tracked source under home/."""
+    assert stow.MANAGED_FILES, "no managed files declared in dotfiles_install.stow"
+    for rel in stow.MANAGED_FILES:
         source = REPO / "home" / rel
-        assert source.exists(), f"install.sh manages $HOME/{rel} but home/{rel} isn't tracked"
+        assert source.exists(), f"stow manages $HOME/{rel} but home/{rel} isn't tracked"
+
+
+def test_install_sh_managed_files_match_python_constant() -> None:
+    """The bash ``managed_files=(...)`` array and ``stow.MANAGED_FILES`` stay in step.
+
+    The Python constant is the source of truth (the stow phase reads it), but ``install.sh``
+    keeps its own copy until the #72 cutover retires the bash. This parity test fails if the
+    two drift, so a managed-file change can't be made in one place and forgotten in the other.
+    """
+    assert _install_sh_managed_files() == list(stow.MANAGED_FILES), (
+        "install.sh managed_files and dotfiles_install.stow.MANAGED_FILES drifted; "
+        "update both (until install.sh is retired in #72)"
+    )
 
 
 def test_tracked_gitconfig_carries_no_personal_identity() -> None:
