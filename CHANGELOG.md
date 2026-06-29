@@ -7,6 +7,19 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.18.0](https://github.com/nivintw/dotfiles/compare/v1.17.0...v1.18.0) (2026-06-29)
+
+
+### Features
+
+* **installer:** Cut install.sh over to the Python installer ([010ec7c](https://github.com/nivintw/dotfiles/commit/010ec7c9852a2e6c93fe0699374353070424522c))
+* **installer:** Port phases 14-16 and add verify CLI modes ([3a56c0b](https://github.com/nivintw/dotfiles/commit/3a56c0bd86a401d7bf4810ade958e0f559de45ff))
+
+
+### Bug Fixes
+
+* **installer:** Make the uv bootstrap errexit-safe ([edb266f](https://github.com/nivintw/dotfiles/commit/edb266f79accaa80d4218b6ebec7f726b1779cad))
+
 ## [1.17.0](https://github.com/nivintw/dotfiles/compare/v1.16.0...v1.17.0) (2026-06-29)
 
 
