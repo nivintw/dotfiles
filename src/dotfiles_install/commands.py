@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
+    from pathlib import Path
 
     from dotfiles_install.ui import UI
 
@@ -112,3 +113,17 @@ def retry(description: str, attempts: int, func: Callable[[], bool], *, ui: UI) 
             )
             time.sleep(_RETRY_DELAY_SECONDS)
     return False
+
+
+def read_text_or_empty(path: Path) -> str:
+    """Read ``path`` as text, returning '' on any read error (bash ``cat ... 2>/dev/null``).
+
+    Catches ``OSError`` broadly (missing, unreadable, not-a-directory) to mirror the bash
+    degrade-to-empty, and decodes with ``surrogateescape`` so non-UTF-8 bytes round-trip
+    instead of raising ``UnicodeDecodeError`` (a ``ValueError``, which ``OSError`` wouldn't
+    catch). The shared home for the per-phase file reads that used to copy this idiom.
+    """
+    try:
+        return path.read_text(encoding="utf-8", errors="surrogateescape")
+    except OSError:
+        return ""

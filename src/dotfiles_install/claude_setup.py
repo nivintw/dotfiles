@@ -71,7 +71,7 @@ def _merged_mcp(ctx: InstallContext) -> dict[str, JSONValue]:
         # A malformed/non-object overlay must never wipe the tracked servers — warn and fall
         # back to the baseline only.
         ctx.ui.warn(
-            f"ignoring {overlay_path} (not valid JSON) — registering baseline servers only; "
+            f"ignoring {overlay_path} (not a JSON object) — registering baseline servers only; "
             "fix it and re-run",
         )
         return baseline
@@ -87,6 +87,15 @@ def _resolve_secrets(ctx: InstallContext, merged: dict[str, JSONValue]) -> dict[
     if commands.which("op") is not None and commands.run_ok(["op", "whoami"], capture=True):
         injected = commands.run(["op", "inject"], input_text=json.dumps(merged), capture=True)
         if injected.returncode != 0:
+            # op inject failed mid-resolution (locked vault, deleted item, …). Surface why,
+            # then degrade to the unresolved doc so the per-server op:// guard skips secrets —
+            # without the misleading "unresolved reference" message implying op isn't signed in.
+            ctx.ui.warn(
+                "1Password 'op inject' failed — skipping secret-backed servers; "
+                "re-run after 'op signin'.",
+            )
+            if injected.stderr.strip():
+                ctx.ui.detail(injected.stderr.strip())
             return merged
         try:
             resolved = json.loads(injected.stdout)
@@ -132,11 +141,14 @@ def _register_one(ctx: InstallContext, name: str, server: JSONValue) -> None:
         ctx.ui.warn(f"skipping '{name}' (command not found: {command})")
         return
     commands.run(["claude", "mcp", "remove", name, "--scope", "user"], capture=True)
-    if not commands.run_ok(
+    added = commands.run(
         ["claude", "mcp", "add-json", name, server_json, "--scope", "user"],
         capture=True,
-    ):
+    )
+    if added.returncode != 0:
         ctx.ui.warn(f"failed to register MCP server '{name}' (re-run install.sh to retry)")
+        if added.stderr.strip():
+            ctx.ui.detail(added.stderr.strip())
 
 
 def _github_pat() -> str:
@@ -167,11 +179,14 @@ def _deep_merge(base: JSONValue, over: JSONValue) -> JSONValue:
 
 def write_user_settings(ctx: InstallContext) -> None:
     """Generate ``~/.claude/settings.json`` from baseline ⊕ overlay, folding in live drift."""
-    baseline_text = (DOTFILES / "claude_settings.json").read_text()
+    # Read via the degrade-to-empty helper so a missing/unreadable tracked baseline routes to the
+    # same warn-skip path as a non-object one (matching bash's `jq -e type==object` guard),
+    # rather than crashing the phase with an OSError.
+    baseline_text = commands.read_text_or_empty(DOTFILES / "claude_settings.json")
     if not is_object(baseline_text):
         ctx.ui.warn(
-            "claude_settings.json is not a JSON object — skipping settings generation "
-            "(fix it and re-run)",
+            "claude_settings.json is missing or not a JSON object — skipping settings "
+            "generation (fix it and re-run)",
         )
         return
     baseline_json = json.loads(baseline_text)
@@ -189,13 +204,23 @@ def write_user_settings(ctx: InstallContext) -> None:
 
     overlay_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.parent.mkdir(parents=True, exist_ok=True)
-    _atomic_write(overlay_path, overlay_json)
+    # A write failure (disk full, perms, read-only FS) must not crash the final phase with a
+    # traceback that skips the run summary — warn and continue, per the warn-and-continue design.
+    try:
+        _atomic_write(overlay_path, overlay_json)
+    except OSError as exc:
+        ctx.ui.warn(f"couldn't write the settings overlay {overlay_path}: {exc}")
+        return
     if settings_path.is_dir():
         ctx.ui.warn(
             "refusing to write: ~/.claude/settings.json is a directory (remove it and re-run)",
         )
         return
-    _atomic_write(settings_path, merged_json)
+    try:
+        _atomic_write(settings_path, merged_json)
+    except OSError as exc:
+        ctx.ui.warn(f"couldn't write ~/.claude/settings.json: {exc}")
+        return
     ctx.ui.ok("Claude settings written (baseline + machine-local overlay)")
 
 
@@ -204,7 +229,7 @@ def _read_live_settings(ctx: InstallContext, settings_path: Path) -> JSONValue:
     # settings_path.exists() follows the link, so a dangling migration symlink reads as absent.
     if not settings_path.exists():
         return {}
-    raw = _read_text(settings_path)
+    raw = commands.read_text_or_empty(settings_path)
     if is_object(raw):
         return json.loads(raw)
     ctx.ui.warn(
@@ -218,7 +243,7 @@ def _fold_overlay(ctx: InstallContext, overlay_path: Path, delta_json: JSONValue
     """Fold the live delta into the existing overlay; rebuild from the delta if it's non-object."""
     if not overlay_path.exists():
         return delta_json
-    raw = _read_text(overlay_path)
+    raw = commands.read_text_or_empty(overlay_path)
     if is_object(raw):
         return merge(json.loads(raw), delta_json)
     ctx.ui.warn(
@@ -229,10 +254,18 @@ def _fold_overlay(ctx: InstallContext, overlay_path: Path, delta_json: JSONValue
 
 
 def _atomic_write(path: Path, value: JSONValue) -> None:
-    """Write ``value`` as pretty JSON to ``path`` via a temp file + atomic replace."""
+    """Write ``value`` as pretty JSON to ``path`` via a temp file + atomic replace.
+
+    Raises ``OSError`` on a write/replace failure after removing the partial temp file, so the
+    caller can warn-and-continue without leaving an orphaned ``.tmp.<pid>`` behind.
+    """
     tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
-    tmp.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    tmp.replace(path)  # atomic; replaces a leftover real file or dangling symlink
+    try:
+        tmp.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        tmp.replace(path)  # atomic; replaces a leftover real file or dangling symlink
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _load_json_object(path: Path) -> dict[str, JSONValue] | None:
@@ -242,11 +275,3 @@ def _load_json_object(path: Path) -> dict[str, JSONValue] | None:
     except OSError, json.JSONDecodeError:
         return None
     return value if isinstance(value, dict) else None
-
-
-def _read_text(path: Path) -> str:
-    """Read ``path`` as text, returning '' on any read error (bash ``cat ... 2>/dev/null``)."""
-    try:
-        return path.read_text(encoding="utf-8", errors="surrogateescape")
-    except OSError:
-        return ""

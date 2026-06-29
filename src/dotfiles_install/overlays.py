@@ -166,8 +166,17 @@ def _disable_signing_without_1password(ctx: InstallContext, gitconfig_local: Pat
             "— leaving it as-is",
         )
         return
-    commands.run(["git", "config", "--file", str(gitconfig_local), "commit.gpgsign", "false"])
-    ctx.ui.warn(
-        "1Password not found — disabled commit signing in ~/.gitconfig_local "
-        "(set commit.gpgsign yourself to re-enable).",
-    )
+    # Gate the "disabled" claim on the write actually succeeding: an unwritable/locked overlay
+    # would otherwise be reported as signing-off while the baseline's gpgsign=true still wins,
+    # breaking every later `git commit` on the exact no-1Password machine this targets.
+    disable = ["git", "config", "--file", str(gitconfig_local), "commit.gpgsign", "false"]
+    if commands.run_ok(disable):
+        ctx.ui.warn(
+            "1Password not found — disabled commit signing in ~/.gitconfig_local "
+            "(set commit.gpgsign yourself to re-enable).",
+        )
+    else:
+        ctx.ui.warn(
+            "1Password not found and couldn't disable commit signing in ~/.gitconfig_local "
+            "— set commit.gpgsign=false yourself, or commits will fail.",
+        )

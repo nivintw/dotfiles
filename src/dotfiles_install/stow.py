@@ -96,7 +96,7 @@ def _migrate_git_template_hooks(ctx: InstallContext) -> None:
     for hook in sorted(p for p in tmpl_hooks.iterdir() if not p.name.startswith(".")):
         if hook.is_symlink():
             continue
-        if _PREK_SHIM_MARKER in _read_text(hook):
+        if _PREK_SHIM_MARKER in commands.read_text_or_empty(hook):
             hook.unlink()
             removed.append(hook.name)
     if removed:
@@ -113,13 +113,15 @@ def _migrate_gitconfig(ctx: InstallContext) -> None:
             home / ".gitconfig_local",
             DOTFILES / "home" / ".gitconfig",
         )
-    except OSError:
-        ctx.ui.err("couldn't safely adopt your existing ~/.gitconfig (see the error above).")
+    except OSError as exc:
+        # gitconfig_migrate raises a bare OSError; surface it so the message isn't an empty
+        # "see the error above" pointing at nothing.
+        ctx.ui.err(f"couldn't safely adopt your existing ~/.gitconfig: {exc}")
         ctx.ui.detail(
             "Your config was left in place or backed up to ~/.gitconfig.pre-stow.bak — "
             "resolve it, then re-run install.sh.",
         )
-        raise SystemExit(1) from None
+        raise SystemExit(1) from exc
     if not action:
         return
     if action.startswith("backed up"):
@@ -150,14 +152,3 @@ def _stow_preflight_and_apply(ctx: InstallContext) -> None:
     if not commands.run_ok(["stow", "--no-folding", *opts]):
         ctx.ui.err("stow failed to symlink the dotfiles despite a clean preflight.")
         raise SystemExit(1)
-
-
-def _read_text(path: Path) -> str:
-    """Read ``path`` as text, '' on any read error (bash ``grep -qs`` degrade-to-no-match).
-
-    Decodes with ``surrogateescape`` so a non-UTF-8 hook file round-trips instead of raising.
-    """
-    try:
-        return path.read_text(encoding="utf-8", errors="surrogateescape")
-    except OSError:
-        return ""

@@ -102,7 +102,7 @@ def import_atuin_history(ctx: InstallContext) -> None:
 def configure_iterm2(ctx: InstallContext) -> None:
     """Phase 8: point iTerm2 at the repo's tracked preferences folder."""
     iterm_prefs = DOTFILES / "iterm2"
-    commands.run(
+    set_folder = commands.run_ok(
         [
             "defaults",
             "write",
@@ -112,7 +112,7 @@ def configure_iterm2(ctx: InstallContext) -> None:
             str(iterm_prefs),
         ],
     )
-    commands.run(
+    load_custom = commands.run_ok(
         [
             "defaults",
             "write",
@@ -122,7 +122,10 @@ def configure_iterm2(ctx: InstallContext) -> None:
             "true",
         ],
     )
-    ctx.ui.ok(f"iTerm2 pointed at tracked preferences ({iterm_prefs})")
+    if set_folder and load_custom:
+        ctx.ui.ok(f"iTerm2 pointed at tracked preferences ({iterm_prefs})")
+    else:
+        ctx.ui.warn("couldn't point iTerm2 at the tracked prefs (defaults write failed)")
 
 
 def install_uv_tools(ctx: InstallContext) -> None:

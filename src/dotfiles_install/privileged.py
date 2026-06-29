@@ -86,7 +86,7 @@ def enable_touch_id_sudo(ctx: InstallContext) -> None:
     desired = _desired_pam_content()
     # Compare against the file with trailing newlines stripped, mirroring bash's `$(cat ...)`
     # command substitution — so a correct file (written as `desired\n`) reads as a no-op.
-    if _read_text(_PAM_SUDO_LOCAL).rstrip("\n") == desired:
+    if commands.read_text_or_empty(_PAM_SUDO_LOCAL).rstrip("\n") == desired:
         return  # already correct — and the read cost no sudo (sudo_local is world-readable)
     if commands.run_ok(
         ["sudo", "tee", str(_PAM_SUDO_LOCAL)],
@@ -103,7 +103,7 @@ def enable_touch_id_sudo(ctx: InstallContext) -> None:
 
 def _sudo_local_supported() -> bool:
     """Report whether ``/etc/pam.d/sudo`` includes sudo_local (false means MDM-managed)."""
-    return "sudo_local" in _read_text(_PAM_SUDO)
+    return "sudo_local" in commands.read_text_or_empty(_PAM_SUDO)
 
 
 def _desired_pam_content() -> str:
@@ -129,7 +129,7 @@ def _set_fish_login_shell(ctx: InstallContext) -> None:
     if fish_bin is None:
         ctx.ui.warn("fish not found on PATH — leaving the default shell unchanged")
         return
-    if fish_bin not in _read_text(_ETC_SHELLS).splitlines():
+    if fish_bin not in commands.read_text_or_empty(_ETC_SHELLS).splitlines():
         ctx.ui.active(f"registering {fish_bin} in /etc/shells")
         if not commands.run_ok(
             ["sudo", "tee", "-a", str(_ETC_SHELLS)],
@@ -185,19 +185,3 @@ def _firewall_enabled() -> bool:
 def _current_username() -> str:
     """Return the invoking user's login name (bash ``id -un``)."""
     return pwd.getpwuid(os.getuid()).pw_name
-
-
-def _read_text(path: Path) -> str:
-    """Read ``path`` as text, returning '' on any read error (bash ``cat ... 2>/dev/null``).
-
-    Catches ``OSError`` broadly — not just missing-file — to match the bash original's
-    degrade-to-empty: a missing, unreadable (e.g. a hardened root-only ``sudo_local``), or
-    not-a-directory path must read as empty and let the caller continue, never abort the run
-    (the phase-1 pre-bundle caller has no try/except around it). Decoding uses
-    ``surrogateescape`` (as ``brew_bundle`` does) so non-UTF-8 bytes round-trip instead of
-    raising ``UnicodeDecodeError`` — which, being a ``ValueError``, ``OSError`` wouldn't catch.
-    """
-    try:
-        return path.read_text(encoding="utf-8", errors="surrogateescape")
-    except OSError:
-        return ""
