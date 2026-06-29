@@ -34,11 +34,13 @@ fi
 # fails loudly instead of silently no-opping a piped shell.
 if ! command -v uv >/dev/null 2>&1; then
   printf 'Installing uv...\n'
-  uv_script="$(curl -LsSf https://astral.sh/uv/install.sh)"
-  [ -n "$uv_script" ] || {
-    printf 'uv install failed (empty download); check your network and re-run.\n' >&2
+  # Test curl's status in the `if` condition (exempt from `set -e`): a bare
+  # `uv_script="$(curl ...)"` would let errexit abort the script on a network/HTTP failure
+  # BEFORE the guard could print a useful message. A non-zero exit OR an empty body is a failure.
+  if ! uv_script="$(curl -LsSf https://astral.sh/uv/install.sh)" || [ -z "$uv_script" ]; then
+    printf 'uv install failed (download error); check your network and re-run.\n' >&2
     exit 1
-  }
+  fi
   printf '%s\n' "$uv_script" | sh
   # uv installs to ~/.local/bin (newer) or ~/.cargo/bin (older); cover both.
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
