@@ -1,14 +1,13 @@
 # SPDX-FileCopyrightText: © 2026 Tyler Nivin
 # SPDX-License-Identifier: MIT
 
-"""Typer entry point for the dotfiles installer (skeleton).
+"""Typer entry point for the dotfiles installer.
 
-Reproduces ``install.sh``'s flag surface (``--bundle`` / ``--no-bundles`` / ``--keep-bundles`` /
-``--core`` / ``--help``) and its exit codes — 0 on success or help, 2 on a usage error, 1 on a
-runtime precondition (non-macOS) — then walks the phase registry. Phases 0-13 and 17 (verify
-& summary) execute **real work**; phases 14-16 are stubs that report as not-yet-ported.
-``install.sh`` stays the default entry point until the cutover (#72), so running this module
-directly today runs only the ported phases for real.
+The installer's real entry point (``install.sh`` is a thin stub that hands off here via uv).
+Reproduces the historical flag surface (``--bundle`` / ``--no-bundles`` / ``--keep-bundles`` /
+``--core`` / ``--help``) plus ``--verify`` / ``--verify-stream``, with the same exit codes — 0 on
+success or help, 2 on a usage error, 1 on a runtime precondition (non-macOS) — then walks the
+phase registry. Every phase (0-17) executes real work; the port from ``install.sh`` is complete.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from typing import Annotated
 
 import typer
 
-from dotfiles_install import commands
+from dotfiles_install import commands, verify_install
 from dotfiles_install.context import InstallContext
 from dotfiles_install.layout import discover_bundles
 from dotfiles_install.os_detect import current_os
@@ -53,8 +52,33 @@ def main(
         bool,
         typer.Option("--core", help="Core profile: CLI formulae only, skip casks."),
     ] = False,
+    verify: Annotated[
+        bool,
+        typer.Option(
+            "--verify",
+            help="Run post-install verification only; print the summary and exit non-zero if "
+            "anything needs attention.",
+        ),
+    ] = False,
+    verify_stream: Annotated[
+        bool,
+        typer.Option(
+            "--verify-stream",
+            help="Emit the raw OK/BAD verification records + a VERIFY_DONE sentinel (consumed by "
+            "the VM-smoke harness), then exit.",
+            hidden=True,
+        ),
+    ] = False,
 ) -> None:
     """Converge this Mac to the state declared in the repo (dotfiles bootstrap)."""
+    # Verification-only modes short-circuit the install (used by `dotfiles-doctor` and the
+    # vm-smoke harness, which replaced sourcing the retired scripts/verify_install.sh).
+    if verify_stream:
+        verify_install.emit_stream(core=core, write=typer.echo)
+        raise typer.Exit(code=0)
+    if verify:
+        problems = verify_install.run_check(InstallContext(ui=UI(), core=core))
+        raise typer.Exit(code=1 if problems else 0)
     # Dedup repeated --bundle values, preserving order (bash's add_requested_bundle).
     requested = tuple(dict.fromkeys(bundle or ()))
     _validate_bundles(requested, no_bundles=no_bundles, keep_bundles=keep_bundles)
@@ -87,7 +111,7 @@ def _validate_bundles(
 
 
 def _run(ctx: InstallContext) -> None:
-    """Walk the OS-gated phase registry, reporting each not-yet-ported phase as skipped."""
+    """Walk the OS-gated phase registry in order, running each phase's body."""
     ui = ctx.ui
     ui.banner("dotfiles bootstrap")
     try:
@@ -102,10 +126,7 @@ def _run(ctx: InstallContext) -> None:
     try:
         for phase in applicable:
             ui.step(f"[{phase.number}] {phase.name}")
-            if phase.run is not None:
-                phase.run(ctx)
-            else:
-                ui.warn(f"phase '{phase.name}' is not yet ported (skipped)")
+            phase.run(ctx)
     finally:
         # Backstop the sudo ticket drop, mirroring install.sh's global `trap 'sudo -k 2>/dev/null
         # || true' EXIT`. The privileged phase drops the ticket at the end of its own block, but

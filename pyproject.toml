@@ -1,16 +1,19 @@
 # SPDX-FileCopyrightText: © 2026 Tyler Nivin
 # SPDX-License-Identifier: MIT
 
-# This repo isn't a Python package — pyproject.toml exists only to give the
-# config-validation test suite (tests/test_*.py) a managed pytest environment.
-# Run it with:  uv run pytest
-# The fish-behavior tests are separate and run with bats (see tests/README.md).
+# The installer is a real Python package (src/dotfiles_install) exposing a `dotfiles-install`
+# console entry point; install.sh is a thin stub that hands off to it via uv (see #72). The same
+# managed env also runs the config-validation suite (uv run pytest); fish tests run via bats.
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "dotfiles"
-# Nothing builds/reads this (package = false), but release-please keeps it in sync with the
-# version-of-record (.config/.release-please-manifest.json + git tags) via extra-files — it
-# rewrites this AND uv.lock's dotfiles version together on each release, so uv-lock stays
-# green. Kept in step manually here so manifest = pyproject = uv.lock.
+# The built wheel's version. release-please keeps it in sync with the version-of-record
+# (.config/.release-please-manifest.json + git tags) via extra-files — it rewrites this AND
+# uv.lock's dotfiles version together on each release, so `uv lock --check` stays green. Kept in
+# step manually here so manifest = pyproject = uv.lock.
 version = "1.17.0"
 requires-python = ">=3.14"
 description = "Tyler Nivin's dotfiles and config repo"
@@ -20,7 +23,11 @@ license-files = ["LICENSE", "LICENSES/*"]
 
 classifiers = ["Programming Language :: Python :: 3"]
 
-dependencies = []
+# The installer's runtime deps (the CLI + UI). Everything else is dev-only (below).
+dependencies = ["rich>=15.0.0", "typer>=0.26.8"]
+
+[project.scripts]
+dotfiles-install = "dotfiles_install.cli:app"
 
 [dependency-groups]
 dev = [
@@ -30,19 +37,21 @@ dev = [
   "pytest-cov>=7.1.0",
   "pytest-playwright>=0.8.0",
   "pyyaml>=6.0.3",
-  "rich>=15.0.0",
   "ruff>=0.15.17",
   "ty>=0.0.49",
-  "typer>=0.26.8",
 ]
 
 [tool.uv]
-package = false # don't try to build/install this repo as a package
+package = true # build/install the package so the `dotfiles-install` console script exists
+
+[tool.hatch.build.targets.wheel]
+# The project is named "dotfiles" but the importable package is dotfiles_install under src/.
+packages = ["src/dotfiles_install"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# The installer helper package lives under src/ but is deliberately not installed
-# (package = false). Put src/ on sys.path so tests can `import dotfiles_install`.
+# The package is installed (editable) into the uv env, so `import dotfiles_install` resolves
+# without this; kept as a belt-and-suspenders for a bare `pytest` run outside `uv run`.
 pythonpath = ["src"]
 markers = [
   "integration: end-to-end tests that boot a VM (opt-in, needs tart); skipped by default.",
@@ -97,8 +106,10 @@ convention = "google"
 # (brew, curl, fzf); the S603 "untrusted input" audit is the whole point of centralizing here.
 "src/dotfiles_install/commands.py" = ["S603"]
 # Typer models CLI flags as boolean parameters with boolean defaults — the idiomatic Typer
-# surface, not the boolean-trap FBT guards against — so silence them for the CLI module.
-"src/dotfiles_install/cli.py" = ["FBT001", "FBT002"]
+# surface, not the boolean-trap FBT guards against — so silence them for the CLI module. The
+# command function also collects one parameter per flag, so PLR0913 (too-many-arguments) is
+# expected for a Typer command and silenced here too.
+"src/dotfiles_install/cli.py" = ["FBT001", "FBT002", "PLR0913"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

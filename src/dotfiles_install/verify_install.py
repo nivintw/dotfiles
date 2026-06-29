@@ -10,8 +10,10 @@ heavier live-state probes (``brew bundle check``, the firewall via ``socketfilte
 shell via ``dscl``, ``pam_tid``). :func:`iter_records` aggregates them into ``("OK"|"BAD", msg)``
 records, and :func:`verify_and_summarize` is the phase-17 body that renders the closing summary.
 
-Ported from ``scripts/verify_install.sh`` (predicates pinned by ``tests/verify_install.bats``);
-the bash emitter stays the live install's source of truth until the #72 cutover.
+Ported from install.sh's verification step (predicates pinned by ``tests/test_verify_install.py``).
+This is now the single source of truth for the install summary, the ``dotfiles-install --verify``
+re-check (``dotfiles-doctor``), and the ``--verify-stream`` record stream the vm-smoke harness gates
+on.
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ from dotfiles_install.bundle_select import parse_bundles
 from dotfiles_install.layout import DOTFILES
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from dotfiles_install.context import InstallContext
 
@@ -166,9 +168,9 @@ def iter_records(dotfiles: Path, *, core: bool) -> Iterator[Record]:
     """Yield an ``("OK"|"BAD", message)`` record per post-install check.
 
     Re-derives the intended end state and reports it; never mutates anything and never needs
-    sudo (every probe reads as the user). The Python phase-17 source of truth for the install
-    summary; it mirrors the bash ``scripts/verify_install.sh`` emitter, which stays the live
-    install's (and ``dotfiles-doctor``'s) source until the #72 cutover repoints them here.
+    sudo (every probe reads as the user). The single source of truth for the phase-17 install
+    summary, the ``dotfiles-install --verify`` re-check (``dotfiles-doctor``), and the
+    ``--verify-stream`` record stream the vm-smoke harness gates on.
     """
     yield from _brew_records(dotfiles, core=core)
     yield _login_shell_record()
@@ -183,8 +185,42 @@ def verify_and_summarize(ctx: InstallContext) -> None:
     """Phase 17: render the closing post-install summary (reads only, never gates).
 
     The cli registry loop already prints the ``[17] Verification & summary`` step header, so this
-    adds no banner of its own. It closes with the same two detail lines as the bash phase 17: a
-    retry hint when anything needs attention, then the unconditional restart reminder.
+    adds no banner of its own. It closes with the same two detail lines as the bash phase 17.
+    """
+    _summarize(ctx)
+
+
+def run_check(ctx: InstallContext) -> int:
+    """Render the verification summary standalone and return the problem count (0 = healthy).
+
+    Backs ``dotfiles-install --verify`` and, through it, the ``dotfiles-doctor`` command — the
+    caller turns the count into an exit code.
+    """
+    return _summarize(ctx)
+
+
+def emit_stream(*, core: bool, write: Callable[[str], object]) -> None:
+    """Emit the raw ``OK<TAB>msg`` / ``BAD<TAB>msg`` records + a trailing ``VERIFY_DONE<TAB>count``.
+
+    The machine-readable stream the vm-smoke harness's ``evaluate_stream`` gates on (it tolerates
+    only the no-Touch-ID BAD and fails closed when the sentinel is missing). The sentinel carries
+    the BAD count (mirroring the bash original, which appended the verify exit status), so it stays
+    honest rather than always claiming zero. Replaces sourcing the retired
+    ``scripts/verify_install.sh`` in the guest.
+    """
+    problems = 0
+    for status, message in iter_records(DOTFILES, core=core):
+        if status != "OK":
+            problems += 1
+        write(f"{status}\t{message}")
+    write(f"VERIFY_DONE\t{problems}")
+
+
+def _summarize(ctx: InstallContext) -> int:
+    """Partition the records into the Verified / Needs-attention summary + closing hints.
+
+    Returns the problem count. Closing lines mirror the bash phase 17: a retry hint when anything
+    needs attention, then the unconditional restart reminder.
     """
     verified: list[str] = []
     problems: list[str] = []
@@ -194,10 +230,10 @@ def verify_and_summarize(ctx: InstallContext) -> None:
     # "Needs attention" = failed checks plus the run's warnings (what ui.summary folds in).
     if problems or ctx.ui.warnings:
         ctx.ui.detail(
-            "re-run ~/dotfiles/install.sh to retry, or "
-            "'bash ~/dotfiles/scripts/verify_install.sh' to re-check.",
+            "re-run ~/dotfiles/install.sh to retry, or 'dotfiles-install --verify' to re-check.",
         )
     ctx.ui.detail("Restart your shell (or run 'exec fish') to pick everything up.")
+    return len(problems)
 
 
 def _record(ok_message: str, bad_message: str, *, passed: bool) -> Record:

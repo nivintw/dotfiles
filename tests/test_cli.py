@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © 2026 Tyler Nivin
 # SPDX-License-Identifier: MIT
 
-"""Tests for the installer CLI: flag surface, exit codes, and the stub run loop."""
+"""Tests for the installer CLI: flag surface, exit codes, verify modes, and the run loop."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from dotfiles_install.os_detect import OS
 from dotfiles_install.phases import Phase
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 runner = CliRunner()
@@ -27,7 +28,7 @@ RUNTIME_ERROR_EXIT = 1
 
 @pytest.fixture
 def _no_real_installs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Neutralize the ported phase 0-13 bodies: stub command execution and isolate ``$HOME``.
+    """Neutralize every phase body: stub command execution and isolate ``$HOME``.
 
     The macOS walk now runs the real bootstrap through Claude-settings phases, so
     ``commands.which`` reports every tool present (skipping installs) and ``commands.run`` is a
@@ -123,16 +124,56 @@ def test_run_on_unsupported_platform_exits_one_cleanly(monkeypatch: pytest.Monke
 
 @pytest.mark.usefixtures("_no_real_installs")
 def test_run_on_macos_walks_all_phases(monkeypatch: pytest.MonkeyPatch) -> None:
-    """On macOS the run completes; the still-unported phases report not-yet-ported."""
+    """On macOS the run completes and every phase executes (the port is complete)."""
     monkeypatch.setattr(cli, "current_os", lambda: OS.MACOS)
     result = runner.invoke(app, [])
     assert result.exit_code == 0
     assert "dotfiles bootstrap" in result.output
-    # Phases 14-17 are still stubs, so the not-yet-ported notice is still emitted.
-    assert "not yet ported" in result.output
-    # Every phase header is printed, including the now-ported phase 0.
+    # No phase is a stub any more, so the not-yet-ported notice is never emitted.
+    assert "not yet ported" not in result.output
+    # Every phase header is printed, from phase 0 through the final verification phase.
     assert "[0] Bootstrap toolchain (Homebrew + uv)" in result.output
     assert "[17] Verification & summary" in result.output
+
+
+def test_verify_flag_exits_zero_when_healthy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--verify`` short-circuits the install and exits 0 when run_check finds no problems."""
+    monkeypatch.setattr(verify_install, "run_check", lambda _ctx: 0)
+    result = runner.invoke(app, ["--verify"])
+    assert result.exit_code == 0
+
+
+def test_verify_flag_exits_one_when_problems(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--verify`` exits 1 when run_check reports any problem (the doctor's failure signal)."""
+    monkeypatch.setattr(verify_install, "run_check", lambda _ctx: 3)
+    result = runner.invoke(app, ["--verify"])
+    assert result.exit_code == 1
+
+
+def test_verify_flag_does_not_run_the_install(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--verify`` must not walk the phase registry (it's a read-only re-check)."""
+    monkeypatch.setattr(verify_install, "run_check", lambda _ctx: 0)
+
+    def _boom() -> OS:
+        msg = "the install walk must not start under --verify"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(cli, "current_os", _boom)
+    assert runner.invoke(app, ["--verify"]).exit_code == 0
+
+
+def test_verify_stream_flag_emits_records_and_exits_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--verify-stream`` writes the raw records via typer.echo and exits 0 for the harness."""
+
+    def _emit(*, core: bool, write: Callable[[str], object]) -> None:  # noqa: ARG001
+        write("OK\tfine")
+        write("VERIFY_DONE\t0")
+
+    monkeypatch.setattr(verify_install, "emit_stream", _emit)
+    result = runner.invoke(app, ["--verify-stream"])
+    assert result.exit_code == 0
+    assert "OK\tfine" in result.output
+    assert "VERIFY_DONE\t0" in result.output
 
 
 def test_run_drops_the_sudo_ticket_when_a_phase_raises(monkeypatch: pytest.MonkeyPatch) -> None:
