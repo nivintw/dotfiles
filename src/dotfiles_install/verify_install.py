@@ -1,26 +1,42 @@
 # SPDX-FileCopyrightText: © 2026 Tyler Nivin
 # SPDX-License-Identifier: MIT
 
-"""Verify-install predicates.
+"""Verify-install checks, OK/BAD emitter, and the phase-17 summary.
 
-The unit-testable checks the post-install summary is built from: resolving a symlink target
-into the repo, rejecting non-object JSON, matching an ``[include]`` path through ``~`` expansion,
-abbreviating ``$HOME`` to ``~`` for display, and counting enrolled Touch ID templates. Two of
-these shell out to fixed commands (``git config`` for includes, ``bioutil`` for the Touch ID
-count) but stay deterministically testable. The full summary *emitter* — which aggregates the
-heavier live-state probes (``brew bundle check``, the firewall, the login shell) into OK/BAD
-records — is orchestration and lands with the orchestrator port.
+The unit-testable predicates the summary is built from — resolving a symlink target into the
+repo, rejecting non-object JSON, matching an ``[include]`` path through ``~`` expansion,
+abbreviating ``$HOME`` to ``~`` for display, and counting enrolled Touch ID templates — plus the
+heavier live-state probes (``brew bundle check``, the firewall via ``socketfilterfw``, the login
+shell via ``dscl``, ``pam_tid``). :func:`iter_records` aggregates them into ``("OK"|"BAD", msg)``
+records, and :func:`verify_and_summarize` is the phase-17 body that renders the closing summary.
 
-Ported from ``scripts/verify_install.sh`` (predicates pinned by ``tests/verify_install.bats``).
+Ported from ``scripts/verify_install.sh`` (predicates pinned by ``tests/verify_install.bats``);
+the bash emitter stays the live install's source of truth until the #72 cutover.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import pwd
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+from dotfiles_install import commands
+from dotfiles_install.brewfile import brewfile_core
+from dotfiles_install.bundle_select import parse_bundles
+from dotfiles_install.layout import DOTFILES
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from dotfiles_install.context import InstallContext
+
+type Record = tuple[str, str]  # ("OK" | "BAD", message)
 
 _TEMPLATE_RE = re.compile(r"(\d+) biometric template")
 
@@ -100,3 +116,252 @@ def touchid_enrolled_count() -> int:
         check=False,
     )
     return sum(int(match.group(1)) for match in _TEMPLATE_RE.finditer(result.stdout))
+
+
+# --- live-state probes (shell out via the commands seam; not pure) ----------
+
+_SUDO_LOCAL = Path("/etc/pam.d/sudo_local")
+_SOCKETFILTERFW = Path("/usr/libexec/ApplicationFirewall/socketfilterfw")
+
+# Key dotfiles symlinks that must resolve into the repo, relative to $HOME.
+_KEY_LINKS = (".gitconfig", ".config/fish/config.fish", ".claude/CLAUDE.md")
+
+
+def pam_tid_enabled() -> bool:
+    """Report whether Touch ID for sudo is wired into /etc/pam.d/sudo_local (readable as user)."""
+    return "pam_tid.so" in commands.read_text_or_empty(_SUDO_LOCAL)
+
+
+def application_firewall_enabled() -> bool:
+    """Report whether the application firewall's global state is enabled (readable without sudo)."""
+    # Gate on executability (bash `[ -x ]`): a present-but-non-executable binary must degrade to
+    # False, not raise PermissionError out of the run() — which only catches FileNotFoundError.
+    if not os.access(_SOCKETFILTERFW, os.X_OK):
+        return False
+    result = commands.run([str(_SOCKETFILTERFW), "--getglobalstate"], capture=True)
+    return "enabled" in (result.stdout or "").lower()
+
+
+def login_shell() -> str | None:
+    """Return the current user's login shell from Directory Services, or ``None`` if unreadable."""
+    # Resolve the user from the real uid (like bash `id -un`), NOT getpass.getuser(), which
+    # trusts $USER/$LOGNAME and would query the wrong account under `su` or a stale env.
+    username = pwd.getpwuid(os.getuid()).pw_name
+    result = commands.run(
+        ["dscl", ".", "-read", f"/Users/{username}", "UserShell"],
+        capture=True,
+    )
+    # "UserShell: /opt/homebrew/bin/fish" — the shell path is the second field.
+    match (result.stdout or "").split():
+        case ["UserShell:", shell, *_]:
+            return shell
+        case _:
+            return None
+
+
+# --- OK/BAD record emitter --------------------------------------------------
+
+
+def iter_records(dotfiles: Path, *, core: bool) -> Iterator[Record]:
+    """Yield an ``("OK"|"BAD", message)`` record per post-install check.
+
+    Re-derives the intended end state and reports it; never mutates anything and never needs
+    sudo (every probe reads as the user). The Python phase-17 source of truth for the install
+    summary; it mirrors the bash ``scripts/verify_install.sh`` emitter, which stays the live
+    install's (and ``dotfiles-doctor``'s) source until the #72 cutover repoints them here.
+    """
+    yield from _brew_records(dotfiles, core=core)
+    yield _login_shell_record()
+    yield _touch_id_record()
+    yield _firewall_record()
+    yield from _symlink_records(dotfiles)
+    yield _settings_record()
+    yield _gitconfig_include_record()
+
+
+def verify_and_summarize(ctx: InstallContext) -> None:
+    """Phase 17: render the closing post-install summary (reads only, never gates).
+
+    The cli registry loop already prints the ``[17] Verification & summary`` step header, so this
+    adds no banner of its own. It closes with the same two detail lines as the bash phase 17: a
+    retry hint when anything needs attention, then the unconditional restart reminder.
+    """
+    verified: list[str] = []
+    problems: list[str] = []
+    for status, message in iter_records(DOTFILES, core=ctx.core):
+        (verified if status == "OK" else problems).append(message)
+    ctx.ui.summary(verified, problems)
+    # "Needs attention" = failed checks plus the run's warnings (what ui.summary folds in).
+    if problems or ctx.ui.warnings:
+        ctx.ui.detail(
+            "re-run ~/dotfiles/install.sh to retry, or "
+            "'bash ~/dotfiles/scripts/verify_install.sh' to re-check.",
+        )
+    ctx.ui.detail("Restart your shell (or run 'exec fish') to pick everything up.")
+
+
+def _record(ok_message: str, bad_message: str, *, passed: bool) -> Record:
+    """Build an OK record when ``passed``, else a BAD one."""
+    return ("OK", ok_message) if passed else ("BAD", bad_message)
+
+
+def _brew_records(dotfiles: Path, *, core: bool) -> Iterator[Record]:
+    """Records for the Homebrew baseline (or --core subset), opt-in bundles, and Brewfile.local."""
+    if commands.which("brew") is None:
+        yield ("BAD", "Homebrew not found on PATH — the bundle step did not complete")
+        return
+    brewfile = dotfiles / "Brewfile"
+    if core:
+        core_text = brewfile_core(commands.read_text_or_empty(brewfile))
+        core_ok, core_bf = _brew_bundle_check_text(core_text)
+        yield _record(
+            "Homebrew core (CLI formulae) packages all installed",
+            f"Homebrew core packages missing — re-check: "
+            f"brew bundle check --verbose --file={core_bf} (kept for inspection)",
+            passed=core_ok,
+        )
+    else:
+        yield _record(
+            "Homebrew baseline packages all installed",
+            f"Homebrew baseline packages missing — run: "
+            f"brew bundle check --verbose --file={brewfile}",
+            passed=_brew_bundle_check(brewfile),
+        )
+    yield from _opt_in_bundle_records(dotfiles)
+    yield from _brewfile_local_records()
+
+
+def _brew_bundle_check(brewfile: Path) -> bool:
+    """Report whether ``brew bundle check`` passes for ``brewfile`` (quietly)."""
+    return commands.run_ok(["brew", "bundle", "check", f"--file={brewfile}"], capture=True)
+
+
+def _brew_bundle_check_text(brewfile_text: str) -> tuple[bool, Path]:
+    """``brew bundle check`` the cask-stripped --core subset; return (passed, the temp Brewfile).
+
+    ``brew bundle check`` needs a real path, so the subset is written to a temp file. On success
+    the temp file is removed; on FAILURE it is kept so the BAD message can point the user at a
+    runnable ``--file=`` re-check (matching the bash original). ``surrogateescape`` round-trips any
+    non-UTF-8 bytes from the source Brewfile, so the write can't raise UnicodeEncodeError.
+    """
+    with tempfile.NamedTemporaryFile(
+        "w",
+        suffix=".brewfile",
+        prefix="brewfile-core",
+        delete=False,
+        encoding="utf-8",
+        errors="surrogateescape",
+    ) as handle:
+        handle.write(brewfile_text)
+        tmp = Path(handle.name)
+    passed = _brew_bundle_check(tmp)
+    if passed:
+        tmp.unlink(missing_ok=True)
+    return passed, tmp
+
+
+def _opt_in_bundle_records(dotfiles: Path) -> Iterator[Record]:
+    """A record per selected opt-in bundle (read from the persisted selection file)."""
+    # Read the selection with the same parser the installer wrote it with, so they can't drift.
+    sel = Path.home() / ".config" / "dotfiles" / "bundles"
+    for name in parse_bundles(sel):
+        brewfile = dotfiles / "Brewfile.d" / f"{name}.brewfile"
+        if not brewfile.is_file():
+            continue
+        yield _record(
+            f"opt-in bundle '{name}' installed",
+            f"opt-in bundle '{name}' has missing packages — run: "
+            f"brew bundle check --verbose --file={brewfile}",
+            passed=_brew_bundle_check(brewfile),
+        )
+
+
+def _brewfile_local_records() -> Iterator[Record]:
+    """A record for a machine-private ``Brewfile.local`` when it declares anything."""
+    local_bf = Path.home() / ".config" / "dotfiles" / "Brewfile.local"
+    if not _has_directive(local_bf):
+        return
+    yield _record(
+        "machine-private Brewfile.local installed",
+        f"Brewfile.local has missing packages — run: brew bundle check --verbose --file={local_bf}",
+        passed=_brew_bundle_check(local_bf),
+    )
+
+
+def _has_directive(path: Path) -> bool:
+    """Report whether ``path`` has any non-blank, non-comment line (empty/missing → False)."""
+    return any(
+        (stripped := line.strip()) and not stripped.startswith("#")
+        for line in commands.read_text_or_empty(path).splitlines()
+    )
+
+
+def _login_shell_record() -> Record:
+    """OK when fish is installed and is the login shell."""
+    fish = commands.which("fish")
+    shell = login_shell()
+    return _record(
+        "fish is the login shell",
+        f"login shell is '{shell or 'unknown'}', not fish ({fish or 'not installed'})",
+        passed=fish is not None and shell == fish,
+    )
+
+
+def _touch_id_record() -> Record:
+    """OK when Touch ID for sudo is enabled AND a fingerprint is enrolled."""
+    if not pam_tid_enabled():
+        return (
+            "BAD",
+            "Touch ID for sudo not enabled (/etc/pam.d/sudo_local) — sudo will prompt for your "
+            "password",
+        )
+    enrolled = touchid_enrolled_count()
+    if enrolled >= 1:
+        return ("OK", f"Touch ID for sudo enabled ({enrolled} fingerprint(s) enrolled)")
+    return (
+        "BAD",
+        "Touch ID for sudo is enabled but NO fingerprint is enrolled — sudo will keep prompting "
+        "for your password. Enroll one in System Settings → Touch ID & Password (or this Mac has "
+        "no Touch ID sensor).",
+    )
+
+
+def _firewall_record() -> Record:
+    """OK when the application firewall is enabled."""
+    return _record(
+        "application firewall enabled",
+        "application firewall is OFF — enable it in System Settings → Network → Firewall",
+        passed=application_firewall_enabled(),
+    )
+
+
+def _symlink_records(dotfiles: Path) -> Iterator[Record]:
+    """A record per key dotfiles symlink that should resolve into the repo."""
+    for rel in _KEY_LINKS:
+        link = Path.home() / rel
+        yield _record(
+            f"symlinked into repo: {tilde(link)}",
+            f"not symlinked into repo (stow may not have run): {tilde(link)}",
+            passed=symlink_into_repo(link, dotfiles),
+        )
+
+
+def _settings_record() -> Record:
+    """OK when the generated Claude settings file is a valid JSON object."""
+    settings = Path.home() / ".claude" / "settings.json"
+    return _record(
+        f"{tilde(settings)} is valid JSON",
+        f"{tilde(settings)} missing or not a JSON object",
+        passed=is_json_object(settings),
+    )
+
+
+def _gitconfig_include_record() -> Record:
+    """OK when ~/.gitconfig [include]s the machine-local overlay."""
+    gitconfig = Path.home() / ".gitconfig"
+    gitconfig_local = Path.home() / ".gitconfig_local"
+    return _record(
+        f"{tilde(gitconfig)} includes {tilde(gitconfig_local)}",
+        f"{tilde(gitconfig)} does not [include] {tilde(gitconfig_local)}",
+        passed=gitconfig_includes(gitconfig, gitconfig_local),
+    )

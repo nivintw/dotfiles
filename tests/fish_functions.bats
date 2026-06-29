@@ -211,6 +211,14 @@ fishrun() {
   [[ "$output" == *"docs site not found"* ]]
 }
 
+# With no repo, no $DOTFILES, and no ~/dotfiles under an overridden HOME, verify_install.sh
+# can't be resolved — dotfiles-doctor must report that rather than silently run nothing.
+@test "dotfiles-doctor reports a missing checker when none can be resolved" {
+  run env HOME="$NONREPO" DOTFILES="" fish -c "cd '$NONREPO'; source '$FUNCDIR/dotfiles-doctor.fish'; dotfiles-doctor"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"verify_install.sh not found"* ]]
+}
+
 # launch-docs opens the browser from a backgrounded readiness poll, gated on the
 # port actually accepting connections. Stubs drive that branch without a real server,
 # browser, or TTY: `nc` decides readiness, `open` records that it was invoked, `python3`

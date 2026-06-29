@@ -155,6 +155,10 @@
           <span class="feature__mark">▤</span>
           <div><h3><code>launch-docs</code></h3><p>Serve this very docs site locally (<code>python -m http.server</code>), pick a free port, and open the browser once it's up. How these pages get previewed before they ship.</p></div>
         </div>
+        <div class="feature">
+          <span class="feature__mark">✚</span>
+          <div><h3><code>dotfiles-doctor</code></h3><p>Re-derive the intended install end state and report it — Homebrew packages, the login shell, Touch&nbsp;ID for sudo, the firewall, key symlinks, the generated Claude settings, and the gitconfig overlay — exiting non-zero if anything needs attention. Reads only and never needs sudo, so it's safe to run any time to answer “is my setup still healthy?” (the same <code>verify_install</code> checks the install ends with).</p></div>
+        </div>
       </section>
 
       <section class="wrap">

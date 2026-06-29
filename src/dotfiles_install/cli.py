@@ -5,10 +5,10 @@
 
 Reproduces ``install.sh``'s flag surface (``--bundle`` / ``--no-bundles`` / ``--keep-bundles`` /
 ``--core`` / ``--help``) and its exit codes — 0 on success or help, 2 on a usage error, 1 on a
-runtime precondition (non-macOS) — then walks the phase registry. Phases 0-1 (bootstrap toolchain
-+ brew bundle) now execute **real installs**; the remaining phases are stubs that report as
-not-yet-ported. ``install.sh`` stays the default entry point until the cutover (#72), so running
-this module directly today runs only the ported phases for real.
+runtime precondition (non-macOS) — then walks the phase registry. Phases 0-13 and 17 (verify
+& summary) execute **real work**; phases 14-16 are stubs that report as not-yet-ported.
+``install.sh`` stays the default entry point until the cutover (#72), so running this module
+directly today runs only the ported phases for real.
 """
 
 from __future__ import annotations
@@ -116,4 +116,3 @@ def _run(ctx: InstallContext) -> None:
         # even when no ticket was acquired (or the user isn't in sudoers), so sudo's stderr must
         # not leak to the terminal.
         commands.run(["sudo", "-k"], capture=True)
-    ui.summary(verified=[], problems=[])

@@ -15,7 +15,8 @@ if TYPE_CHECKING:
     import pytest
 
 EXPECTED_PHASE_COUNT = 18  # install.sh phases 0-17 inclusive
-PORTED_PHASES = set(range(14))  # phases 0-13: bootstrap through Claude settings (#67-#71)
+# Phases 0-13 (bootstrap through Claude settings, #67-#71) plus phase 17 (verify & summary, #39).
+PORTED_PHASES = set(range(14)) | {17}
 
 
 def test_registry_mirrors_install_sh_phase_count() -> None:
@@ -41,7 +42,7 @@ def test_only_the_privileged_block_needs_root() -> None:
 
 
 def test_ported_phases_have_bodies_and_the_rest_are_stubs() -> None:
-    """Phases 0-13 carry a ``run`` callable (#67-#71); phases 14-17 are still ``None`` stubs."""
+    """Phases 0-13 and 17 carry a ``run`` callable; phases 14-16 are still ``None`` stubs."""
     for phase in REGISTRY:
         if phase.number in PORTED_PHASES:
             assert phase.run is not None, f"phase {phase.number} should be ported"

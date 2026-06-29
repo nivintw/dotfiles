@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import pytest
 from typer.testing import CliRunner
 
-from dotfiles_install import cli, commands, privileged
+from dotfiles_install import cli, commands, privileged, verify_install
 from dotfiles_install.cli import app, discover_bundles
 from dotfiles_install.os_detect import OS
 from dotfiles_install.phases import Phase
@@ -50,6 +50,10 @@ def _no_real_installs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     etc_shells = tmp_path / "shells"
     etc_shells.write_text("/bin/zsh\n", encoding="utf-8")
     monkeypatch.setattr(privileged, "_ETC_SHELLS", etc_shells)
+    # Phase 17 (verify & summary) runs in the walk too; stub its emitter so the CLI tests don't
+    # shell out to brew/dscl/socketfilterfw or read the host's /etc. The verify logic itself is
+    # covered by tests/test_verify_install.py.
+    monkeypatch.setattr(verify_install, "iter_records", lambda *_a, **_k: iter(()))
 
 
 def test_discover_bundles_matches_the_repo() -> None:
