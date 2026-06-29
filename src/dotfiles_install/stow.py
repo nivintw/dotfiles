@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from dotfiles_install import commands
-from dotfiles_install.gitconfig_migrate import gitconfig_migrate
+from dotfiles_install.gitconfig_migrate import gitconfig_migrate, next_backup_path
 from dotfiles_install.layout import DOTFILES
 
 if TYPE_CHECKING:
@@ -77,7 +77,7 @@ def _clear_managed_files(ctx: InstallContext) -> None:
             # (like the bash `rm -f`), so a read-only managed file can't stall the run.
             target.unlink()
         else:
-            backup = _next_backup_path(target)
+            backup = next_backup_path(target)
             ctx.ui.warn(f"backing up modified {target} -> {backup} (differs from the repo version)")
             target.rename(backup)
 
@@ -130,10 +130,9 @@ def _migrate_gitconfig(ctx: InstallContext) -> None:
 
 def _stow_preflight_and_apply(ctx: InstallContext) -> None:
     """Dry-run stow to surface every conflict (fatal if any), then apply it for real."""
-    target = str(Path.home())
-    base = ["stow", "--no-folding", f"--dir={DOTFILES}", f"--target={target}", "home"]
+    opts = [f"--dir={DOTFILES}", f"--target={Path.home()}", "home"]
     ctx.ui.active("checking for conflicts (dry run)")
-    preflight = commands.run([base[0], base[1], "-n", "-v", *base[2:]], capture=True)
+    preflight = commands.run(["stow", "--no-folding", "-n", "-v", *opts], capture=True)
     if preflight.returncode:
         # stow -v writes its plan to stderr; the bash original merges 2>&1, so combine both.
         plan = (preflight.stdout or "") + (preflight.stderr or "")
@@ -148,19 +147,9 @@ def _stow_preflight_and_apply(ctx: InstallContext) -> None:
         for line in conflicts or plan.splitlines():
             ctx.ui.detail(line)
         raise SystemExit(1)
-    if not commands.run_ok(base):
+    if not commands.run_ok(["stow", "--no-folding", *opts]):
         ctx.ui.err("stow failed to symlink the dotfiles despite a clean preflight.")
         raise SystemExit(1)
-
-
-def _next_backup_path(target: Path) -> Path:
-    """Return the first free ``<target>.pre-stow.bak[.N]`` path, never clobbering an earlier one."""
-    backup = target.with_name(f"{target.name}.pre-stow.bak")
-    counter = 1
-    while backup.exists():
-        backup = target.with_name(f"{target.name}.pre-stow.bak.{counter}")
-        counter += 1
-    return backup
 
 
 def _read_text(path: Path) -> str:

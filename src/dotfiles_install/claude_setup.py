@@ -86,20 +86,19 @@ def _resolve_secrets(ctx: InstallContext, merged: dict[str, JSONValue]) -> dict[
     """Resolve ``op://`` references: 1Password first, else a GitHub PAT from the environment."""
     if commands.which("op") is not None and commands.run_ok(["op", "whoami"], capture=True):
         injected = commands.run(["op", "inject"], input_text=json.dumps(merged), capture=True)
-        if injected.returncode == 0:
-            try:
-                resolved = json.loads(injected.stdout)
-            except json.JSONDecodeError:
-                # op inject succeeded but emitted nothing parseable — degrade to the unresolved
-                # doc so the per-server op:// guard skips secret servers (bash tolerates this too).
-                ctx.ui.warn(
-                    "1Password 'op inject' returned no parseable output — skipping "
-                    "secret-backed servers; re-run after 'op signin'.",
-                )
-                return merged
-            if isinstance(resolved, dict):
-                return resolved
-        return merged
+        if injected.returncode != 0:
+            return merged
+        try:
+            resolved = json.loads(injected.stdout)
+        except json.JSONDecodeError:
+            # op inject succeeded but emitted nothing parseable — degrade to the unresolved doc
+            # so the per-server op:// guard skips secret servers (bash tolerates this too).
+            ctx.ui.warn(
+                "1Password 'op inject' returned no parseable output — skipping "
+                "secret-backed servers; re-run after 'op signin'.",
+            )
+            return merged
+        return resolved if isinstance(resolved, dict) else merged
     resolved = copy.deepcopy(merged)
     gh_pat = _github_pat()
     if gh_pat:
@@ -168,14 +167,14 @@ def _deep_merge(base: JSONValue, over: JSONValue) -> JSONValue:
 
 def write_user_settings(ctx: InstallContext) -> None:
     """Generate ``~/.claude/settings.json`` from baseline ⊕ overlay, folding in live drift."""
-    baseline_path = DOTFILES / "claude_settings.json"
-    if not is_object(baseline_path.read_text()):
+    baseline_text = (DOTFILES / "claude_settings.json").read_text()
+    if not is_object(baseline_text):
         ctx.ui.warn(
             "claude_settings.json is not a JSON object — skipping settings generation "
             "(fix it and re-run)",
         )
         return
-    baseline_json = json.loads(baseline_path.read_text())
+    baseline_json = json.loads(baseline_text)
 
     overlay_path = _config_dir() / "claude_settings.local.json"
     settings_path = Path.home() / ".claude" / "settings.json"
