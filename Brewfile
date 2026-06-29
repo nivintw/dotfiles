@@ -81,6 +81,7 @@ brew "gitleaks"         # Secret scanner (pre-commit hook; see .pre-commit-confi
 brew "hadolint"         # Smarter Dockerfile linter
 brew "hawkeye"          # SPDX license-header formatter (pre-commit; REUSE compliance)
 brew "hyperfine"        # Command-line benchmarking tool
+brew "kcov"             # Shell line-coverage for the bats suite (CI reports it; macOS support is limited)
 brew "osv-scanner"      # Dependency CVE scanner (pre-commit hook; see .pre-commit-config.yaml)
 brew "shellcheck"       # Static analysis for shell scripts
 brew "taplo"            # TOML toolkit

@@ -18,11 +18,14 @@ earlier one fails, so the report is complete, then summarize.
    prek run --all-files
    ```
 
-2. **pytest — config validity & consistency**
+2. **pytest — config validity, consistency & installer-core coverage gate**
 
    ```bash
-   uv run pytest
+   uv run pytest --cov
    ```
+
+   `--cov` enforces the line-coverage floor for `src/dotfiles_install/` (see
+   `[tool.coverage]` in `pyproject.toml`). Omit it for a quick subset run.
 
 3. **bats — fish / shell behavior**
 
