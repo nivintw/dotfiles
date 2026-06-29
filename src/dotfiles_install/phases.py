@@ -4,7 +4,10 @@
 """The installer's ordered phase registry.
 
 Each :class:`Phase` declares its display name, the operating systems it applies to (for
-per-phase gating), and whether it needs root. :data:`REGISTRY` mirrors ``install.sh``'s
+per-phase gating), and a ``privileged`` flag. That flag marks the **dedicated sudo-gated
+block** (phase 2) — the one that acquires and drops a sudo ticket — not merely "any phase that
+may invoke sudo": phase 1 also makes an optional ``sudo`` call (the pre-bundle Touch-ID enable)
+yet is not ``privileged``. :data:`REGISTRY` mirrors ``install.sh``'s
 phases 0-17 in order. Phase *bodies* are ported one slice at a time (#67-#72): phases 0-2
 (bootstrap toolchain, brew bundle, and the privileged setup block) carry a ``run`` callable
 and **execute real installs**; the rest are still ``None`` stubs. ``install.sh`` stays the
