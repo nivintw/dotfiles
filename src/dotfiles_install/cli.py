@@ -107,10 +107,13 @@ def _run(ctx: InstallContext) -> None:
             else:
                 ui.warn(f"phase '{phase.name}' is not yet ported (skipped)")
     finally:
-        # Backstop the sudo ticket drop, mirroring install.sh's global `trap 'sudo -k' EXIT`.
-        # The privileged phase drops the ticket at the end of its own block, but an earlier
-        # privileged step (phase 1's pre-bundle Touch-ID enable) also warms one, and an abort
-        # (Ctrl-C / unexpected error) could exit before the privileged phase runs. Dropping here
-        # ensures no warm passwordless sudo ticket survives the run, whatever happened above.
-        commands.run(["sudo", "-k"])
+        # Backstop the sudo ticket drop, mirroring install.sh's global `trap 'sudo -k 2>/dev/null
+        # || true' EXIT`. The privileged phase drops the ticket at the end of its own block, but
+        # an earlier privileged step (phase 1's pre-bundle Touch-ID enable) also warms one, and an
+        # abort (Ctrl-C / unexpected error) could exit before the privileged phase runs. Dropping
+        # here ensures no warm passwordless sudo ticket survives the run, whatever happened above.
+        # capture=True keeps it silent like the bash trap's 2>/dev/null — this runs unconditionally,
+        # even when no ticket was acquired (or the user isn't in sudoers), so sudo's stderr must
+        # not leak to the terminal.
+        commands.run(["sudo", "-k"], capture=True)
     ui.summary(verified=[], problems=[])
