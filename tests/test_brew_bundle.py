@@ -309,12 +309,39 @@ def test_install_packages_reports_baseline_success(
     """A clean run reports the baseline installed and (no selection) baseline-only bundles."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(brew_bundle, "_is_interactive", lambda: False)
+    # Stub the pre-bundle Touch-ID enable so the test doesn't read the host's real /etc files.
+    monkeypatch.setattr(brew_bundle, "enable_touch_id_sudo", lambda _ctx: None)
     monkeypatch.setattr(commands, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(commands, "run", _ok)
     ctx, out = _ctx()
     brew_bundle.install_packages(ctx)
     assert "Homebrew packages installed" in out.getvalue()
     assert "opt-in bundles: baseline only" in out.getvalue()
+
+
+def test_install_packages_enables_touch_id_before_the_bundle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pre-bundle Touch-ID enable is wired in and runs before `brew bundle` (#68)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(brew_bundle, "_is_interactive", lambda: False)
+    monkeypatch.setattr(brew_bundle, "_trust_taps", lambda _ctx, _text: None)
+    events: list[str] = []
+    monkeypatch.setattr(brew_bundle, "enable_touch_id_sudo", lambda _ctx: events.append("touch_id"))
+
+    def _run(argv: Sequence[str], **_kw: object) -> subprocess.CompletedProcess[str]:
+        argv = list(argv)
+        if argv[:3] == ["brew", "bundle", "install"]:
+            events.append("bundle")
+        return subprocess.CompletedProcess(argv, 0, stdout="")
+
+    monkeypatch.setattr(commands, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(commands, "run", _run)
+    ctx, _out = _ctx()
+    brew_bundle.install_packages(ctx)
+    assert "touch_id" in events, "the pre-bundle Touch-ID enable must be called"
+    assert events.index("touch_id") < events.index("bundle"), "Touch ID must precede brew bundle"
 
 
 def test_install_packages_warns_when_baseline_bundle_fails(
@@ -324,6 +351,8 @@ def test_install_packages_warns_when_baseline_bundle_fails(
     """A failed baseline ``brew bundle`` warns and does not abort the phase."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(brew_bundle, "_is_interactive", lambda: False)
+    # Stub the pre-bundle Touch-ID enable so the test doesn't read the host's real /etc files.
+    monkeypatch.setattr(brew_bundle, "enable_touch_id_sudo", lambda _ctx: None)
     monkeypatch.setattr(brew_bundle, "_trust_taps", lambda _ctx, _text: None)
 
     def _run(argv: Sequence[str], **_kw: object) -> subprocess.CompletedProcess[str]:
