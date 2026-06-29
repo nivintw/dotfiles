@@ -280,8 +280,15 @@ enable_touch_id_sudo() {
 auth       sufficient     pam_tid.so"
   fi
   if [ "$(cat /etc/pam.d/sudo_local 2>/dev/null)" != "$desired" ]; then
-    printf '%s\n' "$desired" | sudo tee /etc/pam.d/sudo_local >/dev/null
-    ui_ok "Touch ID for sudo enabled (/etc/pam.d/sudo_local)"
+    # Guard the write: the pre-bundle call runs before sudo is acquired, so on a fresh machine
+    # a declined/failed auth here must NOT abort the whole run under `set -e` (#65) — that would
+    # cost the user stow and every later non-root step. Warn and continue; sudo just keeps
+    # prompting for a password. (The post-bundle call runs with a warm ticket, so it won't trip.)
+    if printf '%s\n' "$desired" | sudo tee /etc/pam.d/sudo_local >/dev/null; then
+      ui_ok "Touch ID for sudo enabled (/etc/pam.d/sudo_local)"
+    else
+      ui_warn "couldn't enable Touch ID for sudo (auth declined/failed); continuing — sudo will prompt for your password"
+    fi
   fi
 }
 

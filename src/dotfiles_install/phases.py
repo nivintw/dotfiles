@@ -5,10 +5,11 @@
 
 Each :class:`Phase` declares its display name, the operating systems it applies to (for
 per-phase gating), and whether it needs root. :data:`REGISTRY` mirrors ``install.sh``'s
-phases 0-17 in order. Phase *bodies* are ported one slice at a time (#67-#72): phases 0-1
-(bootstrap toolchain + brew bundle) carry a ``run`` callable and **execute real installs**;
-the rest are still ``None`` stubs. ``install.sh`` stays the default entry point until the
-cutover (#72), but running the ported phases via this registry performs real work now.
+phases 0-17 in order. Phase *bodies* are ported one slice at a time (#67-#72): phases 0-2
+(bootstrap toolchain, brew bundle, and the privileged setup block) carry a ``run`` callable
+and **execute real installs**; the rest are still ``None`` stubs. ``install.sh`` stays the
+default entry point until the cutover (#72), but running the ported phases via this registry
+performs real work now.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from typing import TYPE_CHECKING
 from dotfiles_install.bootstrap import bootstrap_toolchain
 from dotfiles_install.brew_bundle import install_packages
 from dotfiles_install.os_detect import OS, current_os
+from dotfiles_install.privileged import privileged_setup
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -48,7 +50,13 @@ _MAC = frozenset({OS.MACOS})
 REGISTRY: tuple[Phase, ...] = (
     Phase(0, "Bootstrap toolchain (Homebrew + uv)", _MAC, run=bootstrap_toolchain),
     Phase(1, "Homebrew packages (brew bundle)", _MAC, run=install_packages),
-    Phase(2, "Privileged setup (fish shell, firewall, Touch ID)", _MAC, privileged=True),
+    Phase(
+        2,
+        "Privileged setup (fish shell, firewall, Touch ID)",
+        _MAC,
+        privileged=True,
+        run=privileged_setup,
+    ),
     Phase(3, "dotfiles symlinks (stow)", _MAC),
     Phase(4, "Machine-local overlay files", _MAC),
     Phase(5, "Fish plugins (fisher)", _MAC),
