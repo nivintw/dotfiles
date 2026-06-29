@@ -26,7 +26,7 @@ pytestmark = pytest.mark.integration
     reason="opt-in: set DOTFILES_VM_SMOKE=1 to run the VM smoke test",
 )
 def test_install_runs_clean_in_a_fresh_vm() -> None:
-    """install.sh runs end-to-end in a clean VM and verify_install reports healthy."""
+    """The installer runs end-to-end in a clean VM and verification reports healthy."""
     if shutil.which("tart") is None:
         pytest.skip("tart is not installed (brew bundle from the Brewfile installs it)")
     script = REPO / "scripts" / "vm-smoke.sh"

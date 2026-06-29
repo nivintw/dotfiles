@@ -8,8 +8,8 @@ which ``Brewfile.d/<name>.brewfile`` bundles to install on this machine.
 ``write_bundles`` and ``parse_bundles`` are exact inverses; ``fzf_preselect_bind``
 builds the fzf ``load:`` binding that pre-selects the saved choices in the picker.
 
-Ported from ``scripts/bundle_select.sh`` (behavior pinned by
-``tests/bundle_select.bats``).
+Ported from install.sh's bundle-selection logic (behavior pinned by
+``tests/test_bundle_select.py``).
 """
 
 from __future__ import annotations

@@ -5,8 +5,8 @@
 # End-to-end installer smoke test: boot a clean Tart VM, run install.sh inside it from
 # scratch, and assert the post-install verification passes. This is the one thing the
 # unit/config tests can't do — prove the installer works on a genuinely clean machine.
-# It targets today's bash, macOS-only install.sh and is the verification gate the Python
-# installer rewrite (#53) gets tested against.
+# install.sh is now a thin uv shim that hands off to the dotfiles-install Python installer,
+# so this exercises that installer end-to-end and is the verification gate for changes to it.
 #
 # How it works:
 #   - tart clone + run a headless ephemeral VM (deleted on exit unless --keep).
@@ -17,8 +17,8 @@
 #     --core profile installs CLI formulae only — skipping the GUI app/font casks and the
 #     Ollama model pull a headless smoke VM doesn't need — and verify runs core-aware to match.
 #   - By default install TWICE (idempotency); --once does a single pass.
-#   - Gate on verify_install's OK/BAD stream, tolerating only the Touch-ID-no-sensor BAD
-#     (a VM has no biometric sensor); the firewall and everything else stay strict.
+#   - Gate on the installer's `dotfiles-install --verify-stream` OK/BAD output, tolerating only
+#     the Touch-ID-no-sensor BAD (a VM has no biometric sensor); everything else stays strict.
 #
 # Heavy + opt-in: the first run pulls a multi-GB base image and a full install takes
 # many minutes. Run it directly (scripts/vm-smoke.sh) or via the opt-in pytest:
@@ -28,7 +28,7 @@
 # Pure helpers — safe to `source` (no side effects at load time). tests/vm_smoke.bats
 # sources this file to exercise the gate logic without booting a VM, so nothing below
 # the function definitions runs until main() is invoked from the entrypoint guard.
-# Kept bash 3.2-safe to match install.sh / verify_install.sh.
+# Kept bash 3.2-safe (it runs on the host, and forces bash in the guest).
 # ============================================================================
 
 usage() {
@@ -51,13 +51,13 @@ Env: VM_SMOKE_IMAGE, VM_SMOKE_USER (default admin), VM_SMOKE_PASS (default admin
 EOF
 }
 
-# Progress logs go to stderr so stdout stays reserved for the verify_install record
-# stream that evaluate_stream parses.
+# Progress logs go to stderr so stdout stays reserved for the installer's --verify-stream
+# record stream that evaluate_stream parses.
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*" >&2; }
 
 # is_tolerated MSG — true when a BAD verify record is an expected-in-a-VM failure.
-# A headless Tart VM has no Touch ID sensor, so install.sh wires pam_tid but no
-# fingerprint can ever enroll; verify_install flags that as BAD. That single case is
+# A headless Tart VM has no Touch ID sensor, so the installer wires pam_tid but no
+# fingerprint can ever enroll; verification flags that as BAD. That single case is
 # tolerated. Every other BAD — crucially the application firewall — stays strict.
 is_tolerated() {
   case "$1" in
@@ -66,7 +66,7 @@ is_tolerated() {
   esac
 }
 
-# evaluate_stream — read verify_install's `OK<TAB>msg` / `BAD<TAB>msg` records, plus a
+# evaluate_stream — read the installer's `OK<TAB>msg` / `BAD<TAB>msg` records, plus a
 # trailing `VERIFY_DONE<TAB>rc` sentinel, on stdin. Render each to stderr and succeed only
 # when every BAD is tolerated AND the sentinel was seen. The sentinel makes a truncated
 # SSH stream (connection dropped mid-verify) fail closed instead of reading as a pass.
@@ -248,21 +248,19 @@ ASK
     log "$label: install.sh completed cleanly (rc=0)"
   }
 
-  # verify_gate LABEL — source verify_install.sh in the VM, capture its OK/BAD stream plus
-  # the VERIFY_DONE sentinel, and pipe it through evaluate_stream here. Returns non-zero if
-  # any untolerated BAD is present or the stream was truncated. `bash` is forced because the
-  # guest login shell may not be bash and verify_install.sh uses bashisms.
+  # verify_gate LABEL — run `dotfiles-install --verify-stream` in the VM, capture its OK/BAD
+  # stream plus the VERIFY_DONE sentinel (the installer emits both), and pipe it through
+  # evaluate_stream here. Returns non-zero if any untolerated BAD is present or the stream was
+  # truncated. `bash` is forced (the guest login shell is fish after install) so PATH can be
+  # set portably to find uv; --core matches the casks-stripped --core install above.
   verify_gate() {
     local label="$1"
-    log "$label: running verify_install in the VM and evaluating the result"
+    log "$label: running 'dotfiles-install --verify-stream' in the VM and evaluating the result"
+    # shellcheck disable=SC2016  # $HOME must expand in the guest, not here
     ssh_vm 'bash -s' <<'REMOTE' | evaluate_stream
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 cd "$HOME/dotfiles"
-# Match the --core install: verify the casks-stripped baseline, not the full Brewfile.
-export DOTFILES_CORE=1
-# shellcheck source=/dev/null
-source scripts/verify_install.sh
-verify_install "$PWD"
-printf 'VERIFY_DONE\t%s\n' "$?"
+uv run --no-dev --project "$HOME/dotfiles" dotfiles-install --core --verify-stream
 REMOTE
   }
 
@@ -372,7 +370,7 @@ REMOTE
     log "Negative self-test PASSED — the gate correctly rejected a broken install."
   fi
 
-  log "Smoke test PASSED — install.sh ran clean and verify_install reported healthy."
+  log "Smoke test PASSED — the installer ran clean and verification reported healthy."
 }
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then

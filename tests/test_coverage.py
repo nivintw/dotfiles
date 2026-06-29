@@ -42,17 +42,15 @@ UNTESTED_FUNCTIONS = {
 # harness deliberately isn't. A few entries are allowlisted for other reasons (pure data, or
 # network-dependent behavior exercised in CI rather than offline bats) — see each reason.
 UNTESTED_SCRIPTS = {
-    "install.sh": "orchestrates host-mutating steps (stow/chsh/brew/firewall/defaults). The"
-    " bundle round-trip and fzf pre-seed logic is factored into scripts/bundle_select.sh and"
-    " tested there; the CLI arg parsing (--help/--bundle/--no-bundles/--keep-bundles) and the"
-    " interactive"
-    " SELECTION wiring around it (legacy migration, discovery, non-interactive fallback) are"
-    " not yet extracted and ride on shellcheck; the rest is host-mutating glue exercised"
-    " end-to-end by the opt-in VM smoke harness and guarded by shellcheck + the consistency tests",
+    "install.sh": "thin bootstrap shim — macOS guard + uv bootstrap, then exec into the"
+    " dotfiles-install Python installer. The install logic it once held now lives in"
+    " src/dotfiles_install/ (unit-tested under tests/), and its end-to-end behavior is exercised"
+    " by the opt-in VM smoke harness; the shim itself is host-mutating glue guarded by shellcheck",
     "macos.sh": "writes macOS defaults; covered by shellcheck + the opt-in VM smoke harness",
     "dock.sh": "rebuilds the Dock via dockutil; covered by shellcheck + the VM smoke harness",
-    "ollama_models.sh": "pure data — the two Ollama model identifiers shared by install.sh"
-    " and uninstall.sh; no logic to unit-test (guarded by shellcheck)",
+    "ollama_models.sh": "pure data — the two Ollama model identifiers shared by the installer"
+    " (read by dotfiles_install.ollama) and uninstall.sh; no logic to unit-test"
+    " (guarded by shellcheck)",
     "refresh-binary-checksums.sh": "template-authored (copier-everything); recomputes the CI"
     " binary SHA256 pins by downloading upstream release assets, so its real behavior is"
     " network-dependent and a poor fit for the offline bats suite. Coverage is integration-level"
