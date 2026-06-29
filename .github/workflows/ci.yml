@@ -235,3 +235,78 @@ jobs:
       - name: Config-validity + docs-site tests + installer-core coverage gate (pytest)
         if: inputs.skip-quality-gate != true
         run: uv run pytest --cov
+
+  # End-to-end installer gate on a real macOS runner. The ubuntu lint-and-test job above can't
+  # run install.sh (it's macOS-only) and the unit suite stubs every host mutation, so this is the
+  # only CI check that actually RUNS the installer. It runs for real on the ephemeral runner (a
+  # near-clean Mac); GitHub runners can't nest-virt, so Tart is the LOCAL pre-push gate and this
+  # is the CI complement. Make `ci / installer-smoke-macos` a required status check — it's a
+  # stable, always-reporting check thanks to the path gate below.
+  installer-smoke-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          # Full history so the path gate can diff this PR/push against its base.
+          fetch-depth: 0
+
+      # Heavy install: run it ONLY when an installer-path file changed (and never for
+      # release-please's bump commit). On every other PR the steps below no-op, so the job still
+      # reports success — keeping it a stable REQUIRED check without burning macOS minutes.
+      - name: Decide whether installer paths changed
+        id: changed
+        if: inputs.skip-quality-gate != true
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          # release-please's version-bump commit only rewrites version/CHANGELOG/lock (no installer
+          # logic) yet it touches pyproject.toml + uv.lock, which the path predicate below matches.
+          # Skip it explicitly so a release doesn't burn macOS minutes on a pure bump. (On the push
+          # to main, main.yml already sets skip-quality-gate; this also covers the Release PR's CI.)
+          if git log -1 --format=%s | grep -q '^chore(main): release '; then
+            echo "run=false" >>"$GITHUB_OUTPUT"
+            echo "::notice title=installer-smoke-macos::release-please bump — skipping the macOS install."
+            exit 0
+          fi
+          if [ -n "${BASE_SHA:-}" ]; then
+            range="${BASE_SHA}...HEAD"                          # pull_request: whole PR vs its base
+          elif [ -n "${BEFORE_SHA:-}" ] && ! printf '%s' "$BEFORE_SHA" | grep -qE '^0+$'; then
+            range="${BEFORE_SHA}...HEAD"                        # push: the whole pushed commit range
+          else
+            range="HEAD~1...HEAD"                               # new branch/unknown base: tip commit
+          fi
+          if git diff --name-only "$range" \
+            | grep -Eq '^(install\.sh|macos\.sh|dock\.sh|scripts/vm-smoke\.sh|src/dotfiles_install/|Brewfile($|\.d/)|pyproject\.toml|uv\.lock)'; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "run=false" >>"$GITHUB_OUTPUT"
+            echo "::notice title=installer-smoke-macos::No installer-path changes — skipping the macOS install."
+          fi
+
+      - name: Set up uv (+ managed Python)
+        if: inputs.skip-quality-gate != true && steps.changed.outputs.run == 'true'
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          enable-cache: true
+
+      # The baseline --core install (CLI formulae only, no casks) end-to-end via the real shim.
+      # Single pass: the local Tart hook does the ×2 idempotency run; macOS runner minutes are
+      # ~10× ubuntu's, so CI proves "installs clean on a fresh Mac" and the local gate proves
+      # re-runnable.
+      - name: Run the installer (baseline, core profile)
+        if: inputs.skip-quality-gate != true && steps.changed.outputs.run == 'true'
+        run: ./install.sh --no-bundles --core
+
+      - name: Verify the install (tolerating only the no-Touch-ID-sensor BAD)
+        if: inputs.skip-quality-gate != true && steps.changed.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          # vm-smoke.sh is sourceable (its main() only runs from the entrypoint guard), so reuse
+          # its evaluate_stream gate — CI then tolerates exactly the one headless BAD (no Touch ID
+          # sensor) the local harness does, and fails closed if the VERIFY_DONE sentinel is absent.
+          # shellcheck source=scripts/vm-smoke.sh disable=SC1091
+          source scripts/vm-smoke.sh
+          uv run --no-dev --project "$PWD" dotfiles-install --core --verify-stream | evaluate_stream

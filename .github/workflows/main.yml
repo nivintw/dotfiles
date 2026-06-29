@@ -10,8 +10,8 @@
 #      + CHANGELOG.md. The version-of-record is the manifest + the vX.Y.Z git tags; it is also
 #      mirrored into pyproject.toml AND uv.lock's dotfiles entry via .config/release-please-config.json
 #      extra-files. Both are rewritten together, so the uv-lock check stays green (mirroring
-#      pyproject alone would leave uv.lock stale). pyproject [project].version is otherwise
-#      decorative here (package = false).
+#      pyproject alone would leave uv.lock stale). pyproject [project].version is the built
+#      wheel's version (package = true).
 #   2. That Release PR is auto-merged (`--auto --rebase`) once its required checks pass, so
 #      releases are continuous; release-please then cuts the `vX.Y.Z` tag + GitHub Release.
 #   3. The action authenticates as the release GitHub App (see below). An App token is a

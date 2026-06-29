@@ -11,7 +11,7 @@
 #   Bump pins:        prek autoupdate   (keep `typos` pinned to the local typos-cli
 #                     version so local and CI flag identically)
 
-default_install_hook_types: [pre-commit, commit-msg]
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_stages: [pre-commit, manual]
 
 # Binary plist is not text-lintable; keep every hook off it.
@@ -71,8 +71,8 @@ repos:
     hooks:
       - id: shellcheck
         name: "🐚 shell · Lint shell scripts with shellcheck"
-        # -x follows `# shellcheck source=` directives (e.g. install.sh sourcing
-        # scripts/bundle_select.sh) so a partial commit that stages only the sourcing
+        # -x follows `# shellcheck source=` directives (e.g. uninstall.sh sourcing
+        # scripts/ollama_models.sh) so a partial commit that stages only the sourcing
         # file doesn't trip SC1091 on the un-staged source.
         args: ["-s", "bash", "-x"]
 
@@ -271,4 +271,19 @@ repos:
         entry: scripts/check-ssh-config.sh
         language: script
         files: '^home/\.ssh/config$'
+        pass_filenames: false
+
+      # End-to-end installer smoke test (Tart VM). Heavy, so it runs ONLY at pre-push and ONLY
+      # when an installer-path file is in the push. It skips cleanly when Tart isn't installed
+      # (CI, a non-Apple-Silicon host), so it never blocks a push it can't run. It runs the FULL
+      # harness (install ×2 — the second pass is the real idempotency check); CI's macOS job does a
+      # single pass, so this local gate is the one that proves the installer is cleanly re-runnable.
+      # The path set mirrors ci.yml's installer-smoke-macos predicate (incl. pyproject/uv.lock/
+      # Brewfile) so a dependency-only change is gated locally too.
+      - id: vm-smoke
+        name: "📦 installer · VM smoke test (Tart, pre-push)"
+        entry: bash -c 'if command -v tart >/dev/null 2>&1; then exec scripts/vm-smoke.sh; else echo "vm-smoke skipped — tart not installed"; fi'
+        language: system
+        stages: [pre-push]
+        files: '^(install\.sh|macos\.sh|dock\.sh|scripts/vm-smoke\.sh|src/dotfiles_install/.*|Brewfile|Brewfile\.d/.*|pyproject\.toml|uv\.lock)$'
         pass_filenames: false
