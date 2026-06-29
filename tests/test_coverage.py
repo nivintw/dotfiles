@@ -33,12 +33,14 @@ UNTESTED_FUNCTIONS = {
     " pubkey's bats tests",
 }
 
-# Shell scripts without a UNIT (bats) test. These mutate the host (stow, chsh, brew, macOS
-# defaults, the Dock), so the realistic safety net is shellcheck + the consistency tests +
-# the opt-in end-to-end VM smoke harness (scripts/vm-smoke.sh / tests/test_vm_smoke.py),
-# which boots a clean Tart VM and runs install.sh — and with it macos.sh and dock.sh — from
-# scratch. That harness is the behavior coverage for these; they stay listed here because the
-# coverage gate looks for a bats reference, which the heavy opt-in harness deliberately isn't.
+# Shell scripts without a UNIT (bats) test, each with the reason. Most mutate the host (stow,
+# chsh, brew, macOS defaults, the Dock), so the realistic safety net is shellcheck + the
+# consistency tests + the opt-in end-to-end VM smoke harness (scripts/vm-smoke.sh /
+# tests/test_vm_smoke.py), which boots a clean Tart VM and runs install.sh — and with it
+# macos.sh and dock.sh — from scratch. That harness is the behavior coverage for those; they
+# stay listed here because the coverage gate looks for a bats reference, which the heavy opt-in
+# harness deliberately isn't. A few entries are allowlisted for other reasons (pure data, or
+# network-dependent behavior exercised in CI rather than offline bats) — see each reason.
 UNTESTED_SCRIPTS = {
     "install.sh": "orchestrates host-mutating steps (stow/chsh/brew/firewall/defaults). The"
     " bundle round-trip and fzf pre-seed logic is factored into scripts/bundle_select.sh and"
@@ -51,6 +53,12 @@ UNTESTED_SCRIPTS = {
     "dock.sh": "rebuilds the Dock via dockutil; covered by shellcheck + the VM smoke harness",
     "ollama_models.sh": "pure data — the two Ollama model identifiers shared by install.sh"
     " and uninstall.sh; no logic to unit-test (guarded by shellcheck)",
+    "refresh-binary-checksums.sh": "template-authored (copier-everything); recomputes the CI"
+    " binary SHA256 pins by downloading upstream release assets, so its real behavior is"
+    " network-dependent and a poor fit for the offline bats suite. Coverage is integration-level"
+    " instead: the refresh-binary-checksums workflow runs it on every Renovate PR (failing"
+    " loud), and the pins it maintains are independently re-verified by ci.yml's `sha256sum -c`;"
+    " guarded by shellcheck",
 }
 
 
