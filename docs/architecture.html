@@ -82,7 +82,8 @@
               <tr><td><code>Brewfile.d/</code></td><td>Opt-in <code>&lt;name&gt;.brewfile</code> bundles (e.g. <code>personal</code>, <code>homelab</code>) layered on the baseline per machine</td></tr>
               <tr><td><code>uv_tools.txt</code></td><td>Python CLIs, one <code>uv tool install</code> arg-list per line</td></tr>
               <tr><td><code>claude_mcp.json</code></td><td><a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a> MCP servers, replayed into <code>~/.claude.json</code></td></tr>
-              <tr><td><code>install.sh</code></td><td>The idempotent bootstrap</td></tr>
+              <tr><td><code>install.sh</code></td><td>Thin entry-point shim — macOS guard, bootstraps <code>uv</code>, then hands off to the installer</td></tr>
+              <tr><td><code>src/dotfiles_install/</code></td><td>The idempotent installer: a Python package (the <code>dotfiles-install</code> console script) that walks an ordered phase registry</td></tr>
               <tr><td><code>macos.sh</code> · <code>dock.sh</code></td><td>macOS defaults &amp; declarative Dock</td></tr>
               <tr><td><code>iterm2/</code></td><td><a href="https://iterm2.com/" rel="noopener">iTerm2</a> prefs (pointed at directly — see below)</td></tr>
               <tr><td><code>scripts/</code></td><td>Helper scripts referenced by hooks</td></tr>
@@ -125,8 +126,8 @@
               <tr><td>fish</td><td><code>home/.config/fish/**</code></td><td><code>~/.config/dotfiles/local.fish</code></td><td>sourced by <code>conf.d/zzz-local.fish</code></td></tr>
               <tr><td>Homebrew</td><td><code>Brewfile</code> + <code>Brewfile.d/*.brewfile</code></td><td><code>~/.config/dotfiles/Brewfile.local</code></td><td>loaded by <code>install.sh</code></td></tr>
               <tr><td>Claude memory</td><td><code>home/.claude/CLAUDE.md</code></td><td><code>~/.config/dotfiles/CLAUDE.local.md</code></td><td><code>@</code>-imported by the tracked <code>CLAUDE.md</code></td></tr>
-              <tr><td>Claude settings</td><td><code>claude_settings.json</code></td><td><code>~/.config/dotfiles/claude_settings.local.json</code></td><td>deep-merged by <code>install.sh</code> (arrays union) into a real <code>~/.claude/settings.json</code></td></tr>
-              <tr><td>Claude MCP</td><td><code>claude_mcp.json</code></td><td><code>~/.config/dotfiles/claude_mcp.local.json</code></td><td>deep-merged by <code>install.sh</code></td></tr>
+              <tr><td>Claude settings</td><td><code>claude_settings.json</code></td><td><code>~/.config/dotfiles/claude_settings.local.json</code></td><td>deep-merged by the installer (arrays union) into a real <code>~/.claude/settings.json</code></td></tr>
+              <tr><td>Claude MCP</td><td><code>claude_mcp.json</code></td><td><code>~/.config/dotfiles/claude_mcp.local.json</code></td><td>deep-merged by the installer</td></tr>
               <tr><td>macOS defaults</td><td><code>macos.sh</code></td><td><code>~/.config/dotfiles/macos.local.sh</code></td><td>sourced by <code>macos.sh</code></td></tr>
             </tbody>
           </table>
