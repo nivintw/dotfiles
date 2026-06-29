@@ -270,8 +270,12 @@ def _atomic_write(path: Path, value: JSONValue) -> None:
 
 def _load_json_object(path: Path) -> dict[str, JSONValue] | None:
     """Parse ``path`` and return it only if it is a JSON object, else ``None``."""
+    # Separate single-exception clauses rather than a tuple: the parenthesis-free PEP 758 form
+    # ruff would enforce (`except A, B:`) reads like the Python-2 `except E, name:` bug.
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except OSError, json.JSONDecodeError:
+    except OSError:
+        return None
+    except json.JSONDecodeError:
         return None
     return value if isinstance(value, dict) else None
