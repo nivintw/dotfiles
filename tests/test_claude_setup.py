@@ -51,6 +51,8 @@ if TYPE_CHECKING:
 
     import pytest
 
+    from dotfiles_install.claude_settings_merge import JSONValue
+
 
 # ── shared helpers ────────────────────────────────────────────────────────────────────────────
 
@@ -726,3 +728,122 @@ def test_settings_atomic_write_trailing_newline_and_no_temp_leftovers(
     claude_dir = home / ".claude"
     leftovers = list(claude_dir.glob("settings.json.tmp.*"))
     assert leftovers == [], f"leftover temp files found: {leftovers}"
+
+
+# ── Phase 12: op inject degrade paths ─────────────────────────────────────────────────────────
+
+
+def _op_signed_in_which(name: str) -> str | None:
+    """commands.which stub: both op and claude present (op-signed-in scenario)."""
+    return "/usr/local/bin/op" if name == "op" else "/usr/local/bin/claude"
+
+
+def test_mcp_op_inject_nonzero_falls_back_to_unresolved_and_skips(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Behavior 5 (degrade): op inject exits non-zero → unresolved doc, op:// server skipped."""
+    _setup(monkeypatch, tmp_path, mcp_json=_GITHUB_MCP)
+    monkeypatch.setattr(commands, "which", _op_signed_in_which)
+    calls: list[SimpleNamespace] = []
+    # op_inject_json=None makes _fake_run return rc 1 for `op inject`.
+    monkeypatch.setattr(commands, "run", _fake_run(calls, op_whoami_ok=True, op_inject_json=None))
+    ctx, _ = _ctx()
+
+    claude_setup.register_mcp_servers(ctx)
+
+    assert [c for c in _add_json_calls(calls) if c.argv[3] == "github"] == []
+    assert any("unresolved 1Password reference" in w for w in ctx.ui.warnings)
+    assert any("'op inject' failed" in w for w in ctx.ui.warnings)
+
+
+def test_mcp_op_inject_unparsable_warns_and_skips(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Behavior 5 (degrade): op inject emits unparsable output → distinct warn + skip."""
+    _setup(monkeypatch, tmp_path, mcp_json=_GITHUB_MCP)
+    monkeypatch.setattr(commands, "which", _op_signed_in_which)
+    calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(
+        commands,
+        "run",
+        _fake_run(calls, op_whoami_ok=True, op_inject_json="not json!!!"),
+    )
+    ctx, _ = _ctx()
+
+    claude_setup.register_mcp_servers(ctx)
+
+    assert any("no parseable output" in w for w in ctx.ui.warnings)
+    assert [c for c in _add_json_calls(calls) if c.argv[3] == "github"] == []
+
+
+def test_mcp_op_inject_non_dict_json_falls_back_to_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Behavior 5 (degrade): op inject returns valid non-object JSON → unresolved doc, skip."""
+    _setup(monkeypatch, tmp_path, mcp_json=_GITHUB_MCP)
+    monkeypatch.setattr(commands, "which", _op_signed_in_which)
+    calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(
+        commands,
+        "run",
+        _fake_run(calls, op_whoami_ok=True, op_inject_json="[]"),
+    )
+    ctx, _ = _ctx()
+
+    claude_setup.register_mcp_servers(ctx)
+
+    assert [c for c in _add_json_calls(calls) if c.argv[3] == "github"] == []
+
+
+# ── Phase 13: overlay accrual ─────────────────────────────────────────────────────────────────
+
+
+def test_settings_existing_overlay_accrues_live_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Behavior 11: a valid existing overlay is MERGED with the live delta (prefs accrue)."""
+    baseline = {"theme": "dark"}
+    _setup(monkeypatch, tmp_path, settings_json=baseline)
+    home = tmp_path / "home"
+    cfg_dir = home / ".config" / "dotfiles"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "claude_settings.local.json").write_text(json.dumps({"a": 1}), encoding="utf-8")
+    claude_dir = home / ".claude"
+    claude_dir.mkdir(parents=True)
+    (claude_dir / "settings.json").write_text(
+        json.dumps({"theme": "dark", "b": 2}),
+        encoding="utf-8",
+    )
+    ctx, _ = _ctx()
+
+    claude_setup.write_user_settings(ctx)
+
+    overlay_written = json.loads((cfg_dir / "claude_settings.local.json").read_text())
+    assert overlay_written == {"a": 1, "b": 2}, "existing overlay must accrue the live delta"
+
+
+def test_settings_write_failure_warns_not_crash(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """settings.json write failure warns and continues; overlay is already written."""
+    _setup(monkeypatch, tmp_path, settings_json={"theme": "dark"})
+    real = claude_setup._atomic_write
+
+    def _fail_on_settings(path: Path, value: JSONValue) -> None:
+        if path.name == "settings.json":
+            raise OSError(28, "No space left on device")
+        real(path, value)
+
+    monkeypatch.setattr(claude_setup, "_atomic_write", _fail_on_settings)
+    ctx, _ = _ctx()
+
+    claude_setup.write_user_settings(ctx)  # must NOT raise
+
+    assert any("couldn't write ~/.claude/settings.json" in w for w in ctx.ui.warnings)
+    overlay_path = tmp_path / "home" / ".config" / "dotfiles" / "claude_settings.local.json"
+    assert overlay_path.exists(), "overlay must be written before settings write fails"

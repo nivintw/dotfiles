@@ -283,3 +283,29 @@ def test_signing_fallback_entirely_skipped_when_op_executable(
 
     git_calls = [c for c in calls if c.argv[:1] == ["git"]]
     assert git_calls == [], f"expected no git calls when op-ssh-sign is present, got: {git_calls}"
+
+
+def test_signing_fallback_warns_when_disable_write_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Write failure on commit.gpgsign=false emits 'couldn't disable commit signing' warning."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(overlays, "_OP_SSH_SIGN", tmp_path / "no-op-ssh-sign")
+    calls: list[SimpleNamespace] = []
+
+    def _run(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        argv = list(argv)
+        calls.append(SimpleNamespace(argv=argv))
+        if argv[-2:] == ["--get", "commit.gpgsign"]:
+            return subprocess.CompletedProcess(argv, 1, stdout="", stderr="")
+        if argv[-2:] == ["commit.gpgsign", "false"]:
+            return subprocess.CompletedProcess(argv, 1, stdout="", stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(commands, "run", _run)
+    ctx, _ = _ctx()
+
+    overlays.seed_overlays(ctx)
+
+    assert any("couldn't disable commit signing" in w for w in ctx.ui.warnings)
