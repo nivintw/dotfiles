@@ -42,7 +42,7 @@ def gitconfig_migrate(target: Path, overlay: Path, baseline: Path) -> str:
     if raw == baseline.read_bytes():
         target.unlink()
         return f"removed {target} (identical to the repo baseline)"
-    backup = _next_backup_path(target)
+    backup = next_backup_path(target)
     # Decode byte-faithfully: surrogateescape round-trips non-UTF-8 bytes through str ops and
     # back out on the encode below, matching the byte-safe cmp/awk the bash original used.
     migrated = _strip_self_include(raw.decode("utf-8", errors="surrogateescape"), overlay.name)
@@ -51,7 +51,7 @@ def gitconfig_migrate(target: Path, overlay: Path, baseline: Path) -> str:
     return f"backed up {target} -> {backup} and migrated its contents into {overlay}"
 
 
-def _next_backup_path(target: Path) -> Path:
+def next_backup_path(target: Path) -> Path:
     """Return the first free ``<target>.pre-stow.bak[.N]`` path, never clobbering."""
     backup = target.with_name(f"{target.name}.pre-stow.bak")
     counter = 1
