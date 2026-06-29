@@ -193,9 +193,11 @@ def _read_text(path: Path) -> str:
     Catches ``OSError`` broadly — not just missing-file — to match the bash original's
     degrade-to-empty: a missing, unreadable (e.g. a hardened root-only ``sudo_local``), or
     not-a-directory path must read as empty and let the caller continue, never abort the run
-    (the phase-1 pre-bundle caller has no try/except around it).
+    (the phase-1 pre-bundle caller has no try/except around it). Decoding uses
+    ``surrogateescape`` (as ``brew_bundle`` does) so non-UTF-8 bytes round-trip instead of
+    raising ``UnicodeDecodeError`` — which, being a ``ValueError``, ``OSError`` wouldn't catch.
     """
     try:
-        return path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8", errors="surrogateescape")
     except OSError:
         return ""

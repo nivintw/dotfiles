@@ -378,6 +378,24 @@ def test_read_text_degrades_to_empty_on_a_non_missing_os_error(
     assert len(_tee_calls(calls, "sudo_local")) == 1  # read-as-empty → content differs → writes
 
 
+def test_read_text_does_not_raise_on_non_utf8_sudo_local(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Non-UTF-8 bytes in sudo_local round-trip via surrogateescape, never raising on decode."""
+    _point_paths(monkeypatch, tmp_path)
+    # Seed sudo_local with invalid UTF-8 — a plain encoding="utf-8" read would raise (a ValueError,
+    # not an OSError, so the broad OSError guard wouldn't catch it).
+    (tmp_path / "sudo_local").write_bytes(b"\xff\xfe not utf-8 \x80\x81")
+    calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(commands, "run", _fake_run(calls, brew_prefix=str(tmp_path)))
+    ctx, _ = _ctx()
+
+    privileged.enable_touch_id_sudo(ctx)  # must not raise
+
+    assert len(_tee_calls(calls, "sudo_local")) == 1  # garbled content differs → rewrites
+
+
 def test_firewall_unconfirmed_when_getglobalstate_exits_nonzero(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
