@@ -8,11 +8,11 @@ per-phase gating), and a ``privileged`` flag. That flag marks the **dedicated su
 block** (phase 2) — the one that acquires and drops a sudo ticket — not merely "any phase that
 may invoke sudo": phase 1 also makes an optional ``sudo`` call (the pre-bundle Touch-ID enable)
 yet is not ``privileged``. :data:`REGISTRY` mirrors ``install.sh``'s
-phases 0-17 in order. Phase *bodies* are ported one slice at a time (#67-#72): phases 0-2
-(bootstrap toolchain, brew bundle, and the privileged setup block) carry a ``run`` callable
-and **execute real installs**; the rest are still ``None`` stubs. ``install.sh`` stays the
-default entry point until the cutover (#72), but running the ported phases via this registry
-performs real work now.
+phases 0-17 in order. Phase *bodies* are ported one slice at a time (#67-#72): phases 0-13
+(bootstrap toolchain through the Claude Code MCP servers + user settings) carry a ``run``
+callable and **execute real installs**; phases 14-17 are still ``None`` stubs. ``install.sh``
+stays the default entry point until the cutover (#72), but running the ported phases via this
+registry performs real work now.
 """
 
 from __future__ import annotations
@@ -22,8 +22,20 @@ from typing import TYPE_CHECKING
 
 from dotfiles_install.bootstrap import bootstrap_toolchain
 from dotfiles_install.brew_bundle import install_packages
+from dotfiles_install.claude_setup import register_mcp_servers, write_user_settings
 from dotfiles_install.os_detect import OS, current_os
+from dotfiles_install.overlays import seed_overlays
+from dotfiles_install.post_stow import (
+    configure_iterm2,
+    import_atuin_history,
+    install_claude_cli,
+    install_fish_plugins,
+    install_tmux_plugins,
+    install_uv_tools,
+    report_clone_hook,
+)
 from dotfiles_install.privileged import privileged_setup
+from dotfiles_install.stow import stow_dotfiles
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -60,17 +72,17 @@ REGISTRY: tuple[Phase, ...] = (
         privileged=True,
         run=privileged_setup,
     ),
-    Phase(3, "dotfiles symlinks (stow)", _MAC),
-    Phase(4, "Machine-local overlay files", _MAC),
-    Phase(5, "Fish plugins (fisher)", _MAC),
-    Phase(6, "tmux plugins (TPM)", _MAC),
-    Phase(7, "atuin history import", _MAC),
-    Phase(8, "iTerm2 preferences", _MAC),
-    Phase(9, "Python CLI tools (uv)", _MAC),
-    Phase(10, "Git clone hook (notify-on-clone)", _MAC),
-    Phase(11, "Claude Code CLI", _MAC),
-    Phase(12, "Claude Code MCP servers", _MAC),
-    Phase(13, "Claude Code user settings", _MAC),
+    Phase(3, "dotfiles symlinks (stow)", _MAC, run=stow_dotfiles),
+    Phase(4, "Machine-local overlay files", _MAC, run=seed_overlays),
+    Phase(5, "Fish plugins (fisher)", _MAC, run=install_fish_plugins),
+    Phase(6, "tmux plugins (TPM)", _MAC, run=install_tmux_plugins),
+    Phase(7, "atuin history import", _MAC, run=import_atuin_history),
+    Phase(8, "iTerm2 preferences", _MAC, run=configure_iterm2),
+    Phase(9, "Python CLI tools (uv)", _MAC, run=install_uv_tools),
+    Phase(10, "Git clone hook (notify-on-clone)", _MAC, run=report_clone_hook),
+    Phase(11, "Claude Code CLI", _MAC, run=install_claude_cli),
+    Phase(12, "Claude Code MCP servers", _MAC, run=register_mcp_servers),
+    Phase(13, "Claude Code user settings", _MAC, run=write_user_settings),
     Phase(14, "Ollama model for GitLens", _MAC),
     Phase(15, "macOS system defaults (macos.sh)", _MAC),
     Phase(16, "Dock layout (dock.sh)", _MAC),
