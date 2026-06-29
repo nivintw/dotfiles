@@ -27,6 +27,7 @@ dev = [
   "json5>=0.14.0",
   "playwright>=1.60.0",
   "pytest>=9.1.0",
+  "pytest-cov>=7.1.0",
   "pytest-playwright>=0.8.0",
   "pyyaml>=6.0.3",
   "rich>=15.0.0",
@@ -46,6 +47,21 @@ pythonpath = ["src"]
 markers = [
   "integration: end-to-end tests that boot a VM (opt-in, needs tart); skipped by default.",
 ]
+
+# Line-coverage gate for the installer core. `--cov` is NOT in addopts on purpose: a bare
+# `pytest tests/test_foo.py` during development would otherwise report partial coverage and trip
+# fail_under. The gate runs explicitly via `pytest --cov` (the local /check stage and CI), which
+# reads the source/threshold below.
+[tool.coverage.run]
+source = ["dotfiles_install"]
+# The `python -m dotfiles_install` entry shim is a one-line `app()` call with nothing to unit-test.
+omit = ["*/dotfiles_install/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+# Ratchet floor for the Python core (currently ~97%). Raise it as coverage climbs; it exists to
+# catch a meaningful regression, not to pin an exact number.
+fail_under = 95
 
 [tool.ruff]
 target-version = "py314"

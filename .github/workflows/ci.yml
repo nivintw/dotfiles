@@ -175,6 +175,34 @@ jobs:
         if: inputs.skip-quality-gate != true
         run: PATH="$PWD/.venv/bin:$PATH" bats tests/
 
+      # Informational shell line-coverage for the bash scripts/ exercised by the bats suite
+      # (kcov instruments bash, not fish). NOT a gate — continue-on-error keeps a kcov hiccup or
+      # a coverage dip from failing CI. Deliberately soft for now: many of these scripts retire
+      # with the installer→Python cutover (#72), so a hard shell threshold waits until the
+      # surviving shell set is stable. The enforced gate is the Python --cov floor (the pytest
+      # step below).
+      - name: Shell coverage report (kcov, informational)
+        if: inputs.skip-quality-gate != true
+        continue-on-error: true
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends kcov
+          PATH="$PWD/.venv/bin:$PATH" kcov --include-path="$PWD/scripts" \
+            "$PWD/kcov-out" "$(command -v bats)" tests/
+          python3 - <<'PY'
+          import glob, json
+          reports = glob.glob("kcov-out/*/coverage.json")
+          if not reports:
+              print("kcov: no coverage.json produced (skipping summary)")
+              raise SystemExit(0)
+          with open(reports[0], encoding="utf-8") as fh:
+              data = json.load(fh)
+          print(
+              f"::notice title=Shell coverage (scripts/)::"
+              f"{data.get('percent_covered', '?')}% "
+              f"({data.get('covered_lines', '?')}/{data.get('total_lines', '?')} lines)"
+          )
+          PY
+
       # Key the browser cache on the Playwright version, NOT uv.lock: the bundled
       # Chromium build is pinned 1:1 to the Playwright release, while uv.lock churns
       # on every dependency change. Keying on uv.lock therefore busted this cache on
@@ -204,6 +232,6 @@ jobs:
         if: inputs.skip-quality-gate != true
         run: uv run playwright install --with-deps --only-shell chromium
 
-      - name: Config-validity + docs-site tests (pytest)
+      - name: Config-validity + docs-site tests + installer-core coverage gate (pytest)
         if: inputs.skip-quality-gate != true
-        run: uv run pytest
+        run: uv run pytest --cov

@@ -115,16 +115,17 @@ prek install             # install the git hook</code></pre>
               <tr><td rowspan="3"><strong>bats</strong><br />(fish behavior)</td><td><code>git_prune_local.bats</code></td><td>The full branch-state matrix — merged, squash-merged, gone-remote, current-branch — where a bug deletes work</td></tr>
               <tr><td><code>fish_functions.bats</code></td><td>Usage / guard paths of the wrapper helpers</td></tr>
               <tr><td><code>check_ssh_config.bats</code></td><td>The SSH-host guard both ways — generic passes, a planted host/IP/user fails</td></tr>
-              <tr><td rowspan="5"><strong>pytest</strong><br />(config validity)</td><td><code>test_data_files.py</code></td><td>Every <code>*.toml</code> parses; JSON/JSONC/plist load</td></tr>
+              <tr><td rowspan="6"><strong>pytest</strong><br />(config &amp; coverage)</td><td><code>test_data_files.py</code></td><td>Every <code>*.toml</code> parses; JSON/JSONC/plist load</td></tr>
               <tr><td><code>test_secret_hygiene.py</code></td><td>No literal token in <code>claude_mcp.json</code>; GitHub auth stays an <code>op://</code> reference</td></tr>
               <tr><td><code>test_manifests.py</code></td><td>Brewfile directives &amp; <code>uv_tools.txt</code> lines are well-formed</td></tr>
               <tr><td><code>test_consistency.py</code></td><td>Tools used by hooks are in the Brewfile; managed files are stowed</td></tr>
               <tr><td><code>test_coverage.py</code></td><td>Inventory coverage — every function &amp; script is tested or on a documented allowlist</td></tr>
+              <tr><td><code>pytest --cov</code></td><td>Line coverage of the installer core (<code>src/dotfiles_install/</code>) stays above a floor — config in <code>pyproject.toml</code> <code>[tool.coverage]</code></td></tr>
             </tbody>
           </table>
         </div>
-        <pre><code>bats tests/        # fish behavior
-uv run pytest      # config validity &amp; cross-file consistency</code></pre>
+        <pre><code>bats tests/          # fish behavior
+uv run pytest --cov  # config validity, consistency + installer-core line-coverage gate</code></pre>
       </section>
 
       <section class="wrap">
@@ -132,7 +133,7 @@ uv run pytest      # config validity &amp; cross-file consistency</code></pre>
         <p>The bootstrap mutates the system, needs sudo/Touch&nbsp;ID, and drives GUI apps — so it can't run in the cheap CI job. CI does the cheap, high-value parts; the honest end-to-end test is <code>scripts/vm-smoke.sh</code>, which boots a clean <a href="https://tart.run">Tart</a> VM, runs <code>install.sh --core</code> from scratch <em>twice</em> (the second run is the real idempotency check), and gates on <code>verify_install</code> — tolerating only the no-Touch-ID-sensor case, firewall and the rest strict. It's heavy and opt-in (a multi-GB base image plus a full install), so it runs on demand — <code>scripts/vm-smoke.sh</code> or <code>DOTFILES_VM_SMOKE=1 uv run pytest -m integration</code> — never in the default suite.</p>
         <div class="note">
           <div class="note__title">CI — one fast job</div>
-          A single <code>ubuntu-latest</code> job runs the <strong>same prek hooks</strong> (not a parallel set of actions), plus <code>bats tests/</code> and <code>uv run pytest</code>. It pre-installs the few <code>language: system</code> tools it needs (fish, bats, ripgrep); the release binaries it fetches (osv-scanner, hawkeye, taplo) are version-pinned <em>and</em> SHA256-verified on download, so a swapped or MITM'd asset fails the build. hawkeye and taplo run as dedicated checksum-verified steps (their <code>language: system</code> hooks are <code>SKIP</code>'d there); everything else self-bootstraps. Kept green-fast so it runs on every push.
+          A single <code>ubuntu-latest</code> job runs the <strong>same prek hooks</strong> (not a parallel set of actions), plus <code>bats tests/</code> and <code>uv run pytest --cov</code> (which enforces the installer-core line-coverage floor), followed by an informational <code>kcov</code> step that reports shell line-coverage of the bats-exercised <code>scripts/</code> (not a gate — many of those scripts retire with the Python cutover). It pre-installs the few <code>language: system</code> tools it needs (fish, bats, ripgrep); the release binaries it fetches (osv-scanner, hawkeye, taplo) are version-pinned <em>and</em> SHA256-verified on download, so a swapped or MITM'd asset fails the build. hawkeye and taplo run as dedicated checksum-verified steps (their <code>language: system</code> hooks are <code>SKIP</code>'d there); everything else self-bootstraps. Kept green-fast so it runs on every push.
         </div>
       </section>
 
