@@ -42,7 +42,7 @@ def test_brewfile_lines_have_known_directives() -> None:
         (path.name, n, line)
         for path in _brewfiles()
         for n, line in _meaningful_lines(path)
-        if line.split(" ", 1)[0] not in BREW_DIRECTIVES
+        if line.split(maxsplit=1)[0] not in BREW_DIRECTIVES
     ]
     assert not bad, f"Brewfile lines with unknown directive: {bad}"
 
