@@ -6,8 +6,9 @@
 The installer's real entry point (``install.sh`` is a thin stub that hands off here via uv).
 Reproduces the historical flag surface (``--bundle`` / ``--no-bundles`` / ``--keep-bundles`` /
 ``--core`` / ``--help``) plus ``--verify`` / ``--verify-stream``, with the same exit codes — 0 on
-success or help, 2 on a usage error, 1 on a runtime precondition (an unsupported platform) — then
-walks the phase registry, OS-gated to the current platform (macOS runs every phase; Linux/WSL2 run
+success or help, 2 on a usage error, 1 on a runtime precondition (e.g. an unsupported platform) —
+then walks the phase registry, OS-gated to the current platform (macOS runs every phase; Linux/WSL2
+runs the OS-agnostic subset). Every phase (0-17) executes real work; the port from ``install.sh`` is
 the OS-agnostic subset). Every phase (0-17) executes real work; the port from ``install.sh`` is
 complete.
 """

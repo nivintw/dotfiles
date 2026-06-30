@@ -107,6 +107,9 @@ function _pubkey_emit --description "Print a public key, copy it to the clipboar
             echo "(copied to clipboard)" >&2
         end
     else
-        echo "(printed above — no clipboard tool found to copy it)" >&2
+        # __clipboard_copy fails for two reasons — no clipboard tool, OR a tool that ran and
+        # failed (e.g. wl-copy with no Wayland display, which prints its own error above). Don't
+        # assert a cause the user can see is wrong; just report the copy didn't happen.
+        echo "(printed above — couldn't copy it to the clipboard)" >&2
     end
 end

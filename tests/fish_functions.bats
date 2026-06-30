@@ -327,9 +327,32 @@ run_launchdocs_stubbed() {
   [ "$status" -eq 1 ]
 }
 
+@test "is_linux is false under WSL (WSL is reported separately)" {
+  osrel="$(mktemp)"; printf '5.15.0-microsoft-standard-WSL2\n' > "$osrel"
+  run_fish_os Linux "set -gx __dotfiles_osrelease '$osrel'; is_linux"
+  [ "$status" -eq 1 ]
+  rm -f "$osrel"
+}
+
 @test "is_wsl is false on a non-Linux kernel" {
   run_fish_os Darwin "is_wsl"
   [ "$status" -eq 1 ]
+}
+
+# The detection heart — the osrelease marker match — is exercised via the $__dotfiles_osrelease
+# seam (fixture file), so it's covered on any host instead of needing a real WSL kernel.
+@test "is_wsl detects a Microsoft/WSL kernel marker" {
+  osrel="$(mktemp)"; printf '5.15.167.4-microsoft-standard-WSL2\n' > "$osrel"
+  run_fish_os Linux "set -gx __dotfiles_osrelease '$osrel'; is_wsl"
+  [ "$status" -eq 0 ]
+  rm -f "$osrel"
+}
+
+@test "is_wsl rejects a bare-metal Linux kernel" {
+  osrel="$(mktemp)"; printf '6.8.0-generic\n' > "$osrel"
+  run_fish_os Linux "set -gx __dotfiles_osrelease '$osrel'; is_wsl"
+  [ "$status" -eq 1 ]
+  rm -f "$osrel"
 }
 
 # --- __clipboard_copy: pbcopy / clip.exe / wl-copy / xclip dispatch ------------------------
@@ -358,6 +381,15 @@ run_launchdocs_stubbed() {
   rm -rf "$STUBDIR"; unset STUBDIR
 }
 
+@test "__clipboard_copy reports failure when no clipboard tool exists" {
+  # Empty STUBDIR → no pbcopy/clip.exe/wl-copy/xclip/xsel on PATH; the else branch must drain
+  # the piped stdin and return non-zero (the contract pubkey relies on for its honest report).
+  STUBDIR="$(mktemp -d)"
+  run_fish_os Linux "printf x | __clipboard_copy"
+  [ "$status" -ne 0 ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
 # --- __os_open: open / xdg-open / wslview dispatch ----------------------------------------
 
 @test "__os_open opens a URL via open on macOS" {
@@ -380,15 +412,41 @@ run_launchdocs_stubbed() {
   rm -rf "$STUBDIR"; unset STUBDIR
 }
 
+@test "__os_open reports failure when no opener exists" {
+  # Empty STUBDIR + a non-WSL osrelease → no open/xdg-open/wslview; the no-handler branch must
+  # return non-zero so callers (launch-docs, the editor fallback) can react instead of hanging.
+  STUBDIR="$(mktemp -d)"
+  osrel="$STUBDIR/osrelease"; printf '6.8.0-generic\n' > "$osrel"
+  run_fish_os Linux "set -gx __dotfiles_osrelease '$osrel'; __os_open http://localhost:8000"
+  [ "$status" -ne 0 ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
 # --- dnsflush: macOS dscacheutil vs Linux systemd-resolved --------------------------------
 
-@test "dnsflush flushes via resolvectl on a Linux box that has it" {
+@test "dnsflush flushes via resolvectl on a (non-WSL) Linux box that has it" {
   STUBDIR="$(mktemp -d)"
-  printf '#!/bin/sh\nexec "$@"\n' > "$STUBDIR/sudo"     # run the wrapped command directly
-  printf '#!/bin/sh\nexit 0\n' > "$STUBDIR/resolvectl"  # pretend the flush succeeds
+  osrel="$STUBDIR/osrelease"; printf '6.8.0-generic\n' > "$osrel"   # bare-metal, not WSL
+  printf '#!/bin/sh\nexec "$@"\n' > "$STUBDIR/sudo"                 # run the wrapped command directly
+  printf '#!/bin/sh\necho ran > "%s/ran"\n' "$STUBDIR" > "$STUBDIR/resolvectl"
   chmod +x "$STUBDIR/sudo" "$STUBDIR/resolvectl"
-  run_fish_os Linux "dnsflush"
+  run_fish_os Linux "set -gx __dotfiles_osrelease '$osrel'; dnsflush"
   [ "$status" -eq 0 ]
   [[ "$output" == *"systemd-resolved"* ]]
+  [ -f "$STUBDIR/ran" ]   # resolvectl was actually invoked, not merely claimed (non-vacuous)
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+@test "dnsflush defers to the Windows host on WSL, without touching resolvectl" {
+  STUBDIR="$(mktemp -d)"
+  osrel="$STUBDIR/osrelease"; printf '5.15.0-microsoft-standard-WSL2\n' > "$osrel"
+  # resolvectl present, yet WSL must NOT flush it — DNS is the Windows host's job.
+  printf '#!/bin/sh\nexec "$@"\n' > "$STUBDIR/sudo"
+  printf '#!/bin/sh\necho ran > "%s/ran"\n' "$STUBDIR" > "$STUBDIR/resolvectl"
+  chmod +x "$STUBDIR/sudo" "$STUBDIR/resolvectl"
+  run_fish_os Linux "set -gx __dotfiles_osrelease '$osrel'; dnsflush"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Windows host"* ]]
+  [ ! -f "$STUBDIR/ran" ]   # resolvectl must not have run
   rm -rf "$STUBDIR"; unset STUBDIR
 }

@@ -28,6 +28,12 @@ function __open_at_line --description "Internal helper: open file:line in the us
         case vim nvim vi
             $editor +$line -- $file
         case '*'
-            $editor $file
+            # Generic editor, or the __os_open fallback when no editor was found. Surface a
+            # failure instead of silently doing nothing — the __os_open fallback returns
+            # non-zero when no OS handler exists, which would otherwise be invisible.
+            if not $editor $file
+                echo "__open_at_line: couldn't open $file (no editor, and no OS opener available)" >&2
+                return 1
+            end
     end
 end

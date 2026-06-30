@@ -632,6 +632,7 @@ def test_stow_dotfiles_happy_path_emits_ok(
     # home_dir has no managed files, no .config/git/template/hooks/, no .gitconfig
     calls: list[SimpleNamespace] = []
     monkeypatch.setattr(commands, "run", _fake_stow_run(calls))
+    monkeypatch.setattr(commands, "which", lambda name: f"/usr/bin/{name}")  # stow present
     monkeypatch.setattr(stow, "DOTFILES", dotfiles)
     monkeypatch.setenv("HOME", str(home_dir))
     ctx, out = _ctx()
@@ -642,3 +643,25 @@ def test_stow_dotfiles_happy_path_emits_ok(
         f"expected final ok message; got: {out.getvalue()!r}"
     )
     assert ctx.ui.warnings == [], f"no warnings expected on happy path; got: {ctx.ui.warnings!r}"
+
+
+def test_stow_dotfiles_aborts_clearly_when_stow_is_absent(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A missing `stow` binary fails fast with a clear message, not a phantom conflict abort.
+
+    On Linux/WSL the package phase that installs stow is deferred, so stow can be absent. The
+    guard must catch that up front rather than letting the preflight misread stow's exit 127.
+    """
+    dotfiles, home_dir = _setup_repo(tmp_path)
+    monkeypatch.setattr(commands, "which", lambda _name: None)  # stow not installed
+    monkeypatch.setattr(stow, "DOTFILES", dotfiles)
+    monkeypatch.setenv("HOME", str(home_dir))
+    ctx, _out, err = _ctx_err()
+
+    with pytest.raises(SystemExit) as excinfo:
+        stow.stow_dotfiles(ctx)
+
+    assert excinfo.value.code == 1
+    assert "stow isn't installed" in err.getvalue()
