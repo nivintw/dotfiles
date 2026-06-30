@@ -102,16 +102,19 @@ def test_unexpected_argument_is_a_usage_error() -> None:
 
 @pytest.mark.usefixtures("_no_real_installs")
 def test_run_on_linux_walks_the_os_agnostic_phases(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Off macOS the run no longer aborts: Linux walks the OS-agnostic phases only."""
+    """Off macOS the run walks the OS-agnostic phases (now incl. Linuxbrew 0-1), not the macOS."""
     monkeypatch.setattr(cli, "current_os", lambda: OS.LINUX)
+    # Phase 1 (install_packages) branches on its own current_os; pin it so the Touch-ID skip is
+    # deterministic regardless of the host running the test.
+    monkeypatch.setattr("dotfiles_install.brew_bundle.current_os", lambda: OS.LINUX)
     result = runner.invoke(app, [])
     assert result.exit_code == 0
     assert "dotfiles bootstrap" in result.output
-    # An OS-agnostic phase runs (stow)...
+    # The Linuxbrew package phases (0-1) and an OS-agnostic phase (stow) all run on Linux...
+    assert "[0] Bootstrap toolchain" in result.output
+    assert "[1] Homebrew packages" in result.output
     assert "[3] dotfiles symlinks (stow)" in result.output
-    # ...while macOS-only phases (Homebrew bootstrap, the privileged block, the macOS tweaks)
-    # are gated out and never print a header.
-    assert "[0] Bootstrap toolchain" not in result.output
+    # ...while macOS-only phases (the privileged block, the macOS tweaks) are gated out.
     assert "[2] Privileged setup" not in result.output
     assert "[15] macOS system defaults" not in result.output
 

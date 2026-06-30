@@ -30,6 +30,7 @@ from dotfiles_install import commands
 from dotfiles_install.brewfile import brewfile_core, brewfile_taps
 from dotfiles_install.bundle_select import fzf_preselect_bind, parse_bundles, write_bundles
 from dotfiles_install.layout import BUNDLES_DIR, DOTFILES, discover_bundles
+from dotfiles_install.os_detect import OS, current_os
 from dotfiles_install.privileged import enable_touch_id_sudo
 
 if TYPE_CHECKING:
@@ -57,9 +58,11 @@ def _brewfile_local() -> Path:
 
 def install_packages(ctx: InstallContext) -> None:
     """Run the baseline bundle, the selected opt-in bundles, and any ``Brewfile.local``."""
-    # Pre-bundle Touch-ID-for-sudo enable: turns a cask's .pkg password prompt into a
-    # fingerprint tap. The shared helper warns (never aborts) if auth is declined here (#65).
-    enable_touch_id_sudo(ctx)
+    # Pre-bundle Touch-ID-for-sudo enable (macOS only): turns a cask's .pkg password prompt
+    # into a fingerprint tap. The shared helper warns (never aborts) if auth is declined here
+    # (#65). On Linux/WSL there's no Touch-ID / pam_tid PAM module, so skip it entirely.
+    if current_os() == OS.MACOS:
+        enable_touch_id_sudo(ctx)
     if _brew_bundle(ctx, _BREWFILE):
         ctx.ui.ok("Homebrew packages installed")
     else:

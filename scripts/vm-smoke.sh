@@ -33,21 +33,27 @@
 
 usage() {
   cat <<EOF
-Usage: vm-smoke.sh [--image REF] [--once] [--negative] [--keep] [-h|--help]
+Usage: vm-smoke.sh [--os macos|linux] [--image REF] [--once] [--negative] [--keep] [-h|--help]
 
 Boot a clean Tart VM, run install.sh end-to-end inside it, and verify the result.
 Requires tart (in the Brewfile) and an Apple Silicon host.
 
-  --image REF   Base VM image to clone (default: \$VM_SMOKE_IMAGE or the cirruslabs
-                macos-sequoia-base image)
+  --os OS       Guest OS to smoke: macos (default) or linux. macos runs the full
+                verify gate; linux runs the OS-agnostic phases + Linuxbrew packages
+                (the macOS-only phases — privileged/verify — are gated off, tracked
+                in #113), so it gates on install rc + the deterministic outputs
+                rather than --verify-stream.
+  --image REF   Base VM image to clone (default: \$VM_SMOKE_IMAGE, else the cirruslabs
+                macos-sequoia-base / ubuntu image for the chosen --os)
   --once        Install only once (default installs twice to prove idempotency)
   --negative    Self-test the gate: after a clean install, break the firewall in the VM
-                and assert the gate now FAILS (proves the gate isn't a rubber stamp)
+                and assert the gate now FAILS (proves the gate isn't a rubber stamp).
+                macOS only (the Linux verify gate lands in #113).
   --keep        Don't delete the VM on exit (for debugging a failed run)
   -h, --help    Show this help
 
-Env: VM_SMOKE_IMAGE, VM_SMOKE_USER (default admin), VM_SMOKE_PASS (default admin),
-     VM_SMOKE_INSTALL_TIMEOUT (seconds, default 3600).
+Env: VM_SMOKE_OS (default macos), VM_SMOKE_IMAGE, VM_SMOKE_USER (default admin),
+     VM_SMOKE_PASS (default admin), VM_SMOKE_INSTALL_TIMEOUT (seconds, default 3600).
 EOF
 }
 
@@ -101,7 +107,10 @@ evaluate_stream() {
 main() {
   set -euo pipefail
 
-  local IMAGE="${VM_SMOKE_IMAGE:-ghcr.io/cirruslabs/macos-sequoia-base:latest}"
+  local OS_TARGET="${VM_SMOKE_OS:-macos}"
+  # The default image depends on --os, so resolve it after arg parsing; an explicit --image
+  # or $VM_SMOKE_IMAGE still wins.
+  local IMAGE="${VM_SMOKE_IMAGE:-}"
   local VM_USER="${VM_SMOKE_USER:-admin}"
   # Generous default: a from-scratch install downloads the full baseline Brewfile, including
   # heavy GUI casks, over the network into a fresh VM. Override with VM_SMOKE_INSTALL_TIMEOUT.
@@ -120,6 +129,8 @@ main() {
 
   while [ $# -gt 0 ]; do
     case "$1" in
+    --os) OS_TARGET="${2:?--os needs a value}" && shift 2 ;;
+    --os=*) OS_TARGET="${1#*=}" && shift ;;
     --image) IMAGE="${2:?--image needs a value}" && shift 2 ;;
     --image=*) IMAGE="${1#*=}" && shift ;;
     --once) ONCE=1 && shift ;;
@@ -150,6 +161,24 @@ main() {
     return 2
     ;;
   esac
+
+  # Validate --os and resolve the per-OS default image (an explicit --image / $VM_SMOKE_IMAGE wins).
+  case "$OS_TARGET" in
+  macos) : "${IMAGE:=ghcr.io/cirruslabs/macos-sequoia-base:latest}" ;;
+  linux) : "${IMAGE:=ghcr.io/cirruslabs/ubuntu:latest}" ;;
+  *)
+    printf 'vm-smoke.sh: --os must be macos or linux; got: %s\n' "$OS_TARGET" >&2
+    return 2
+    ;;
+  esac
+
+  # The --negative self-test breaks the macOS application firewall and asserts the verify gate
+  # then fails. Linux has neither that firewall nor (yet) a verify gate — phase 17 verify is
+  # macOS-gated, tracked in #113 — so the self-test is macOS-only.
+  if [ "$NEGATIVE" -eq 1 ] && [ "$OS_TARGET" != macos ]; then
+    printf 'vm-smoke.sh: --negative is macOS-only (no Linux verify gate yet — see #113).\n' >&2
+    return 2
+  fi
 
   # Repo root, resolved with builtins so the preflight above works under a stripped PATH.
   local DOTFILES
@@ -255,6 +284,13 @@ ASK
   # set portably to find uv; --core matches the casks-stripped --core install above.
   verify_gate() {
     local label="$1"
+    # On Linux the verify phase (17) is macOS-gated (its Linux port is #113), so --verify-stream
+    # emits no records and would fail closed. Skip it here; the Linux run is gated instead on
+    # install rc + assert_install_outputs + assert_linux_packages.
+    if [ "$OS_TARGET" != macos ]; then
+      log "$label: skipping --verify-stream gate on $OS_TARGET (Linux verify lands in #113)"
+      return 0
+    fi
     log "$label: running 'dotfiles-install --verify-stream' in the VM and evaluating the result"
     # shellcheck disable=SC2016  # $HOME must expand in the guest, not here
     ssh_vm 'bash -s' <<'REMOTE' | evaluate_stream
@@ -273,6 +309,13 @@ REMOTE
   assert_install_outputs() {
     log "checking deterministic install outputs (Claude CLI, uv tools, TPM, fisher)"
     ssh_vm 'bash -s' <<'REMOTE' | evaluate_stream
+# Resolve uv tools (~/.local/bin) and the brew prefix explicitly: on Linux the login shell isn't
+# switched to fish (phase 2 is macOS-only), so this non-login bash session wouldn't otherwise find
+# fish / claude / the uv shims on PATH. Additive and harmless on macOS.
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+for b in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew"; do
+  [ -x "$b" ] && eval "$("$b" shellenv)" && break
+done
 say() { printf '%s\t%s\n' "$1" "$2"; }
 command -v claude >/dev/null 2>&1 && say OK "Claude CLI installed" || say BAD "Claude CLI missing (native installer step failed)"
 command -v prek   >/dev/null 2>&1 && say OK "uv tool prek installed" || say BAD "uv tool prek missing (uv tools step failed)"
@@ -280,6 +323,27 @@ command -v rumdl  >/dev/null 2>&1 && say OK "uv tool rumdl installed" || say BAD
 [ -d "$HOME/.config/tmux/plugins/tpm" ] && say OK "TPM installed" || say BAD "TPM missing (tmux plugin step failed)"
 fish -c 'functions -q fisher' >/dev/null 2>&1 && say OK "fisher installed" || say BAD "fisher missing (fish plugin bootstrap failed)"
 fish -c 'functions -q tide' >/dev/null 2>&1 && say OK "fish_plugins installed (tide)" || say BAD "fish_plugins missing (fisher update failed)"
+printf 'VERIFY_DONE\t0\n'
+REMOTE
+  }
+
+  # assert_linux_packages — Linux-only spot check of this slice's deliverable (#112): Linuxbrew
+  # bootstrapped (phase 0) and `brew bundle` installed the cross-platform CLI formulae (phase 1),
+  # and stow linked the dotfiles (phase 3). macOS asserts the equivalent via verify_gate; on Linux
+  # that gate is deferred to #113, so check the concrete outputs here instead.
+  assert_linux_packages() {
+    log "checking Linuxbrew packages + stow symlinks (Linux)"
+    ssh_vm 'bash -s' <<'REMOTE' | evaluate_stream
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+for b in /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew"; do
+  [ -x "$b" ] && eval "$("$b" shellenv)" && break
+done
+say() { printf '%s\t%s\n' "$1" "$2"; }
+command -v brew >/dev/null 2>&1 && say OK "Linuxbrew on PATH" || say BAD "brew missing (phase 0 bootstrap failed)"
+command -v fish >/dev/null 2>&1 && say OK "fish installed (brew bundle)" || say BAD "fish missing (phase 1 brew bundle failed)"
+command -v stow >/dev/null 2>&1 && say OK "stow installed (brew bundle)" || say BAD "stow missing (phase 1 brew bundle failed)"
+command -v rg   >/dev/null 2>&1 && say OK "ripgrep installed (brew bundle)" || say BAD "ripgrep missing (phase 1 brew bundle failed)"
+[ -L "$HOME/.config/fish/config.fish" ] && say OK "dotfiles stowed (config.fish symlink)" || say BAD "config.fish not a symlink (phase 3 stow failed)"
 printf 'VERIFY_DONE\t0\n'
 REMOTE
   }
@@ -345,6 +409,10 @@ REMOTE
   fi
   if ! assert_install_outputs; then
     log "Install-output check FAILED — a non-fatal bootstrap step (fisher/TPM/uv tools/Claude CLI) didn't complete."
+    return 1
+  fi
+  if [ "$OS_TARGET" = linux ] && ! assert_linux_packages; then
+    log "Linux package/stow check FAILED — Linuxbrew bootstrap or brew bundle didn't land the core tools."
     return 1
   fi
 

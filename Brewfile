@@ -49,10 +49,14 @@ brew "agg"              # Convert asciinema recordings (asciicasts) to animated 
 brew "tmux"             # Terminal multiplexer
 
 # --- Dotfiles bootstrap & macOS management ---------------------------------
+# macOS-only formulae — `OS.mac?` makes `brew bundle` skip them on Linuxbrew (Homebrew
+# evaluates this Ruby at bundle time), so a Linux install doesn't try to install macOS tools.
+if OS.mac?
 brew "dockutil"         # Scriptable macOS Dock — drives dock.sh
 brew "duti"             # Set default apps for file types / URL schemes
 brew "mas"              # Mac App Store CLI — drives the `mas` apps in the opt-in bundles
 brew "pam-reattach"     # Makes Touch ID sudo work inside tmux (see install.sh sudo_local)
+end
 brew "stow"             # Symlink farm manager — deploys this dotfiles repo into $HOME
 brew "topgrade"         # One command to update brew + mas + uv + fisher + more
 
@@ -85,7 +89,10 @@ brew "kcov"             # Shell line-coverage for the bats suite (CI reports it;
 brew "osv-scanner"      # Dependency CVE scanner (pre-commit hook; see .pre-commit-config.yaml)
 brew "shellcheck"       # Static analysis for shell scripts
 brew "taplo"            # TOML toolkit
+# tart runs on the Apple-Silicon macOS host (Virtualization.framework); macOS-only formula.
+if OS.mac?
 brew "cirruslabs/cli/tart" # Boot macOS/Linux VMs on Apple Silicon — drives scripts/vm-smoke.sh
+end
 brew "typos-cli"        # Source-code spell checker
 
 # --- Languages & runtimes --------------------------------------------------
@@ -105,12 +112,17 @@ brew "ncdu"             # Interactive disk-usage explorer
 
 # --- Misc utilities --------------------------------------------------------
 brew "md5sha1sum"       # Hash utilities
-brew "terminal-notifier" # Send macOS notifications from scripts (long runs)
+if OS.mac?
+brew "terminal-notifier" # Send macOS notifications from scripts (long runs) — macOS-only API
+end
 
 # ===========================================================================
-# Casks (GUI apps)
+# Casks (GUI apps) — all macOS-only; `OS.mac?` skips the whole section on
+# Linuxbrew (`brew bundle` rejects casks on Linux). VS Code / browsers on Linux
+# are out of scope here — VS Code per-OS handling is tracked in #40.
 # ===========================================================================
 
+if OS.mac?
 # --- Security & secrets ----------------------------------------------------
 # 1Password (desktop app, `op` CLI, Safari extension) lives in the opt-in
 # Brewfile.d/1password.brewfile bundle, NOT here: a managed work machine may be
@@ -138,6 +150,7 @@ cask "obsidian"              # Second-brain / notes
 
 # --- System utilities ------------------------------------------------------
 cask "appcleaner"            # Thorough app uninstaller (catches leftover support files)
+end
 
 # Software not wanted on every machine lives in opt-in bundles under Brewfile.d/
 # (each a <name>.brewfile): "personal" (gaming, 3D printing, Office/Anki/sync that
@@ -153,8 +166,13 @@ cask "appcleaner"            # Thorough app uninstaller (catches leftover suppor
 # NOTE in the header (cleanup leaves Sync-managed extensions alone).
 # Comments are intentionally left unaligned: the IDs span a wide range, so
 # column-aligning to the longest reads worse than a single space.
+#
+# Gated behind `OS.mac?`: these install via `code --install-extension`, and the
+# `code` CLI comes from the macOS-only visual-studio-code cask above. VS Code on
+# Linux is out of scope here — tracked in #40.
 # ===========================================================================
 
+if OS.mac?
 # AI assistance
 vscode "anthropic.claude-code" # Claude Code in the editor
 
@@ -243,6 +261,7 @@ vscode "johnpapa.vscode-peacock"  # Tint each workspace a different color
 vscode "azemoh.one-monokai"       # One Monokai theme
 vscode "liviuschera.noctis"       # Noctis theme family
 vscode "silofy.hackthebox"        # HackTheBox theme
+end
 
 # ---------------------------------------------------------------------------
 # No `mas` (Mac App Store) apps in the baseline: a managed work machine may have

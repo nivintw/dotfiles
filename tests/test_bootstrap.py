@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -125,3 +126,22 @@ def test_install_uv_pipes_the_captured_script_to_sh(monkeypatch: pytest.MonkeyPa
     assert bootstrap._install_uv() is True
     assert captured["argv"] == ["sh"]
     assert captured["input_text"] == "UV_SCRIPT"
+
+
+def test_brew_binaries_include_linuxbrew_prefixes() -> None:
+    """The brew prefix candidates cover Linuxbrew (system-wide and per-user) as well as macOS."""
+    paths = {str(p) for p in bootstrap._BREW_BINARIES}
+    assert "/home/linuxbrew/.linuxbrew/bin/brew" in paths
+    assert str(Path.home() / ".linuxbrew" / "bin" / "brew") in paths
+
+
+def test_activate_homebrew_finds_linuxbrew(monkeypatch: pytest.MonkeyPatch) -> None:
+    """On Linux, _activate_homebrew puts the Linuxbrew bin (ahead of sbin) on PATH."""
+    linuxbrew = Path("/home/linuxbrew/.linuxbrew/bin/brew")
+    # Only the Linuxbrew binary "exists" — the macOS candidates are skipped.
+    monkeypatch.setattr(bootstrap.os, "access", lambda p, _mode: Path(p) == linuxbrew)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    bootstrap._activate_homebrew()
+    assert bootstrap.os.environ["PATH"].startswith(
+        "/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:",
+    )
