@@ -7,6 +7,18 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.19.0](https://github.com/nivintw/dotfiles/compare/v1.18.0...v1.19.0) (2026-06-30)
+
+
+### Features
+
+* **installer:** Add Linux/WSL2 foundation — OS-aware phases + shell bridges ([1828b9f](https://github.com/nivintw/dotfiles/commit/1828b9f65261070911c626b7255431ad7df96ab0))
+
+
+### Bug Fixes
+
+* **fish:** Harden Linux/WSL bridges from review (dnsflush WSL, stow guard, no-hang) ([98f9e81](https://github.com/nivintw/dotfiles/commit/98f9e81a2f08e7eba3bd2181945c2ca59b8affb3))
+
 ## [1.18.0](https://github.com/nivintw/dotfiles/compare/v1.17.0...v1.18.0) (2026-06-29)
 
 
