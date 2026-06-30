@@ -16,7 +16,9 @@ function __open_at_line --description "Internal helper: open file:line in the us
         else if command -q vim
             set editor vim
         else
-            set editor open
+            # No editor found — fall back to the OS default handler (open / xdg-open /
+            # wslview). It can't honor the line number, but opening the file beats nothing.
+            set editor __os_open
         end
     end
 

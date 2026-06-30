@@ -97,10 +97,16 @@ function _pubkey_emit --description "Print a public key, copy it to the clipboar
         return 1
     end
     printf '%s\n' $key
-    printf '%s' $key | pbcopy
-    if test -n "$label"
-        echo "(copied $label to clipboard)" >&2
+    # __clipboard_copy dispatches pbcopy / clip.exe / wl-copy / xclip by OS; on a box with no
+    # clipboard tool it returns non-zero, so report honestly instead of claiming a copy that
+    # didn't happen (the key is already printed above either way).
+    if printf '%s' $key | __clipboard_copy
+        if test -n "$label"
+            echo "(copied $label to clipboard)" >&2
+        else
+            echo "(copied to clipboard)" >&2
+        end
     else
-        echo "(copied to clipboard)" >&2
+        echo "(printed above — no clipboard tool found to copy it)" >&2
     end
 end

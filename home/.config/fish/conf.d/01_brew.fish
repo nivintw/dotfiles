@@ -9,9 +9,10 @@
 # i.e. sub-shells
 # because it is well-written. Good job homebrew team!
 #
-# Prefer the Apple-Silicon prefix; fall back to the Intel prefix so a shell on an
-# Intel Mac doesn't error on every startup. Silent no-op if brew isn't installed.
-for brew_bin in /opt/homebrew/bin/brew /usr/local/bin/brew
+# Try each known Homebrew prefix in turn: Apple-Silicon mac, Intel mac, then the two
+# Linuxbrew locations (system-wide install, then a per-user ~/.linuxbrew). The first
+# one present wins; silent no-op if brew isn't installed at all.
+for brew_bin in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew $HOME/.linuxbrew/bin/brew
     if test -x $brew_bin
         $brew_bin shellenv | source
         break

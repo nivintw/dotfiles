@@ -21,10 +21,30 @@ teardown() {
   rm -rf "$NONREPO"
 }
 
-# Source one function file and run the function, capturing stdout+stderr+status.
+# Source one function file and run the function, capturing stdout+stderr+status. The
+# functions dir is also put on $fish_function_path so any shared helper the function calls
+# (is_macos/is_linux/is_wsl, __clipboard_copy, __os_open) autoloads instead of being an
+# "unknown command".
 fishrun() {
   local func="$1"; shift
-  run fish -c "source '$FUNCDIR/$func.fish'; $func $*"
+  run fish -c "set -p fish_function_path '$FUNCDIR'; source '$FUNCDIR/$func.fish'; $func $*"
+}
+
+# Run a fish snippet with the functions dir autoloadable and `uname` reporting $1, so the
+# OS helpers (is_macos/is_linux/is_wsl) take a deterministic branch on any host. A test that
+# wants to control which tool a helper dispatches to sets $STUBDIR (a dir of fake binaries);
+# it is prepended to PATH so its stubs win over the real ones. coreutils (/usr/bin:/bin) stay
+# on PATH so is_wsl's `cat` and the stubs' own `cat`/`exec` resolve. --no-config skips conf.d
+# so unrelated startup files can't perturb the result.
+run_fish_os() {
+  local os="$1"; shift
+  UNAMESHIM="$(mktemp -d)"
+  printf '#!/bin/sh\necho %s\n' "$os" > "$UNAMESHIM/uname"
+  chmod +x "$UNAMESHIM/uname"
+  local fishbin; fishbin="$(dirname "$(command -v fish)")"
+  run env PATH="${STUBDIR:+$STUBDIR:}$UNAMESHIM:$fishbin:/usr/bin:/bin" fish --no-config -c \
+    "set -p fish_function_path '$FUNCDIR'; $*"
+  rm -rf "$UNAMESHIM"
 }
 
 @test "eachdir with no args prints usage and returns 2" {
@@ -120,7 +140,8 @@ fishrun() {
   ssh-keygen -t ed25519 -N "" -C "Bats Test Key" -f "$tmp/k" >/dev/null
   eval "$(ssh-agent -s)" >/dev/null
   ssh-add "$tmp/k" 2>/dev/null
-  run fish -c "source '$FUNCDIR/pubkey.fish'; pubkey"
+  # Function path set so the emit helper's __clipboard_copy (a separate autoload file) resolves.
+  run fish -c "set -p fish_function_path '$FUNCDIR'; source '$FUNCDIR/pubkey.fish'; pubkey"
   ssh-agent -k >/dev/null 2>&1
   rm -rf "$tmp"
   [ "$status" -eq 0 ]
@@ -230,10 +251,16 @@ fishrun() {
 launchdocs_shims() {
   SHIM="$(mktemp -d)"
   OPENLOG="$SHIM/open.log"
-  printf '#!/bin/sh\nprintf "OPENED %%s\\n" "$*" >> "%s"\n' "$OPENLOG" > "$SHIM/open"
+  # launch-docs opens via __os_open, which dispatches to open (macOS), xdg-open (Linux), or
+  # wslview (WSL). Shim all three to the same log so the test asserts "the browser was opened"
+  # regardless of which host runs it (macOS dev box vs. the ubuntu CI runner).
+  for opener in open xdg-open wslview; do
+    printf '#!/bin/sh\nprintf "OPENED %%s\\n" "$*" >> "%s"\n' "$OPENLOG" > "$SHIM/$opener"
+    chmod +x "$SHIM/$opener"
+  done
   printf '#!/bin/sh\necho $$ > "%s/server.pid"\nexec /bin/sleep 30\n' "$SHIM" > "$SHIM/python3"
   printf '#!/bin/sh\nexit 0\n' > "$SHIM/sleep"
-  chmod +x "$SHIM/open" "$SHIM/python3" "$SHIM/sleep"
+  chmod +x "$SHIM/python3" "$SHIM/sleep"
 }
 
 # Start the stubbed function in the background and return once `open` has fired or the
@@ -242,7 +269,7 @@ run_launchdocs_stubbed() {
   cd "$BATS_TEST_DIRNAME/.." || return 1
   # Close fd 3 (bats' trace fd): a backgrounded process that inherits it makes bats
   # hang at end-of-test waiting for the fd to close.
-  env PATH="$SHIM:$PATH" fish -c "source '$FUNCDIR/launch-docs.fish'; launch-docs" >/dev/null 2>&1 3>&- &
+  env PATH="$SHIM:$PATH" fish -c "set -p fish_function_path '$FUNCDIR'; source '$FUNCDIR/launch-docs.fish'; launch-docs" >/dev/null 2>&1 3>&- &
   LD_PID=$!
   for _ in $(seq 30); do
     if [ -f "$OPENLOG" ]; then break; fi
@@ -279,4 +306,89 @@ run_launchdocs_stubbed() {
   run_launchdocs_stubbed
   [ ! -f "$OPENLOG" ]   # `open` was never invoked — no browser at a dead port
   rm -rf "$SHIM"
+}
+
+# --- OS-detection helpers (is_macos / is_linux / is_wsl) -----------------------------------
+# These mirror src/dotfiles_install/os_detect.py and gate the cross-platform bridges below.
+# `uname` is shimmed (via run_fish_os) so each branch is deterministic on any host. The
+# positive WSL case needs a real Microsoft/WSL kernel marker and is verified manually.
+
+@test "is_macos is true on Darwin, false on Linux" {
+  run_fish_os Darwin "is_macos"
+  [ "$status" -eq 0 ]
+  run_fish_os Linux "is_macos"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_linux is true on a (non-WSL) Linux kernel, false on Darwin" {
+  run_fish_os Linux "is_linux"
+  [ "$status" -eq 0 ]
+  run_fish_os Darwin "is_linux"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_wsl is false on a non-Linux kernel" {
+  run_fish_os Darwin "is_wsl"
+  [ "$status" -eq 1 ]
+}
+
+# --- __clipboard_copy: pbcopy / clip.exe / wl-copy / xclip dispatch ------------------------
+
+@test "__clipboard_copy pipes stdin to pbcopy on macOS" {
+  STUBDIR="$(mktemp -d)"
+  printf '#!/bin/sh\ncat > "%s/clip"\n' "$STUBDIR" > "$STUBDIR/pbcopy"
+  chmod +x "$STUBDIR/pbcopy"
+  run_fish_os Darwin "printf hello-mac | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/clip")" = "hello-mac" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+@test "__clipboard_copy pipes stdin to a Linux clipboard tool" {
+  STUBDIR="$(mktemp -d)"
+  # Shim every Linux clipboard tool to one sink, so the test asserts "stdin reached the
+  # clipboard" without depending on which (wl-copy vs xclip vs xsel) the helper picks.
+  for tool in wl-copy xclip xsel; do
+    printf '#!/bin/sh\ncat > "%s/clip"\n' "$STUBDIR" > "$STUBDIR/$tool"
+    chmod +x "$STUBDIR/$tool"
+  done
+  run_fish_os Linux "printf hello-linux | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/clip")" = "hello-linux" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+# --- __os_open: open / xdg-open / wslview dispatch ----------------------------------------
+
+@test "__os_open opens a URL via open on macOS" {
+  STUBDIR="$(mktemp -d)"
+  printf '#!/bin/sh\nprintf "%%s" "$*" > "%s/opened"\n' "$STUBDIR" > "$STUBDIR/open"
+  chmod +x "$STUBDIR/open"
+  run_fish_os Darwin "__os_open http://localhost:8000"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/opened")" = "http://localhost:8000" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+@test "__os_open opens a URL via xdg-open on Linux" {
+  STUBDIR="$(mktemp -d)"
+  printf '#!/bin/sh\nprintf "%%s" "$*" > "%s/opened"\n' "$STUBDIR" > "$STUBDIR/xdg-open"
+  chmod +x "$STUBDIR/xdg-open"
+  run_fish_os Linux "__os_open http://localhost:8000"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/opened")" = "http://localhost:8000" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+# --- dnsflush: macOS dscacheutil vs Linux systemd-resolved --------------------------------
+
+@test "dnsflush flushes via resolvectl on a Linux box that has it" {
+  STUBDIR="$(mktemp -d)"
+  printf '#!/bin/sh\nexec "$@"\n' > "$STUBDIR/sudo"     # run the wrapped command directly
+  printf '#!/bin/sh\nexit 0\n' > "$STUBDIR/resolvectl"  # pretend the flush succeeds
+  chmod +x "$STUBDIR/sudo" "$STUBDIR/resolvectl"
+  run_fish_os Linux "dnsflush"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"systemd-resolved"* ]]
+  rm -rf "$STUBDIR"; unset STUBDIR
 }

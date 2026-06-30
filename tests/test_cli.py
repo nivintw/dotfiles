@@ -100,12 +100,29 @@ def test_unexpected_argument_is_a_usage_error() -> None:
     assert result.exit_code == USAGE_ERROR_EXIT
 
 
-def test_run_on_non_macos_exits_one(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Off macOS the run aborts with exit 1 (the installer is macOS-only today)."""
+@pytest.mark.usefixtures("_no_real_installs")
+def test_run_on_linux_walks_the_os_agnostic_phases(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Off macOS the run no longer aborts: Linux walks the OS-agnostic phases only."""
     monkeypatch.setattr(cli, "current_os", lambda: OS.LINUX)
     result = runner.invoke(app, [])
+    assert result.exit_code == 0
+    assert "dotfiles bootstrap" in result.output
+    # An OS-agnostic phase runs (stow)...
+    assert "[3] dotfiles symlinks (stow)" in result.output
+    # ...while macOS-only phases (Homebrew bootstrap, the privileged block, the macOS tweaks)
+    # are gated out and never print a header.
+    assert "[0] Bootstrap toolchain" not in result.output
+    assert "[2] Privileged setup" not in result.output
+    assert "[15] macOS system defaults" not in result.output
+
+
+def test_run_with_no_applicable_phases_exits_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A target with zero applicable phases exits 1 with a message (the empty-set safety net)."""
+    monkeypatch.setattr(cli, "current_os", lambda: OS.LINUX)
+    monkeypatch.setattr(cli, "phases_for", lambda _target=None: [])
+    result = runner.invoke(app, [])
     assert result.exit_code == RUNTIME_ERROR_EXIT
-    assert "macOS only" in result.output
+    assert "no install phases apply" in result.output
 
 
 def test_run_on_unsupported_platform_exits_one_cleanly(monkeypatch: pytest.MonkeyPatch) -> None:
