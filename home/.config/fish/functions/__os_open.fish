@@ -8,10 +8,16 @@ function __os_open --description "Open a URL or file in the OS default handler (
     # fall back (or simply not open) instead of erroring.
     if is_macos
         open $argv
-    else if is_wsl; and command -q wslview
-        wslview $argv
-    else if is_wsl; and command -q explorer.exe
-        explorer.exe $argv
+    else if is_wsl
+        # On WSL prefer the Windows handler (wslview from wslu, else explorer.exe). Don't fall
+        # through to xdg-open — that's the wrong tool on a Windows-backed desktop.
+        if command -q wslview
+            wslview $argv
+        else if command -q explorer.exe
+            explorer.exe $argv
+        else
+            return 1
+        end
     else if command -q xdg-open
         xdg-open $argv
     else
