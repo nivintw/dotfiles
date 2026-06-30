@@ -47,6 +47,29 @@ def test_brewfile_lines_have_known_directives() -> None:
     assert not bad, f"Brewfile lines with unknown directive: {bad}"
 
 
+def test_brewfile_os_conditionals_are_balanced_and_mac_only() -> None:
+    """Each Brewfile's ``if``/``end`` gates are balanced and gate exactly on ``OS.mac?``.
+
+    The macOS-only formulae/casks/extensions are wrapped in ``if OS.mac? … end`` so ``brew
+    bundle`` skips them on Linuxbrew. ``if`` and ``end`` are accepted as line directives (see
+    BREW_DIRECTIVES), but the line-shape check alone would let an orphan ``if``/``end`` or a
+    typo'd condition (``if OS.linux?``) through — and a wrong condition silently skips the whole
+    macOS block *on a Mac* with no other test failing. Pin both balance and the exact condition.
+    These blocks are flat (no nesting/else), so a simple count comparison is sufficient.
+    """
+    for path in _brewfiles():
+        lines = [line for _n, line in _meaningful_lines(path)]
+        ifs = [line for line in lines if line.split(" ", 1)[0] == "if"]
+        ends = [line for line in lines if line == "end"]
+        assert len(ifs) == len(ends), (
+            f"{path.name}: unbalanced Brewfile if/end ({len(ifs)} if vs {len(ends)} end)"
+        )
+        bad_conditions = [line for line in ifs if line != "if OS.mac?"]
+        assert not bad_conditions, (
+            f"{path.name}: only `if OS.mac?` gates are allowed; got {bad_conditions}"
+        )
+
+
 def test_uv_tools_first_token_is_a_tool_name() -> None:
     """Each uv_tools.txt line begins with a plausible tool name (optionally extras)."""
     bad = [

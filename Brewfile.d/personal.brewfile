@@ -12,6 +12,9 @@
 # The two-line SPDX header above is inserted and maintained by hawkeye via the
 # `brewfile` extension mapping in .config/licenserc.toml — no need to hand-write it.
 
+# Casks are macOS-only; `OS.mac?` skips this whole block on Linuxbrew (`brew bundle`
+# rejects casks on Linux). The one cross-platform formula (gource) sits outside the gate.
+if OS.mac?
 # --- Media & gaming --------------------------------------------------------
 cask "discord"               # Discord
 cask "openemu"               # Retro game console emulator
@@ -25,11 +28,14 @@ cask "raspberry-pi-imager"   # Flash Raspberry Pi OS images to SD cards
 cask "anki"                  # Spaced-repetition flashcards
 cask "microsoft-office"      # Office 365 (work-managed on a work machine). Bundles "Defender Shim"; conflicts with a standalone onedrive cask, so don't add one.
 cask "resilio-sync"          # Peer-to-peer file sync
+end
 
 # --- Dev & visualization ---------------------------------------------------
 brew "gource"                # Version control history visualization
 
-# --- App Store (personal Apple ID) -----------------------------------------
+# --- App Store (personal Apple ID) — macOS-only, skipped on Linuxbrew ------
+if OS.mac?
 mas "The Unarchiver", id: 425424353  # Archive extractor
 mas "Kindle",         id: 302584613  # Kindle reader
 mas "Calca",          id: 635758264  # Markdown calculator
+end
