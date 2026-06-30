@@ -16,7 +16,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-BREW_DIRECTIVES = ("tap", "brew", "cask", "mas", "vscode")
+# Brewfiles are Ruby; `if`/`end` bracket the `OS.mac?` blocks that gate macOS-only
+# formulae/casks/extensions off Linuxbrew (Homebrew evaluates them at bundle time).
+BREW_DIRECTIVES = ("tap", "brew", "cask", "mas", "vscode", "if", "end")
 # A tool name, optionally with a uv/pip extras suffix like `reuse[charset-normalizer]`.
 TOOL_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[[A-Za-z0-9._,-]+\])?$")
 

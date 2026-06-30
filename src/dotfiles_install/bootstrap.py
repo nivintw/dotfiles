@@ -28,8 +28,16 @@ if TYPE_CHECKING:
 _RETRY_ATTEMPTS = 3
 _BREW_INSTALL_URL = "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 _UV_INSTALL_URL = "https://astral.sh/uv/install.sh"
-# Apple-Silicon prefix first, then Intel — mirrors the bash `brew shellenv` candidate loop.
-_BREW_BINARIES = (Path("/opt/homebrew/bin/brew"), Path("/usr/local/bin/brew"))
+# Homebrew prefix candidates, checked in order — Apple-Silicon mac, Intel mac, then the two
+# Linuxbrew locations (system-wide /home/linuxbrew, then a per-user ~/.linuxbrew).
+# _activate_homebrew picks the first one actually present, so the same code path serves
+# Homebrew on macOS and Linuxbrew on Linux/WSL.
+_BREW_BINARIES = (
+    Path("/opt/homebrew/bin/brew"),
+    Path("/usr/local/bin/brew"),
+    Path("/home/linuxbrew/.linuxbrew/bin/brew"),
+    Path.home() / ".linuxbrew" / "bin" / "brew",
+)
 
 
 def bootstrap_toolchain(ctx: InstallContext) -> None:

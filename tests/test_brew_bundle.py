@@ -20,6 +20,7 @@ from rich.console import Console
 from dotfiles_install import brew_bundle, commands
 from dotfiles_install.bundle_select import parse_bundles
 from dotfiles_install.context import InstallContext
+from dotfiles_install.os_detect import OS
 from dotfiles_install.ui import UI
 
 if TYPE_CHECKING:
@@ -323,8 +324,9 @@ def test_install_packages_enables_touch_id_before_the_bundle(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The pre-bundle Touch-ID enable is wired in and runs before `brew bundle` (#68)."""
+    """On macOS the pre-bundle Touch-ID enable is wired in and runs before `brew bundle` (#68)."""
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(brew_bundle, "current_os", lambda: OS.MACOS)  # deterministic on any host
     monkeypatch.setattr(brew_bundle, "_is_interactive", lambda: False)
     monkeypatch.setattr(brew_bundle, "_trust_taps", lambda _ctx, _text: None)
     events: list[str] = []
@@ -342,6 +344,32 @@ def test_install_packages_enables_touch_id_before_the_bundle(
     brew_bundle.install_packages(ctx)
     assert "touch_id" in events, "the pre-bundle Touch-ID enable must be called"
     assert events.index("touch_id") < events.index("bundle"), "Touch ID must precede brew bundle"
+
+
+def test_install_packages_skips_touch_id_on_linux(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On Linux (no Touch-ID/pam_tid) the pre-bundle enable is skipped; the bundle still runs."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(brew_bundle, "current_os", lambda: OS.LINUX)
+    monkeypatch.setattr(brew_bundle, "_is_interactive", lambda: False)
+    monkeypatch.setattr(brew_bundle, "_trust_taps", lambda _ctx, _text: None)
+    events: list[str] = []
+    monkeypatch.setattr(brew_bundle, "enable_touch_id_sudo", lambda _ctx: events.append("touch_id"))
+
+    def _run(argv: Sequence[str], **_kw: object) -> subprocess.CompletedProcess[str]:
+        argv = list(argv)
+        if argv[:3] == ["brew", "bundle", "install"]:
+            events.append("bundle")
+        return subprocess.CompletedProcess(argv, 0, stdout="")
+
+    monkeypatch.setattr(commands, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(commands, "run", _run)
+    ctx, _out = _ctx()
+    brew_bundle.install_packages(ctx)
+    assert "touch_id" not in events, "Touch-ID enable must NOT run on Linux"
+    assert "bundle" in events, "brew bundle must still run on Linux"
 
 
 def test_install_packages_warns_when_baseline_bundle_fails(

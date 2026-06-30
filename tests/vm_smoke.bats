@@ -18,16 +18,42 @@ setup() {
 
 # --- arg parsing + preflight (the script executed) --------------------------
 
-@test "--help prints usage and exits 0" {
+@test "--help prints usage (incl. --os) and exits 0" {
   run bash "$SCRIPT" --help
   [ "$status" -eq 0 ]
   [[ "$output" == *"Usage: vm-smoke.sh"* ]]
+  [[ "$output" == *"--os"* ]]
 }
 
 @test "an unexpected argument exits 2 with a usage hint" {
   run bash "$SCRIPT" --bogus
   [ "$status" -eq 2 ]
   [[ "$output" == *"unexpected argument"* ]]
+}
+
+# A no-op `tart` on PATH lets the post-preflight arg validations (which sit after the tart
+# check) run on a host without real tart — e.g. the ubuntu CI runner. tart is never invoked
+# because these cases return before any VM work.
+_with_fake_tart() {
+  FAKETART="$(mktemp -d)"
+  printf '#!/bin/sh\nexit 0\n' >"$FAKETART/tart"
+  chmod +x "$FAKETART/tart"
+}
+
+@test "--os with an unknown value exits 2" {
+  _with_fake_tart
+  PATH="$FAKETART:$PATH" run bash "$SCRIPT" --os bogus
+  rm -rf "$FAKETART"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--os must be macos or linux"* ]]
+}
+
+@test "--negative is rejected on Linux (macOS-only self-test)" {
+  _with_fake_tart
+  PATH="$FAKETART:$PATH" run bash "$SCRIPT" --os linux --negative
+  rm -rf "$FAKETART"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--negative is macOS-only"* ]]
 }
 
 @test "preflight fails clearly when tart is absent" {

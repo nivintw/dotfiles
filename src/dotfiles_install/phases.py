@@ -62,16 +62,18 @@ class Phase:
 
 
 _MAC = frozenset({OS.MACOS})
-# Phases whose bodies carry no OS-specific assumption — they run identically on macOS, Linux, and
-# WSL2. The macOS-only phases that *touch* OS internals (the Homebrew bootstrap/bundle, the
-# Touch-ID/firewall privileged block, iTerm2 `defaults`, the Ollama memory/version probe, the
-# `macos.sh`/`dock.sh` system tweaks, and the dscl/socketfilterfw verification) stay `_MAC`; their
-# Linux ports are tracked follow-ups (#112 packages, #113 privileged/verify) under the #34 epic.
+# Phases that run on macOS, Linux, and WSL2. Phases 0-1 (Homebrew/Linuxbrew bootstrap + brew
+# bundle) now run everywhere: the bootstrap finds the Linuxbrew prefix and `brew bundle` installs
+# the cross-platform formulae (the Brewfile gates its macOS-only formulae/casks behind `OS.mac?`,
+# and the pre-bundle Touch-ID enable is macOS-only). The remaining `_MAC` phases touch OS
+# internals with no Linux path yet — the Touch-ID/firewall privileged block, iTerm2 `defaults`,
+# the Ollama memory/version probe, the `macos.sh`/`dock.sh` tweaks, and the dscl/socketfilterfw
+# verification — and are tracked in #113 under the #34 epic.
 _ALL = frozenset({OS.MACOS, OS.LINUX, OS.WSL})
 
 REGISTRY: tuple[Phase, ...] = (
-    Phase(0, "Bootstrap toolchain (Homebrew + uv)", _MAC, run=bootstrap_toolchain),
-    Phase(1, "Homebrew packages (brew bundle)", _MAC, run=install_packages),
+    Phase(0, "Bootstrap toolchain (Homebrew + uv)", _ALL, run=bootstrap_toolchain),
+    Phase(1, "Homebrew packages (brew bundle)", _ALL, run=install_packages),
     Phase(
         2,
         "Privileged setup (fish shell, firewall, Touch ID)",
