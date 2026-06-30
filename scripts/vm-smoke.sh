@@ -300,6 +300,20 @@ uv run --no-dev --project "$HOME/dotfiles" dotfiles-install --core --verify-stre
 REMOTE
   }
 
+  # _remote_env — emit (to stdout) the shell that puts the uv shims (~/.local/bin) and the brew
+  # prefix on PATH inside the guest. Prepended to the assert REMOTE scripts below: on Linux the
+  # login shell isn't switched to fish (phase 2 is macOS-only), so a non-login bash SSH session
+  # wouldn't otherwise find fish / claude / the uv tools. Quoted heredoc — $HOME / $b expand in the
+  # guest, not here — and additive/harmless on macOS (the Linux brew paths simply don't exist).
+  _remote_env() {
+    cat <<'ENV'
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+for b in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew"; do
+  [ -x "$b" ] && eval "$("$b" shellenv)" && break
+done
+ENV
+  }
+
   # assert_install_outputs — gate coverage for the install steps this harness's own hardening
   # made NON-FATAL (fisher, TPM, uv tools, the Claude CLI). verify_install asserts system state
   # (brew/shell/firewall/symlinks/settings) but not these, so without this a swallowed bootstrap
@@ -308,14 +322,9 @@ REMOTE
   # 1Password/PAT secrets a clean VM lacks). Reuses evaluate_stream: any BAD fails the gate.
   assert_install_outputs() {
     log "checking deterministic install outputs (Claude CLI, uv tools, TPM, fisher)"
-    ssh_vm 'bash -s' <<'REMOTE' | evaluate_stream
-# Resolve uv tools (~/.local/bin) and the brew prefix explicitly: on Linux the login shell isn't
-# switched to fish (phase 2 is macOS-only), so this non-login bash session wouldn't otherwise find
-# fish / claude / the uv shims on PATH. Additive and harmless on macOS.
-export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-for b in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew"; do
-  [ -x "$b" ] && eval "$("$b" shellenv)" && break
-done
+    {
+      _remote_env
+      cat <<'REMOTE'
 say() { printf '%s\t%s\n' "$1" "$2"; }
 command -v claude >/dev/null 2>&1 && say OK "Claude CLI installed" || say BAD "Claude CLI missing (native installer step failed)"
 command -v prek   >/dev/null 2>&1 && say OK "uv tool prek installed" || say BAD "uv tool prek missing (uv tools step failed)"
@@ -325,6 +334,7 @@ fish -c 'functions -q fisher' >/dev/null 2>&1 && say OK "fisher installed" || sa
 fish -c 'functions -q tide' >/dev/null 2>&1 && say OK "fish_plugins installed (tide)" || say BAD "fish_plugins missing (fisher update failed)"
 printf 'VERIFY_DONE\t0\n'
 REMOTE
+    } | ssh_vm 'bash -s' | evaluate_stream
   }
 
   # assert_linux_packages — Linux-only spot check of this slice's deliverable (#112): Linuxbrew
@@ -333,11 +343,9 @@ REMOTE
   # that gate is deferred to #113, so check the concrete outputs here instead.
   assert_linux_packages() {
     log "checking Linuxbrew packages + stow symlinks (Linux)"
-    ssh_vm 'bash -s' <<'REMOTE' | evaluate_stream
-export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-for b in /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew"; do
-  [ -x "$b" ] && eval "$("$b" shellenv)" && break
-done
+    {
+      _remote_env
+      cat <<'REMOTE'
 say() { printf '%s\t%s\n' "$1" "$2"; }
 command -v brew >/dev/null 2>&1 && say OK "Linuxbrew on PATH" || say BAD "brew missing (phase 0 bootstrap failed)"
 command -v fish >/dev/null 2>&1 && say OK "fish installed (brew bundle)" || say BAD "fish missing (phase 1 brew bundle failed)"
@@ -346,6 +354,7 @@ command -v rg   >/dev/null 2>&1 && say OK "ripgrep installed (brew bundle)" || s
 [ -L "$HOME/.config/fish/config.fish" ] && say OK "dotfiles stowed (config.fish symlink)" || say BAD "config.fish not a symlink (phase 3 stow failed)"
 printf 'VERIFY_DONE\t0\n'
 REMOTE
+    } | ssh_vm 'bash -s' | evaluate_stream
   }
 
   log "Cloning ${IMAGE} -> ${VM_NAME} (pulls the base image on first run; multi-GB)"
