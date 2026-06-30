@@ -3,9 +3,11 @@
 
 """Operating-system detection for per-phase install gating.
 
-The installer is macOS-only today, but the phase registry declares which OSes each phase
-applies to so future Linux / WSL2 phases (see #34) can gate cleanly. This module gives that
-gating a small, testable vocabulary, mirroring the bash installer's ``uname`` / ``is_wsl`` checks.
+The phase registry declares which OSes each phase applies to, so the OS-agnostic phases (stow,
+fisher, atuin, the Claude/uv steps, …) run on macOS, Linux, and WSL2 while the macOS-specific
+phases (Homebrew, the Touch-ID/firewall block, `defaults`, the Dock) stay gated to macOS — their
+Linux ports are tracked under the #34 epic. This module gives that gating a small, testable
+vocabulary, mirroring the bash installer's ``uname`` / ``is_wsl`` checks.
 """
 
 from __future__ import annotations

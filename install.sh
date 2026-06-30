@@ -19,13 +19,19 @@ set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# macOS only — fail fast before fetching anything. The installer guards too (it
-# targets macOS: Homebrew prefixes, Touch-ID PAM, chsh, the firewall, `defaults`,
-# dockutil), but there's no point bootstrapping uv on an unsupported platform.
-if [ "$(uname)" != "Darwin" ]; then
-  printf 'install.sh supports macOS only (detected %s). Aborting.\n' "$(uname)" >&2
+# Supported platforms only — fail fast before fetching anything. macOS is fully
+# supported; Linux/WSL2 run the OS-agnostic phases (stow, fish, atuin, the Claude/uv
+# steps) — the package, privileged, and system-tweak phases are macOS-gated, with
+# Linux ports tracked under issue #34. The installer re-checks per phase via
+# os_detect; this guard just rejects platforms it can't target (e.g. Windows, BSD)
+# before bootstrapping uv. WSL2 reports `Linux` to uname, so it passes here.
+case "$(uname)" in
+Darwin | Linux) ;;
+*)
+  printf 'install.sh supports macOS and Linux/WSL2 only (detected %s). Aborting.\n' "$(uname)" >&2
   exit 1
-fi
+  ;;
+esac
 
 # Bootstrap uv if missing — the only thing needed to launch the installer. uv then
 # provides the managed Python (>=3.14) and builds the dotfiles-install entry point.

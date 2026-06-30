@@ -62,6 +62,12 @@ class Phase:
 
 
 _MAC = frozenset({OS.MACOS})
+# Phases whose bodies carry no OS-specific assumption — they run identically on macOS, Linux, and
+# WSL2. The macOS-only phases that *touch* OS internals (the Homebrew bootstrap/bundle, the
+# Touch-ID/firewall privileged block, iTerm2 `defaults`, the Ollama memory/version probe, the
+# `macos.sh`/`dock.sh` system tweaks, and the dscl/socketfilterfw verification) stay `_MAC`; their
+# Linux ports are tracked follow-ups (#112 packages, #113 privileged/verify) under the #34 epic.
+_ALL = frozenset({OS.MACOS, OS.LINUX, OS.WSL})
 
 REGISTRY: tuple[Phase, ...] = (
     Phase(0, "Bootstrap toolchain (Homebrew + uv)", _MAC, run=bootstrap_toolchain),
@@ -73,17 +79,17 @@ REGISTRY: tuple[Phase, ...] = (
         privileged=True,
         run=privileged_setup,
     ),
-    Phase(3, "dotfiles symlinks (stow)", _MAC, run=stow_dotfiles),
-    Phase(4, "Machine-local overlay files", _MAC, run=seed_overlays),
-    Phase(5, "Fish plugins (fisher)", _MAC, run=install_fish_plugins),
-    Phase(6, "tmux plugins (TPM)", _MAC, run=install_tmux_plugins),
-    Phase(7, "atuin history import", _MAC, run=import_atuin_history),
+    Phase(3, "dotfiles symlinks (stow)", _ALL, run=stow_dotfiles),
+    Phase(4, "Machine-local overlay files", _ALL, run=seed_overlays),
+    Phase(5, "Fish plugins (fisher)", _ALL, run=install_fish_plugins),
+    Phase(6, "tmux plugins (TPM)", _ALL, run=install_tmux_plugins),
+    Phase(7, "atuin history import", _ALL, run=import_atuin_history),
     Phase(8, "iTerm2 preferences", _MAC, run=configure_iterm2),
-    Phase(9, "Python CLI tools (uv)", _MAC, run=install_uv_tools),
-    Phase(10, "Git clone hook (notify-on-clone)", _MAC, run=report_clone_hook),
-    Phase(11, "Claude Code CLI", _MAC, run=install_claude_cli),
-    Phase(12, "Claude Code MCP servers", _MAC, run=register_mcp_servers),
-    Phase(13, "Claude Code user settings", _MAC, run=write_user_settings),
+    Phase(9, "Python CLI tools (uv)", _ALL, run=install_uv_tools),
+    Phase(10, "Git clone hook (notify-on-clone)", _ALL, run=report_clone_hook),
+    Phase(11, "Claude Code CLI", _ALL, run=install_claude_cli),
+    Phase(12, "Claude Code MCP servers", _ALL, run=register_mcp_servers),
+    Phase(13, "Claude Code user settings", _ALL, run=write_user_settings),
     Phase(14, "Ollama model for GitLens", _MAC, run=install_ollama_models),
     Phase(15, "macOS system defaults (macos.sh)", _MAC, run=apply_macos_defaults),
     Phase(16, "Dock layout (dock.sh)", _MAC, run=apply_dock_layout),

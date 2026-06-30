@@ -25,7 +25,6 @@ from conftest import tracked
 # the suite. Keep this list honest — it is the repo's "known gaps" ledger.
 UNTESTED_FUNCTIONS = {
     "__open_at_line": "internal helper exercised via fif/fsearch; opens $EDITOR, no guard",
-    "dnsflush": "two privileged side-effects (sudo dscacheutil/killall), no testable logic",
     "fif": "interactive fzf+rg picker; its only non-interactive branch is the rg-missing dep guard",
     "gp-all": "thin wrapper that delegates to the tested forrepos",
     "gs-all": "thin wrapper that delegates to the tested forrepos",
@@ -42,7 +41,8 @@ UNTESTED_FUNCTIONS = {
 # harness deliberately isn't. A few entries are allowlisted for other reasons (pure data, or
 # network-dependent behavior exercised in CI rather than offline bats) — see each reason.
 UNTESTED_SCRIPTS = {
-    "install.sh": "thin bootstrap shim — macOS guard + uv bootstrap, then exec into the"
+    "install.sh": "thin bootstrap shim — supported-platform guard (macOS/Linux/WSL2) + uv"
+    " bootstrap, then exec into the"
     " dotfiles-install Python installer. The install logic it once held now lives in"
     " src/dotfiles_install/ (unit-tested under tests/), and its end-to-end behavior is exercised"
     " by the opt-in VM smoke harness; the shim itself is host-mutating glue guarded by shellcheck",

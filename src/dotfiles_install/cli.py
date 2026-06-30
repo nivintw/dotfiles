@@ -6,8 +6,10 @@
 The installer's real entry point (``install.sh`` is a thin stub that hands off here via uv).
 Reproduces the historical flag surface (``--bundle`` / ``--no-bundles`` / ``--keep-bundles`` /
 ``--core`` / ``--help``) plus ``--verify`` / ``--verify-stream``, with the same exit codes — 0 on
-success or help, 2 on a usage error, 1 on a runtime precondition (non-macOS) — then walks the
-phase registry. Every phase (0-17) executes real work; the port from ``install.sh`` is complete.
+success or help, 2 on a usage error, 1 on a runtime precondition (an unsupported platform) — then
+walks the phase registry, OS-gated to the current platform (macOS runs every phase; Linux/WSL2 run
+the OS-agnostic subset). Every phase (0-17) executes real work; the port from ``install.sh`` is
+complete.
 """
 
 from __future__ import annotations
@@ -70,7 +72,7 @@ def main(
         ),
     ] = False,
 ) -> None:
-    """Converge this Mac to the state declared in the repo (dotfiles bootstrap)."""
+    """Converge this machine to the state declared in the repo (dotfiles bootstrap)."""
     # Verification-only modes short-circuit the install (used by `dotfiles-doctor` and the
     # vm-smoke harness, which replaced sourcing the retired scripts/verify_install.sh).
     if verify_stream:
@@ -117,11 +119,11 @@ def _run(ctx: InstallContext) -> None:
     try:
         target = current_os()
     except RuntimeError as exc:
-        ui.err(f"{exc}; the installer targets macOS")
+        ui.err(f"{exc}; the installer targets macOS, Linux, and WSL2")
         raise typer.Exit(code=1) from exc
     applicable = phases_for(target)
     if not applicable:
-        ui.err(f"no install phases apply to {target.value}; macOS only for now")
+        ui.err(f"no install phases apply to {target.value}")
         raise typer.Exit(code=1)
     try:
         for phase in applicable:
