@@ -9,7 +9,6 @@ Reproduces the historical flag surface (``--bundle`` / ``--no-bundles`` / ``--ke
 success or help, 2 on a usage error, 1 on a runtime precondition (e.g. an unsupported platform) —
 then walks the phase registry, OS-gated to the current platform (macOS runs every phase; Linux/WSL2
 runs the OS-agnostic subset). Every phase (0-17) executes real work; the port from ``install.sh`` is
-the OS-agnostic subset). Every phase (0-17) executes real work; the port from ``install.sh`` is
 complete.
 """
 
