@@ -32,8 +32,10 @@ if TYPE_CHECKING:
     from dotfiles_install.context import InstallContext
 
 # $HOME-relative paths that tools may generate as real files on first run, which stow would
-# then refuse to overwrite. The source of truth for tests/test_consistency.py — kept in step
-# with the bash `managed_files=(...)` array by a parity test until the #72 cutover.
+# then refuse to overwrite. This is the cross-OS *union*: phase 3 now runs on macOS, Linux, and
+# WSL2, and `_clear_managed_files` gates per OS by each path's actual presence — so the
+# macOS-only VS Code path is simply absent (and skipped) on Linux, needing no OS gating here.
+# The source of truth for tests/test_consistency.py.
 MANAGED_FILES: tuple[str, ...] = (
     "Library/Application Support/Code/User/settings.json",  # VS Code / Settings Sync
     ".config/atuin/config.toml",  # atuin writes a default on first run
