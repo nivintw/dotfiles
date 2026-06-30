@@ -59,7 +59,7 @@ def test_brewfile_os_conditionals_are_balanced_and_mac_only() -> None:
     """
     for path in _brewfiles():
         lines = [line for _n, line in _meaningful_lines(path)]
-        ifs = [line for line in lines if line.split(" ", 1)[0] == "if"]
+        ifs = [line for line in lines if line.split(maxsplit=1)[0] == "if"]
         ends = [line for line in lines if line == "end"]
         assert len(ifs) == len(ends), (
             f"{path.name}: unbalanced Brewfile if/end ({len(ifs)} if vs {len(ends)} end)"
