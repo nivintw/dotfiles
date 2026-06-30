@@ -91,7 +91,7 @@ def _install_uv() -> bool:
 
 
 def _activate_homebrew() -> None:
-    """Put a freshly installed brew's ``bin`` and ``sbin`` on ``PATH`` (Apple Silicon vs Intel).
+    """Put a freshly installed brew's ``bin`` and ``sbin`` on ``PATH`` (mac or Linuxbrew prefix).
 
     Mirrors ``brew shellenv``'s PATH effect (both ``bin`` and ``sbin``) but not its
     ``HOMEBREW_*``/``MANPATH`` exports — nothing in the install path reads those, and ``brew``

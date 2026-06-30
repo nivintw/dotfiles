@@ -40,9 +40,10 @@ Requires tart (in the Brewfile) and an Apple Silicon host.
 
   --os OS       Guest OS to smoke: macos (default) or linux. macos runs the full
                 verify gate; linux runs the OS-agnostic phases + Linuxbrew packages
-                (the macOS-only phases — privileged/verify — are gated off, tracked
-                in #113), so it gates on install rc + the deterministic outputs
-                rather than --verify-stream.
+                (the macOS-only phases — the privileged block, verify, and the other
+                macOS-gated steps — are skipped; their Linux ports are tracked in
+                #113), so it gates on install rc + the deterministic outputs rather
+                than --verify-stream.
   --image REF   Base VM image to clone (default: \$VM_SMOKE_IMAGE, else the cirruslabs
                 macos-sequoia-base / ubuntu image for the chosen --os)
   --once        Install only once (default installs twice to prove idempotency)
@@ -284,9 +285,11 @@ ASK
   # set portably to find uv; --core matches the casks-stripped --core install above.
   verify_gate() {
     local label="$1"
-    # On Linux the verify phase (17) is macOS-gated (its Linux port is #113), so --verify-stream
-    # emits no records and would fail closed. Skip it here; the Linux run is gated instead on
-    # install rc + assert_install_outputs + assert_linux_packages.
+    # --verify-stream bypasses the phase registry (cli.py calls emit_stream directly), so it DOES
+    # run on Linux — but iter_records still probes macOS-only state (the socketfilterfw firewall,
+    # the dscl login shell, Touch ID), which has no Linux path and degrades to BAD, failing the
+    # gate on false negatives. The Linux port of those checks is #113; until then skip the stream
+    # gate and rely on install rc + assert_install_outputs + assert_linux_packages instead.
     if [ "$OS_TARGET" != macos ]; then
       log "$label: skipping --verify-stream gate on $OS_TARGET (Linux verify lands in #113)"
       return 0
@@ -430,7 +433,16 @@ REMOTE
       log "Idempotency re-run FAILED — install.sh is not cleanly re-runnable."
       return 1
     fi
-    if ! verify_gate "re-verify"; then
+    # Re-assert post-install STATE, not just rc=0 — otherwise a second run that exits 0 but
+    # clobbered a stow symlink or dropped a package would pass green. macOS re-runs the full
+    # verify gate; on Linux verify_gate no-ops (#113), so re-run the same concrete checks the
+    # first install used, which is what actually proves the re-run preserved state.
+    if [ "$OS_TARGET" = linux ]; then
+      if ! assert_install_outputs || ! assert_linux_packages; then
+        log "Re-run state check FAILED — the idempotency re-run didn't preserve the installed state."
+        return 1
+      fi
+    elif ! verify_gate "re-verify"; then
       log "Verification FAILED after the idempotency re-run — install.sh is not cleanly re-runnable."
       return 1
     fi

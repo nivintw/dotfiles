@@ -17,4 +17,8 @@ brew "nmap"                  # Port scanning utility for large networks
 brew "step"                  # smallstep CLI — private CA, X.509/SSH certs, ACME, mTLS
 
 # --- App Store (personal Apple ID) -----------------------------------------
+# Mac App Store — macOS-only; `OS.mac?` skips it on Linuxbrew (the formulae above are
+# all cross-platform and install on Linux too).
+if OS.mac?
 mas "Home Assistant", id: 1099568401   # Home Assistant companion app
+end
