@@ -11,9 +11,8 @@ hooks to the notify-on-clone design (drop only prek-generated shims) and adopt a
 ``stow --no-folding -n`` preflight surfaces every conflict up front; a conflict (or a failed
 gitconfig adoption) is **fatal** (exit 1) so the user resolves it rather than losing config.
 
-:data:`MANAGED_FILES` is the Python source of truth the test suite checks (it used to scrape
-the bash ``managed_files=(...)`` array); a consistency test keeps the two in step until the
-``install.sh`` cutover (#72).
+:data:`MANAGED_FILES` is the Python source of truth that ``tests/test_consistency.py`` checks
+(each entry must have a tracked ``home/`` counterpart).
 
 Ported from ``install.sh`` phase 3 (the "Symlink dotfiles into $HOME" block).
 """
@@ -53,6 +52,15 @@ def stow_dotfiles(ctx: InstallContext) -> None:
     The four steps run in install.sh's order; the last two (gitconfig adoption, stow preflight)
     can exit 1.
     """
+    # stow is the hard dependency of this phase. On macOS the brew bundle (phase 1) installs it;
+    # on Linux/WSL the package phases are deferred, so it may be absent. Fail with a clear,
+    # actionable message rather than letting the preflight below read stow's command-not-found
+    # (exit 127) as a phantom "these files already exist" conflict.
+    if commands.which("stow") is None:
+        ctx.ui.err(
+            "GNU stow isn't installed — can't symlink the dotfiles; install stow and re-run.",
+        )
+        raise SystemExit(1)
     _clear_managed_files(ctx)
     _migrate_git_template_hooks(ctx)
     _migrate_gitconfig(ctx)

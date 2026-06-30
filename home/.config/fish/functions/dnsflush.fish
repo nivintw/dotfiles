@@ -15,6 +15,12 @@ function dnsflush --description "Flush the DNS resolver cache (macOS / systemd-r
         end
         echo "dnsflush: one or more steps failed" >&2
         return 1
+    else if is_wsl
+        # WSL must be checked BEFORE resolvectl: modern WSL2 ships systemd-resolved, so
+        # resolvectl is present — but flushing it is pointless, because name resolution on WSL
+        # is handled by the Windows host. Flushing the Linux cache wouldn't fix a stale lookup.
+        echo "dnsflush: on WSL, DNS is the Windows host's job — flush it from Windows (run 'ipconfig /flushdns')." >&2
+        return 1
     else if command -q resolvectl
         # systemd-resolved is the common Linux resolver-cache owner.
         if sudo resolvectl flush-caches
@@ -24,7 +30,7 @@ function dnsflush --description "Flush the DNS resolver cache (macOS / systemd-r
         echo "dnsflush: resolvectl flush-caches failed" >&2
         return 1
     else
-        # Plain Linux without systemd-resolved, or WSL (DNS is the Windows host's job).
+        # Plain Linux without systemd-resolved.
         echo "dnsflush: no supported DNS cache to flush on this system" >&2
         return 1
     end
