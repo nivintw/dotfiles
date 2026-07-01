@@ -62,13 +62,11 @@ class Phase:
 
 
 _MAC = frozenset({OS.MACOS})
-# Phases that run on macOS, Linux, and WSL2. Phases 0-1 (Homebrew/Linuxbrew bootstrap + brew
-# bundle) now run everywhere: the bootstrap finds the Linuxbrew prefix and `brew bundle` installs
-# the cross-platform formulae (the Brewfile gates its macOS-only formulae/casks behind `OS.mac?`,
-# and the pre-bundle Touch-ID enable is macOS-only). The remaining `_MAC` phases touch OS
-# internals with no Linux path yet — the Touch-ID/firewall privileged block, iTerm2 `defaults`,
-# the Ollama memory/version probe, the `macos.sh`/`dock.sh` tweaks, and the dscl/socketfilterfw
-# verification — and are tracked in #113 under the #34 epic.
+# Phases that run on macOS, Linux, and WSL2. Most phase bodies are OS-agnostic; the ones that
+# touch OS internals branch internally on `current_os()` — the privileged block (Touch ID and
+# the app firewall on macOS, ufw on Linux, no firewall on WSL), the Ollama MLX gate (Apple-only),
+# and the verification probes (dscl/socketfilterfw vs passwd/ufw). Only the phases whose entire
+# purpose is macOS state stay `_MAC`: iTerm2 `defaults`, `macos.sh`, and the Dock.
 _ALL = frozenset({OS.MACOS, OS.LINUX, OS.WSL})
 
 REGISTRY: tuple[Phase, ...] = (
@@ -77,7 +75,7 @@ REGISTRY: tuple[Phase, ...] = (
     Phase(
         2,
         "Privileged setup (fish shell, firewall, Touch ID)",
-        _MAC,
+        _ALL,
         privileged=True,
         run=privileged_setup,
     ),
@@ -92,10 +90,10 @@ REGISTRY: tuple[Phase, ...] = (
     Phase(11, "Claude Code CLI", _ALL, run=install_claude_cli),
     Phase(12, "Claude Code MCP servers", _ALL, run=register_mcp_servers),
     Phase(13, "Claude Code user settings", _ALL, run=write_user_settings),
-    Phase(14, "Ollama model for GitLens", _MAC, run=install_ollama_models),
+    Phase(14, "Ollama model for GitLens", _ALL, run=install_ollama_models),
     Phase(15, "macOS system defaults (macos.sh)", _MAC, run=apply_macos_defaults),
     Phase(16, "Dock layout (dock.sh)", _MAC, run=apply_dock_layout),
-    Phase(17, "Verification & summary", _MAC, run=verify_and_summarize),
+    Phase(17, "Verification & summary", _ALL, run=verify_and_summarize),
 )
 
 

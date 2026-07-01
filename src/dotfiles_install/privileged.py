@@ -3,13 +3,14 @@
 
 """Phase 2: the single privileged (root-requiring) block.
 
-One ``sudo -v`` authenticates the whole contiguous block — the Touch-ID-for-sudo finalize,
-fish as the login shell (``/etc/shells`` + ``chsh``), and the macOS application firewall — then
-``sudo -k`` drops the ticket so nothing downstream (the fisher/Claude ``curl|bash`` installers)
-runs with a warm timestamp. The ticket is acquired *after* ``brew bundle`` by design (the bundle
-invalidates any earlier sudo timestamp), so it can't fail fast: a declined/failed auth WARNS and
-skips only these privileged steps — stow and every other non-root step still run (losing root
-must not cost the user their symlinks).
+One ``sudo -v`` authenticates the whole contiguous block — the Touch-ID-for-sudo finalize
+(macOS), fish as the login shell (``/etc/shells`` + ``chsh``, portable), and the firewall
+(macOS application firewall, or ufw on Linux; WSL skips it — the Windows host owns the
+firewall) — then ``sudo -k`` drops the ticket so nothing downstream (the fisher/Claude
+``curl|bash`` installers) runs with a warm timestamp. The ticket is acquired *after*
+``brew bundle`` by design (the bundle invalidates any earlier sudo timestamp), so it can't
+fail fast: a declined/failed auth WARNS and skips only these privileged steps — stow and
+every other non-root step still run (losing root must not cost the user their symlinks).
 
 :func:`enable_touch_id_sudo` is shared with the pre-bundle call site in phase 1
 (:mod:`dotfiles_install.brew_bundle`): the same helper writes pam_tid-only before the bundle
@@ -27,6 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from dotfiles_install import commands
+from dotfiles_install.os_detect import OS, current_os
 
 if TYPE_CHECKING:
     from dotfiles_install.context import InstallContext
@@ -54,10 +56,18 @@ def privileged_setup(ctx: InstallContext) -> None:
             "finish these",
         )
         return
+    target = current_os()
     try:
-        enable_touch_id_sudo(ctx)
-        _set_fish_login_shell(ctx)
-        _enable_firewall(ctx)
+        if target == OS.MACOS:
+            enable_touch_id_sudo(ctx)  # pam_tid/pam_reattach exist only on macOS
+        _set_fish_login_shell(ctx)  # chsh + /etc/shells — portable
+        if target == OS.MACOS:
+            _enable_firewall(ctx)
+        elif target == OS.LINUX:
+            _enable_ufw_firewall(ctx)
+        else:
+            # WSL: the Windows host owns the firewall; nothing to manage in the guest.
+            ctx.ui.detail("skipping firewall setup on WSL (the Windows host manages it)")
     finally:
         # Drop the ticket promptly so nothing downstream (the fisher/Claude curl|bash installers,
         # in phases 5+) runs with a warm sudo timestamp — even if a step above raised. The CLI's
@@ -180,6 +190,40 @@ def _firewall_enabled() -> bool:
     if result.returncode:
         return False
     return "enabled" in result.stdout.lower()
+
+
+def _enable_ufw_firewall(ctx: InstallContext) -> None:
+    """Enable ufw with default-deny-incoming on Linux; skip (warn) when ufw isn't installed.
+
+    The Linux analogue of the macOS application firewall: ``ufw --force enable`` (--force skips
+    the interactive "may disrupt ssh" prompt, which would hang an unattended install) plus the
+    stock deny-incoming/allow-outgoing policy. Verified via ``ufw status`` under the same sudo
+    ticket — the apply calls' exit codes aren't trusted alone, mirroring the socketfilterfw path.
+    """
+    if commands.which("ufw") is None:
+        ctx.ui.warn(
+            "ufw not installed — skipping firewall setup; install ufw and re-run install.sh "
+            "(or configure your distro's firewall yourself)",
+        )
+        return
+    ctx.ui.active("enabling the ufw firewall (default deny incoming)")
+    commands.run(["sudo", "ufw", "default", "deny", "incoming"], capture=True)
+    commands.run(["sudo", "ufw", "default", "allow", "outgoing"], capture=True)
+    commands.run(["sudo", "ufw", "--force", "enable"], capture=True)
+    if _ufw_active():
+        ctx.ui.ok("ufw firewall enabled")
+    else:
+        ctx.ui.warn(
+            "could not confirm ufw is active; check `sudo ufw status` and enable it manually",
+        )
+
+
+def _ufw_active() -> bool:
+    """Report whether ``ufw status`` (run under the sudo ticket) says the firewall is active."""
+    result = commands.run(["sudo", "ufw", "status"], capture=True)
+    if result.returncode:
+        return False
+    return "status: active" in result.stdout.lower()
 
 
 def _current_username() -> str:

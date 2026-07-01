@@ -16,11 +16,13 @@ if TYPE_CHECKING:
 
 EXPECTED_PHASE_COUNT = 18  # install.sh phases 0-17 inclusive
 
-# Phases that run on macOS, Linux, and WSL2 (phases.py's ``_ALL``). Phases 0-1 (Homebrew/Linuxbrew
-# bootstrap + brew bundle) joined this set in #112. The complement stays macOS-gated until its
-# Linux port lands (#113 privileged/verify). These two sets must partition the registry.
-_OS_AGNOSTIC_PHASES = frozenset({0, 1, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13})
-_MACOS_ONLY_PHASES = frozenset({2, 8, 14, 15, 16, 17})
+# Phases that run on macOS, Linux, and WSL2 (phases.py's ``_ALL``): everything whose body is
+# OS-agnostic or branches internally on current_os() — including the privileged block (2), the
+# Ollama MLX gate (14), and the OS-aware verification (17), all ported in #113. Only the phases
+# whose entire purpose is macOS state stay macOS-gated: iTerm2 (8), macos.sh (15), the Dock (16).
+# These two sets must partition the registry.
+_OS_AGNOSTIC_PHASES = frozenset({0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 17})
+_MACOS_ONLY_PHASES = frozenset({8, 15, 16})
 
 
 def test_registry_mirrors_install_sh_phase_count() -> None:
@@ -52,8 +54,8 @@ def test_every_phase_is_ported() -> None:
 
 
 def test_applies_gates_on_os() -> None:
-    """A macOS-only phase (phase 2, the privileged Touch-ID/firewall block) is gated off Linux."""
-    phase = REGISTRY[2]
+    """A macOS-only phase (phase 8, iTerm2 preferences) is gated off Linux."""
+    phase = REGISTRY[8]
     assert phase.applies(OS.MACOS) is True
     assert phase.applies(OS.LINUX) is False
 

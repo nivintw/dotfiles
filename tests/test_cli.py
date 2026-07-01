@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import pytest
 from typer.testing import CliRunner
 
-from dotfiles_install import cli, commands, privileged, verify_install
+from dotfiles_install import brew_bundle, cli, commands, ollama, privileged, verify_install
 from dotfiles_install.cli import app, discover_bundles
 from dotfiles_install.os_detect import OS
 from dotfiles_install.phases import Phase
@@ -55,6 +55,11 @@ def _no_real_installs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     # shell out to brew/dscl/socketfilterfw or read the host's /etc. The verify logic itself is
     # covered by tests/test_verify_install.py.
     monkeypatch.setattr(verify_install, "iter_records", lambda *_a, **_k: iter(()))
+    # The OS-branching phase bodies resolve current_os() themselves; pin them to macOS so
+    # the walk is deterministic on any host. The Linux-walk test re-pins to LINUX in its
+    # body (a later setattr wins).
+    for mod in (privileged, brew_bundle, ollama, verify_install):
+        monkeypatch.setattr(mod, "current_os", lambda: OS.MACOS)
 
 
 def test_discover_bundles_matches_the_repo() -> None:
@@ -104,19 +109,24 @@ def test_unexpected_argument_is_a_usage_error() -> None:
 def test_run_on_linux_walks_the_os_agnostic_phases(monkeypatch: pytest.MonkeyPatch) -> None:
     """Off macOS the run walks the OS-agnostic phases (now incl. Linuxbrew 0-1), not the macOS."""
     monkeypatch.setattr(cli, "current_os", lambda: OS.LINUX)
-    # Phase 1 (install_packages) branches on its own current_os; pin it so the Touch-ID skip is
-    # deterministic regardless of the host running the test.
-    monkeypatch.setattr("dotfiles_install.brew_bundle.current_os", lambda: OS.LINUX)
+    # The OS-branching phase bodies resolve current_os() themselves; re-pin them to LINUX so
+    # the walk exercises the Linux paths (overriding the fixture's macOS pin).
+    for mod in (privileged, brew_bundle, ollama, verify_install):
+        monkeypatch.setattr(mod, "current_os", lambda: OS.LINUX)
     result = runner.invoke(app, [])
     assert result.exit_code == 0
     assert "dotfiles bootstrap" in result.output
-    # The Linuxbrew package phases (0-1) and an OS-agnostic phase (stow) all run on Linux...
+    # Packages (0-1), the privileged block (2), stow (3), ollama (14), and verify (17) all run...
     assert "[0] Bootstrap toolchain" in result.output
     assert "[1] Homebrew packages" in result.output
+    assert "[2] Privileged setup" in result.output
     assert "[3] dotfiles symlinks (stow)" in result.output
-    # ...while macOS-only phases (the privileged block, the macOS tweaks) are gated out.
-    assert "[2] Privileged setup" not in result.output
+    assert "[14] Ollama model" in result.output
+    assert "[17] Verification & summary" in result.output
+    # ...while the macOS-purpose phases (iTerm2, macos.sh, the Dock) are gated out.
+    assert "[8] iTerm2 preferences" not in result.output
     assert "[15] macOS system defaults" not in result.output
+    assert "[16] Dock layout" not in result.output
 
 
 def test_run_with_no_applicable_phases_exits_one(monkeypatch: pytest.MonkeyPatch) -> None:

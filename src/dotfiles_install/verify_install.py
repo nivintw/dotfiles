@@ -6,9 +6,11 @@
 The unit-testable predicates the summary is built from — resolving a symlink target into the
 repo, rejecting non-object JSON, matching an ``[include]`` path through ``~`` expansion,
 abbreviating ``$HOME`` to ``~`` for display, and counting enrolled Touch ID templates — plus the
-heavier live-state probes (``brew bundle check``, the firewall via ``socketfilterfw``, the login
-shell via ``dscl``, ``pam_tid``). :func:`iter_records` aggregates them into ``("OK"|"BAD", msg)``
-records, and :func:`verify_and_summarize` is the phase-17 body that renders the closing summary.
+heavier live-state probes, chosen per OS: ``brew bundle check`` everywhere, the firewall via
+``socketfilterfw`` (macOS) or the ufw systemd unit (Linux), the login shell via ``dscl`` (macOS)
+or the passwd database (Linux), and ``pam_tid`` (macOS only; WSL also skips the firewall — the
+Windows host owns it). :func:`iter_records` aggregates them into ``("OK"|"BAD", msg)`` records,
+and :func:`verify_and_summarize` is the phase-17 body that renders the closing summary.
 
 Ported from install.sh's verification step (predicates pinned by ``tests/test_verify_install.py``).
 This is now the single source of truth for the install summary, the ``dotfiles-install --verify``
@@ -32,6 +34,7 @@ from dotfiles_install import commands
 from dotfiles_install.brewfile import brewfile_core
 from dotfiles_install.bundle_select import parse_bundles
 from dotfiles_install.layout import DOTFILES
+from dotfiles_install.os_detect import OS, current_os
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -124,6 +127,7 @@ def touchid_enrolled_count() -> int:
 
 _SUDO_LOCAL = Path("/etc/pam.d/sudo_local")
 _SOCKETFILTERFW = Path("/usr/libexec/ApplicationFirewall/socketfilterfw")
+_UFW_CONF = Path("/etc/ufw/ufw.conf")
 
 # Key dotfiles symlinks that must resolve into the repo, relative to $HOME.
 _KEY_LINKS = (".gitconfig", ".config/fish/config.fish", ".claude/CLAUDE.md")
@@ -145,7 +149,15 @@ def application_firewall_enabled() -> bool:
 
 
 def login_shell() -> str | None:
-    """Return the current user's login shell from Directory Services, or ``None`` if unreadable."""
+    """Return the current user's login shell, or ``None`` if unreadable.
+
+    macOS asks Directory Services (``dscl``) — the authority under MDM/AD management, where the
+    passwd database can lag. Linux reads the passwd database directly (``pwd.getpwuid``, the
+    same NSS-backed source ``getent passwd`` uses) — no subprocess needed.
+    """
+    if current_os() != OS.MACOS:
+        shell = pwd.getpwuid(os.getuid()).pw_shell
+        return shell or None
     # Resolve the user from the real uid (like bash `id -un`), NOT getpass.getuser(), which
     # trusts $USER/$LOGNAME and would query the wrong account under `su` or a stale env.
     username = pwd.getpwuid(os.getuid()).pw_name
@@ -161,6 +173,21 @@ def login_shell() -> str | None:
             return None
 
 
+def ufw_active() -> bool:
+    """Report whether the ufw firewall is enabled, readable without sudo.
+
+    ``ufw status`` needs root, and the ``ufw.service`` systemd unit is a oneshot that stays
+    "active (exited)" even after ``ufw disable`` — so neither reflects enablement for an
+    unprivileged probe. Read ufw's own persistent state instead: ``ufw enable``/``disable``
+    write ``ENABLED=yes``/``no`` to the world-readable ``/etc/ufw/ufw.conf`` (the Linux
+    analogue of ``socketfilterfw --getglobalstate`` reading the firewall's configured state).
+    """
+    for line in commands.read_text_or_empty(_UFW_CONF).splitlines():
+        if line.strip().replace(" ", "") == "ENABLED=yes":
+            return True
+    return False
+
+
 # --- OK/BAD record emitter --------------------------------------------------
 
 
@@ -171,11 +198,18 @@ def iter_records(dotfiles: Path, *, core: bool) -> Iterator[Record]:
     sudo (every probe reads as the user). The single source of truth for the phase-17 install
     summary, the ``dotfiles-install --verify`` re-check (``dotfiles-doctor``), and the
     ``--verify-stream`` record stream the vm-smoke harness gates on.
+
+    OS-aware: each check either probes per-OS (login shell, firewall) or applies only where the
+    state exists — Touch ID is macOS-only, and WSL yields no firewall record at all (the Windows
+    host owns the firewall, so there is nothing in the guest to verify).
     """
+    target = current_os()
     yield from _brew_records(dotfiles, core=core)
     yield _login_shell_record()
-    yield _touch_id_record()
-    yield _firewall_record()
+    if target == OS.MACOS:
+        yield _touch_id_record()
+    if target != OS.WSL:
+        yield _firewall_record()
     yield from _symlink_records(dotfiles)
     yield _settings_record()
     yield _gitconfig_include_record()
@@ -363,7 +397,13 @@ def _touch_id_record() -> Record:
 
 
 def _firewall_record() -> Record:
-    """OK when the application firewall is enabled."""
+    """OK when the OS firewall is enabled (macOS application firewall, or ufw on Linux)."""
+    if current_os() == OS.LINUX:
+        return _record(
+            "ufw firewall active",
+            "ufw firewall is OFF — enable it with `sudo ufw enable` (or re-run install.sh)",
+            passed=ufw_active(),
+        )
     return _record(
         "application firewall enabled",
         "application firewall is OFF — enable it in System Settings → Network → Firewall",

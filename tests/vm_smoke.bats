@@ -49,13 +49,6 @@ _with_fake_tart() {
   [[ "$output" == *"--os must be macos or linux"* ]]
 }
 
-@test "--negative is rejected on Linux (macOS-only self-test)" {
-  _with_fake_tart
-  PATH="$FAKETART:$PATH" run bash "$SCRIPT" --os linux --negative
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"--negative is macOS-only"* ]]
-}
-
 @test "preflight fails clearly when tart is absent" {
   # tart is a Homebrew tool, never in /usr/bin:/bin — so this PATH guarantees it is missing
   # while leaving the basic tools the script needs available.

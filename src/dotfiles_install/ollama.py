@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 
 from dotfiles_install import commands
 from dotfiles_install.layout import DOTFILES
+from dotfiles_install.os_detect import OS, current_os
 
 if TYPE_CHECKING:
     from dotfiles_install.context import InstallContext
@@ -161,7 +162,14 @@ def _pull_model(ctx: InstallContext, model: str, size: str, installed: list[str]
 
 
 def _mlx_supported() -> bool:
-    """Whether this machine meets the MLX gate: Apple Silicon + >32 GiB RAM + macOS 13+."""
+    """Whether this machine meets the MLX gate: Apple Silicon + >32 GiB RAM + macOS 13+.
+
+    MLX is Apple-only, so any non-macOS host fails the gate up front — before the ``sysctl`` /
+    ``sw_vers`` probes, which don't exist on Linux and would only produce stderr noise on their
+    way to the same closed-gate answer.
+    """
+    if current_os() != OS.MACOS:
+        return False
     if platform.machine() != "arm64":
         return False
     if _mem_bytes() <= _MEM_32_GIB_BYTES:
