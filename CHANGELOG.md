@@ -7,6 +7,18 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.20.0](https://github.com/nivintw/dotfiles/compare/v1.19.0...v1.20.0) (2026-07-01)
+
+
+### Features
+
+* **installer:** Linuxbrew package install on Linux + a Linux Tart smoke ([5c27bc4](https://github.com/nivintw/dotfiles/commit/5c27bc4ef7569e1cb1246b08bb0d2ffe733ceb66))
+
+
+### Bug Fixes
+
+* **installer:** Address review — Linux re-run assert, bundle gating, comments ([aef13ba](https://github.com/nivintw/dotfiles/commit/aef13ba605ba9dddcbf75bbe83c1bf203b6ea0b8))
+
 ## [1.19.0](https://github.com/nivintw/dotfiles/compare/v1.18.0...v1.19.0) (2026-06-30)
 
 
