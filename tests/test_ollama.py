@@ -23,6 +23,7 @@ from rich.console import Console
 
 from dotfiles_install import commands, ollama
 from dotfiles_install.context import InstallContext
+from dotfiles_install.os_detect import OS
 from dotfiles_install.ui import UI
 
 _MODELS_FRAGMENT = (
@@ -368,6 +369,7 @@ def test_mlx_gate_false_on_intel(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_mlx_gate_false_at_exactly_32gib(monkeypatch: pytest.MonkeyPatch) -> None:
     """Exactly 32 GiB fails the strictly-greater memory check."""
+    monkeypatch.setattr(ollama, "current_os", lambda: OS.MACOS)
     monkeypatch.setattr(ollama.platform, "machine", lambda: "arm64")
     monkeypatch.setattr(ollama, "_mem_bytes", lambda: ollama._MEM_32_GIB_BYTES)
 
@@ -376,6 +378,7 @@ def test_mlx_gate_false_at_exactly_32gib(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_mlx_gate_false_on_old_macos(monkeypatch: pytest.MonkeyPatch) -> None:
     """Enough RAM but macOS 12 fails the version check."""
+    monkeypatch.setattr(ollama, "current_os", lambda: OS.MACOS)
     monkeypatch.setattr(ollama.platform, "machine", lambda: "arm64")
     monkeypatch.setattr(ollama, "_mem_bytes", lambda: ollama._MEM_32_GIB_BYTES + 1)
     monkeypatch.setattr(ollama, "_macos_major", lambda: 12)
@@ -384,12 +387,28 @@ def test_mlx_gate_false_on_old_macos(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_mlx_gate_true_when_all_met(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Apple Silicon + >32 GiB + macOS 13 passes the gate."""
+    """Apple Silicon + >32 GiB + macOS 13 passes the gate (OS pinned for any test host)."""
+    monkeypatch.setattr(ollama, "current_os", lambda: OS.MACOS)
     monkeypatch.setattr(ollama.platform, "machine", lambda: "arm64")
     monkeypatch.setattr(ollama, "_mem_bytes", lambda: ollama._MEM_32_GIB_BYTES + 1)
     monkeypatch.setattr(ollama, "_macos_major", lambda: ollama._MIN_MACOS_MAJOR)
 
     assert ollama._mlx_supported() is True
+
+
+def test_mlx_gate_false_off_macos(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A non-macOS host fails the gate up front — no sysctl/sw_vers probes are consulted."""
+    monkeypatch.setattr(ollama, "current_os", lambda: OS.LINUX)
+    monkeypatch.setattr(ollama.platform, "machine", lambda: "arm64")  # even on Apple hardware
+
+    def _boom() -> int:
+        msg = "memory/version must not be probed off macOS"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(ollama, "_mem_bytes", _boom)
+    monkeypatch.setattr(ollama, "_macos_major", _boom)
+
+    assert ollama._mlx_supported() is False
 
 
 # --- _mem_bytes / _macos_major ----------------------------------------------------------------

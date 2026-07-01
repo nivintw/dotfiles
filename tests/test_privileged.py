@@ -28,6 +28,7 @@ from rich.console import Console
 
 from dotfiles_install import commands, privileged
 from dotfiles_install.context import InstallContext
+from dotfiles_install.os_detect import OS
 from dotfiles_install.ui import UI
 
 if TYPE_CHECKING:
@@ -35,6 +36,16 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _PAM_TID = "auth       sufficient     pam_tid.so"
+
+
+@pytest.fixture(autouse=True)
+def _pin_macos(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin ``current_os()`` to macOS so the suite is deterministic on any host (Linux CI too).
+
+    ``privileged_setup`` branches on the OS and the historical tests assert the macOS path.
+    Tests for the Linux/WSL paths re-pin inside their own bodies (a later setattr wins).
+    """
+    monkeypatch.setattr(privileged, "current_os", lambda: OS.MACOS)
 
 
 def _ctx() -> tuple[InstallContext, io.StringIO]:
@@ -53,6 +64,7 @@ class _Rc:
     shells: int = 0  # the `tee -a /etc/shells` append
     chsh: int = 0
     getglobalstate: int = 0  # the firewall verify probe's exit code
+    ufw_status: int = 0  # the `sudo ufw status` verify probe's exit code
 
 
 def _fake_run(
@@ -60,6 +72,7 @@ def _fake_run(
     *,
     brew_prefix: str = "/opt/homebrew",
     firewall: str = "enabled",
+    ufw: str = "active",
     rc: _Rc | None = None,
 ) -> Callable[..., subprocess.CompletedProcess[str]]:
     """Build a ``commands.run`` replacement that records calls and answers by argv shape."""
@@ -73,20 +86,20 @@ def _fake_run(
     ) -> subprocess.CompletedProcess[str]:
         argv = list(argv)
         calls.append(SimpleNamespace(argv=argv, input_text=input_text))
+        code, stdout = 0, ""
         if argv[:2] == ["brew", "--prefix"]:
-            return subprocess.CompletedProcess(argv, 0, stdout=brew_prefix, stderr="")
-        if argv[:2] == ["sudo", "-v"]:
-            return subprocess.CompletedProcess(argv, rc.sudo_v, stdout="", stderr="")
-        if argv[:2] == ["sudo", "tee"]:
+            stdout = brew_prefix
+        elif argv[:2] == ["sudo", "-v"]:
+            code = rc.sudo_v
+        elif argv[:2] == ["sudo", "tee"]:
             code = rc.shells if argv[-1].endswith("shells") else rc.tee
-            return subprocess.CompletedProcess(argv, code, stdout="", stderr="")
-        if argv[:2] == ["sudo", "chsh"]:
-            return subprocess.CompletedProcess(argv, rc.chsh, stdout="", stderr="")
-        if "--getglobalstate" in argv:
-            return subprocess.CompletedProcess(
-                argv, rc.getglobalstate, stdout=f"Firewall is {firewall}.", stderr=""
-            )
-        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        elif argv[:2] == ["sudo", "chsh"]:
+            code = rc.chsh
+        elif "--getglobalstate" in argv:
+            code, stdout = rc.getglobalstate, f"Firewall is {firewall}."
+        elif argv[:3] == ["sudo", "ufw", "status"]:
+            code, stdout = rc.ufw_status, f"Status: {ufw}\n"
+        return subprocess.CompletedProcess(argv, code, stdout=stdout, stderr="")
 
     return run
 
@@ -460,3 +473,98 @@ def test_setup_warns_and_skips_chsh_when_shells_registration_fails(
     assert any("couldn't register" in w for w in ctx.ui.warnings)
     assert not any(a[:2] == ["sudo", "chsh"] for a in argvs)  # chsh skipped after failed register
     assert argvs[-1] == ["sudo", "-k"]  # firewall + ticket-drop still ran
+
+
+# --- privileged_setup: Linux / WSL ------------------------------------------------------------
+
+
+def test_setup_linux_runs_ufw_and_skips_touch_id(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """On Linux: no Touch-ID PAM write, chsh still runs, and ufw is enabled + verified."""
+    monkeypatch.setattr(privileged, "current_os", lambda: OS.LINUX)
+    _point_paths(monkeypatch, tmp_path)
+    fish = "/home/linuxbrew/.linuxbrew/bin/fish"
+    calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(commands, "run", _fake_run(calls))
+    monkeypatch.setattr(commands, "which", lambda _name: fish)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+    ctx, out = _ctx()
+
+    privileged.privileged_setup(ctx)
+
+    argvs = [c.argv for c in calls]
+    assert not _tee_calls(calls, "sudo_local")  # Touch ID never touched on Linux
+    assert ["sudo", "chsh", "-s", fish, privileged._current_username()] in argvs
+    assert ["sudo", "ufw", "default", "deny", "incoming"] in argvs
+    assert ["sudo", "ufw", "default", "allow", "outgoing"] in argvs
+    assert ["sudo", "ufw", "--force", "enable"] in argvs
+    assert not any(privileged._SOCKETFILTERFW in a for a in argvs)  # no macOS firewall calls
+    assert argvs[-1] == ["sudo", "-k"]
+    assert "ufw firewall enabled" in out.getvalue()
+
+
+def test_setup_linux_warns_when_ufw_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A Linux box without ufw warns and skips firewall setup; the rest of the block still runs."""
+    monkeypatch.setattr(privileged, "current_os", lambda: OS.LINUX)
+    _point_paths(monkeypatch, tmp_path)
+    fish = "/home/linuxbrew/.linuxbrew/bin/fish"
+    calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(commands, "run", _fake_run(calls))
+    monkeypatch.setattr(commands, "which", lambda name: None if name == "ufw" else fish)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+    ctx, _ = _ctx()
+
+    privileged.privileged_setup(ctx)
+
+    argvs = [c.argv for c in calls]
+    assert any("ufw not installed" in w for w in ctx.ui.warnings)
+    assert not any(a[:2] == ["sudo", "ufw"] for a in argvs)
+    assert argvs[-1] == ["sudo", "-k"]
+
+
+def test_setup_linux_warns_when_ufw_not_confirmed_active(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """If `ufw status` doesn't report active after enable, warn — but still drop the ticket."""
+    monkeypatch.setattr(privileged, "current_os", lambda: OS.LINUX)
+    _point_paths(monkeypatch, tmp_path)
+    calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(commands, "run", _fake_run(calls, ufw="inactive"))
+    monkeypatch.setattr(commands, "which", lambda _name: "/home/linuxbrew/.linuxbrew/bin/fish")
+    monkeypatch.setenv("SHELL", "/bin/bash")
+    ctx, _ = _ctx()
+
+    privileged.privileged_setup(ctx)
+
+    assert any("could not confirm ufw is active" in w for w in ctx.ui.warnings)
+    assert [c.argv for c in calls][-1] == ["sudo", "-k"]
+
+
+def test_setup_wsl_skips_firewall_entirely(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """On WSL neither firewall is touched (the Windows host owns it); shell setup still runs."""
+    monkeypatch.setattr(privileged, "current_os", lambda: OS.WSL)
+    _point_paths(monkeypatch, tmp_path)
+    fish = "/home/linuxbrew/.linuxbrew/bin/fish"
+    calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(commands, "run", _fake_run(calls))
+    monkeypatch.setattr(commands, "which", lambda _name: fish)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+    ctx, out = _ctx()
+
+    privileged.privileged_setup(ctx)
+
+    argvs = [c.argv for c in calls]
+    assert not any(a[:2] == ["sudo", "ufw"] for a in argvs)
+    assert not any(privileged._SOCKETFILTERFW in a for a in argvs)
+    assert not _tee_calls(calls, "sudo_local")
+    assert ["sudo", "chsh", "-s", fish, privileged._current_username()] in argvs
+    assert "privileged setup complete" in out.getvalue()

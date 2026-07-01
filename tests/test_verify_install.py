@@ -15,12 +15,13 @@ import os
 import pwd
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING
 
+import pytest
 from rich.console import Console
 
 from dotfiles_install import commands, verify_install
 from dotfiles_install.context import InstallContext
+from dotfiles_install.os_detect import OS
 from dotfiles_install.ui import UI
 from dotfiles_install.verify_install import (
     gitconfig_includes,
@@ -30,8 +31,15 @@ from dotfiles_install.verify_install import (
     touchid_enrolled_count,
 )
 
-if TYPE_CHECKING:
-    import pytest
+
+@pytest.fixture(autouse=True)
+def _pin_macos(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin ``current_os()`` to macOS so the suite is deterministic on any host (Linux CI too).
+
+    ``iter_records`` and the login-shell/firewall probes branch on the OS; the historical tests
+    assert the macOS shape. Tests for the Linux/WSL shapes re-pin inside their own bodies.
+    """
+    monkeypatch.setattr(verify_install, "current_os", lambda: OS.MACOS)
 
 
 def _completed(stdout: str) -> subprocess.CompletedProcess[str]:
@@ -631,3 +639,87 @@ def test_emit_stream_passes_core_flag_through(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(verify_install, "iter_records", _iter)
     verify_install.emit_stream(core=True, write=lambda _line: None)
     assert captured["core"] is True
+
+
+# --- Linux / WSL shapes -----------------------------------------------------------------------
+
+
+def test_login_shell_linux_reads_passwd(monkeypatch: pytest.MonkeyPatch) -> None:
+    """On Linux the login shell comes from the passwd database (pw_shell), not dscl."""
+    monkeypatch.setattr(verify_install, "current_os", lambda: OS.LINUX)
+
+    class _Entry:
+        pw_shell = "/home/linuxbrew/.linuxbrew/bin/fish"
+
+    monkeypatch.setattr(pwd, "getpwuid", lambda _uid: _Entry())
+
+    def _no_dscl(*_a: object, **_k: object) -> subprocess.CompletedProcess[str]:
+        msg = "dscl must not be invoked on Linux"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(commands, "run", _no_dscl)
+    assert verify_install.login_shell() == "/home/linuxbrew/.linuxbrew/bin/fish"
+
+
+def test_ufw_active_reads_ufw_conf(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ufw_active reflects the persistent ENABLED flag in ufw.conf; missing file reads inactive."""
+    conf = tmp_path / "ufw.conf"
+    monkeypatch.setattr(verify_install, "_UFW_CONF", conf)
+    assert verify_install.ufw_active() is False  # no ufw.conf at all
+    conf.write_text("# ufw config\nENABLED=yes\nLOGLEVEL=low\n", encoding="utf-8")
+    assert verify_install.ufw_active() is True
+    conf.write_text("ENABLED=no\n", encoding="utf-8")
+    assert verify_install.ufw_active() is False
+
+
+def test_iter_records_linux_shape(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On Linux there is no Touch ID record, and the firewall record probes ufw (all OK here)."""
+    monkeypatch.setattr(verify_install, "current_os", lambda: OS.LINUX)
+    repo = _healthy_repo_and_home(tmp_path, monkeypatch)
+    monkeypatch.setattr(commands, "which", lambda name: f"/usr/local/bin/{name}")
+    _all_probes(monkeypatch, healthy=True)
+    monkeypatch.setattr(verify_install, "ufw_active", lambda: True)
+    records = list(verify_install.iter_records(repo, core=False))
+    bad = [msg for status, msg in records if status == "BAD"]
+    assert bad == []
+    expected_checks = 8  # the macOS nine, minus Touch ID
+    assert len(records) == expected_checks
+    assert any("ufw firewall active" in msg for _s, msg in records)
+    assert not any("Touch ID" in msg for _s, msg in records)
+
+
+def test_iter_records_linux_flags_inactive_ufw(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An inactive ufw yields a BAD firewall record on Linux."""
+    monkeypatch.setattr(verify_install, "current_os", lambda: OS.LINUX)
+    repo = _healthy_repo_and_home(tmp_path, monkeypatch)
+    monkeypatch.setattr(commands, "which", lambda name: f"/usr/local/bin/{name}")
+    _all_probes(monkeypatch, healthy=True)
+    monkeypatch.setattr(verify_install, "ufw_active", lambda: False)
+    records = list(verify_install.iter_records(repo, core=False))
+    assert any(status == "BAD" and "ufw firewall is OFF" in msg for status, msg in records)
+
+
+def test_iter_records_wsl_omits_the_firewall_record(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On WSL neither firewall record is yielded (the Windows host owns the firewall)."""
+    monkeypatch.setattr(verify_install, "current_os", lambda: OS.WSL)
+    repo = _healthy_repo_and_home(tmp_path, monkeypatch)
+    monkeypatch.setattr(commands, "which", lambda name: f"/usr/local/bin/{name}")
+    _all_probes(monkeypatch, healthy=True)
+    records = list(verify_install.iter_records(repo, core=False))
+    bad = [msg for status, msg in records if status == "BAD"]
+    assert bad == []
+    expected_checks = 7  # the macOS nine, minus Touch ID and the firewall
+    assert len(records) == expected_checks
+    assert not any("firewall" in msg for _s, msg in records)

@@ -38,18 +38,17 @@ Usage: vm-smoke.sh [--os macos|linux] [--image REF] [--once] [--negative] [--kee
 Boot a clean Tart VM, run install.sh end-to-end inside it, and verify the result.
 Requires tart (in the Brewfile) and an Apple Silicon host.
 
-  --os OS       Guest OS to smoke: macos (default) or linux. macos runs the full
-                verify gate; linux runs the OS-agnostic phases + Linuxbrew packages
-                (the macOS-only phases — the privileged block, verify, and the other
-                macOS-gated steps — are skipped; their Linux ports are tracked in
-                #113), so it gates on install rc + the deterministic outputs rather
-                than --verify-stream.
+  --os OS       Guest OS to smoke: macos (default) or linux. Both run the full,
+                strict --verify-stream gate — the verification probes are OS-aware
+                (dscl/socketfilterfw on macOS; passwd/ufw on Linux; Touch ID is
+                macOS-only). Only the macOS-purpose phases (iTerm2, macos.sh, Dock)
+                are skipped on linux.
   --image REF   Base VM image to clone (default: \$VM_SMOKE_IMAGE, else the cirruslabs
                 macos-sequoia-base / ubuntu image for the chosen --os)
   --once        Install only once (default installs twice to prove idempotency)
   --negative    Self-test the gate: after a clean install, break the firewall in the VM
-                and assert the gate now FAILS (proves the gate isn't a rubber stamp).
-                macOS only (the Linux verify gate lands in #113).
+                (socketfilterfw off on macOS, ufw disable on linux) and assert the gate
+                now FAILS (proves the gate isn't a rubber stamp).
   --keep        Don't delete the VM on exit (for debugging a failed run)
   -h, --help    Show this help
 
@@ -173,14 +172,6 @@ main() {
     ;;
   esac
 
-  # The --negative self-test breaks the macOS application firewall and asserts the verify gate
-  # then fails. Linux has neither that firewall nor (yet) a verify gate — phase 17 verify is
-  # macOS-gated, tracked in #113 — so the self-test is macOS-only.
-  if [ "$NEGATIVE" -eq 1 ] && [ "$OS_TARGET" != macos ]; then
-    printf 'vm-smoke.sh: --negative is macOS-only (no Linux verify gate yet — see #113).\n' >&2
-    return 2
-  fi
-
   # Repo root, resolved with builtins so the preflight above works under a stripped PATH.
   local DOTFILES
   DOTFILES="$(cd "${BASH_SOURCE[0]%/*}/.." && pwd)"
@@ -285,15 +276,9 @@ ASK
   # set portably to find uv; --core matches the casks-stripped --core install above.
   verify_gate() {
     local label="$1"
-    # --verify-stream bypasses the phase registry (cli.py calls emit_stream directly), so it DOES
-    # run on Linux — but iter_records still probes macOS-only state (the socketfilterfw firewall,
-    # the dscl login shell, Touch ID), which has no Linux path and degrades to BAD, failing the
-    # gate on false negatives. The Linux port of those checks is #113; until then skip the stream
-    # gate and rely on install rc + assert_install_outputs + assert_linux_packages instead.
-    if [ "$OS_TARGET" != macos ]; then
-      log "$label: skipping --verify-stream gate on $OS_TARGET (Linux verify lands in #113)"
-      return 0
-    fi
+    # iter_records is OS-aware (dscl/socketfilterfw on macOS; passwd/ufw on Linux; Touch ID is
+    # macOS-only), so the same strict gate runs on both guest OSes. Only the Touch-ID-no-sensor
+    # BAD is tolerated (see is_tolerated) — a macOS-only record, so Linux runs fully strict.
     log "$label: running 'dotfiles-install --verify-stream' in the VM and evaluating the result"
     # shellcheck disable=SC2016  # $HOME must expand in the guest, not here
     ssh_vm 'bash -s' <<'REMOTE' | evaluate_stream
@@ -304,10 +289,11 @@ REMOTE
   }
 
   # _remote_env — emit (to stdout) the shell that puts the uv shims (~/.local/bin) and the brew
-  # prefix on PATH inside the guest. Prepended to the assert REMOTE scripts below: on Linux the
-  # login shell isn't switched to fish (phase 2 is macOS-only), so a non-login bash SSH session
-  # wouldn't otherwise find fish / claude / the uv tools. Quoted heredoc — $HOME / $b expand in the
-  # guest, not here — and additive/harmless on macOS (the Linux brew paths simply don't exist).
+  # prefix on PATH inside the guest. Prepended to the assert REMOTE scripts below: ssh_vm runs
+  # `bash -s` directly (a non-login session, whatever the login shell), so nothing sources the
+  # fish/profile PATH setup and fish / claude / the uv tools wouldn't otherwise resolve. Quoted
+  # heredoc — $HOME / $b expand in the guest, not here — and the inapplicable brew paths simply
+  # don't exist on the other OS.
   _remote_env() {
     cat <<'ENV'
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
@@ -434,24 +420,29 @@ REMOTE
       return 1
     fi
     # Re-assert post-install STATE, not just rc=0 — otherwise a second run that exits 0 but
-    # clobbered a stow symlink or dropped a package would pass green. macOS re-runs the full
-    # verify gate; on Linux verify_gate no-ops (#113), so re-run the same concrete checks the
-    # first install used, which is what actually proves the re-run preserved state.
+    # clobbered a stow symlink or dropped a package would pass green. The verify gate is
+    # OS-aware and strict on both guests; Linux additionally re-runs the concrete output
+    # checks (Claude CLI / uv tools / TPM / fisher / packages), which verify doesn't cover.
+    if ! verify_gate "re-verify"; then
+      log "Verification FAILED after the idempotency re-run — install.sh is not cleanly re-runnable."
+      return 1
+    fi
     if [ "$OS_TARGET" = linux ]; then
       if ! assert_install_outputs || ! assert_linux_packages; then
         log "Re-run state check FAILED — the idempotency re-run didn't preserve the installed state."
         return 1
       fi
-    elif ! verify_gate "re-verify"; then
-      log "Verification FAILED after the idempotency re-run — install.sh is not cleanly re-runnable."
-      return 1
     fi
   fi
 
   if [ "$NEGATIVE" -eq 1 ]; then
     log "Negative self-test: disabling the firewall in the VM; the gate MUST now fail"
-    ssh_vm 'sudo -n /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off' \
-      >/dev/null 2>&1 || true
+    if [ "$OS_TARGET" = macos ]; then
+      ssh_vm 'sudo -n /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off' \
+        >/dev/null 2>&1 || true
+    else
+      ssh_vm 'sudo -n ufw disable' >/dev/null 2>&1 || true
+    fi
     if verify_gate "negative"; then
       printf 'vm-smoke.sh: NEGATIVE self-test FAILED — the gate passed with the firewall OFF, so it is not actually checking.\n' >&2
       return 1
