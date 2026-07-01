@@ -15,8 +15,8 @@ import os
 import pwd
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import pytest
 from rich.console import Console
 
 from dotfiles_install import commands, verify_install
@@ -31,15 +31,8 @@ from dotfiles_install.verify_install import (
     touchid_enrolled_count,
 )
 
-
-@pytest.fixture(autouse=True)
-def _pin_macos(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pin ``current_os()`` to macOS so the suite is deterministic on any host (Linux CI too).
-
-    ``iter_records`` and the login-shell/firewall probes branch on the OS; the historical tests
-    assert the macOS shape. Tests for the Linux/WSL shapes re-pin inside their own bodies.
-    """
-    monkeypatch.setattr(verify_install, "current_os", lambda: OS.MACOS)
+if TYPE_CHECKING:
+    import pytest
 
 
 def _completed(stdout: str) -> subprocess.CompletedProcess[str]:

@@ -55,11 +55,6 @@ def _no_real_installs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     # shell out to brew/dscl/socketfilterfw or read the host's /etc. The verify logic itself is
     # covered by tests/test_verify_install.py.
     monkeypatch.setattr(verify_install, "iter_records", lambda *_a, **_k: iter(()))
-    # The OS-branching phase bodies resolve current_os() themselves; pin them to macOS so
-    # the walk is deterministic on any host. The Linux-walk test re-pins to LINUX in its
-    # body (a later setattr wins).
-    for mod in (privileged, brew_bundle, ollama, verify_install):
-        monkeypatch.setattr(mod, "current_os", lambda: OS.MACOS)
 
 
 def test_discover_bundles_matches_the_repo() -> None:

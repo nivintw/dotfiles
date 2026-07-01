@@ -219,7 +219,13 @@ def _enable_ufw_firewall(ctx: InstallContext) -> None:
 
 
 def _ufw_active() -> bool:
-    """Report whether ``ufw status`` (run under the sudo ticket) says the firewall is active."""
+    """Report whether ``ufw status`` (run under the sudo ticket) says the firewall is active.
+
+    Deliberately probes ufw's *live* state, unlike ``verify_install.ufw_active`` which reads
+    the persistent ``/etc/ufw/ufw.conf``: this runs immediately after the enable, under the
+    same sudo ticket, so asking ufw directly is both possible and the strongest confirmation.
+    The verify phase runs later without sudo, where only the persistent config is readable.
+    """
     result = commands.run(["sudo", "ufw", "status"], capture=True)
     if result.returncode:
         return False

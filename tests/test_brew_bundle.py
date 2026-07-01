@@ -326,7 +326,6 @@ def test_install_packages_enables_touch_id_before_the_bundle(
 ) -> None:
     """On macOS the pre-bundle Touch-ID enable is wired in and runs before `brew bundle` (#68)."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr(brew_bundle, "current_os", lambda: OS.MACOS)  # deterministic on any host
     monkeypatch.setattr(brew_bundle, "_is_interactive", lambda: False)
     monkeypatch.setattr(brew_bundle, "_trust_taps", lambda _ctx, _text: None)
     events: list[str] = []

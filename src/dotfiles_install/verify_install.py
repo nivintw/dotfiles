@@ -183,8 +183,9 @@ def ufw_active() -> bool:
     analogue of ``socketfilterfw --getglobalstate`` reading the firewall's configured state).
     """
     for line in commands.read_text_or_empty(_UFW_CONF).splitlines():
-        if line.strip().replace(" ", "") == "ENABLED=yes":
-            return True
+        key, _, value = line.partition("=")
+        if key.strip() == "ENABLED":
+            return value.strip() == "yes"
     return False
 
 
