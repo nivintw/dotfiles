@@ -197,8 +197,11 @@ def _enable_ufw_firewall(ctx: InstallContext) -> None:
 
     The Linux analogue of the macOS application firewall: ``ufw --force enable`` (--force skips
     the interactive "may disrupt ssh" prompt, which would hang an unattended install) plus the
-    stock deny-incoming/allow-outgoing policy. Verified via ``ufw status`` under the same sudo
-    ticket — the apply calls' exit codes aren't trusted alone, mirroring the socketfilterfw path.
+    stock deny-incoming/allow-outgoing policy. When sshd is running, port 22 is allowed FIRST —
+    default-deny-incoming hard-blocks new SSH connections (unlike the macOS app firewall), so
+    without the rule a headless install driven over SSH would lock its own operator out the
+    moment the firewall came up. Verified via ``ufw status`` under the same sudo ticket — the
+    apply calls' exit codes aren't trusted alone, mirroring the socketfilterfw path.
     """
     if commands.which("ufw") is None:
         ctx.ui.warn(
@@ -207,6 +210,9 @@ def _enable_ufw_firewall(ctx: InstallContext) -> None:
         )
         return
     ctx.ui.active("enabling the ufw firewall (default deny incoming)")
+    if _sshd_running():
+        ctx.ui.detail("sshd is running — allowing 22/tcp so the firewall can't cut off SSH")
+        commands.run(["sudo", "ufw", "allow", "22/tcp"], capture=True)
     commands.run(["sudo", "ufw", "default", "deny", "incoming"], capture=True)
     commands.run(["sudo", "ufw", "default", "allow", "outgoing"], capture=True)
     commands.run(["sudo", "ufw", "--force", "enable"], capture=True)
@@ -216,6 +222,16 @@ def _enable_ufw_firewall(ctx: InstallContext) -> None:
         ctx.ui.warn(
             "could not confirm ufw is active; check `sudo ufw status` and enable it manually",
         )
+
+
+def _sshd_running() -> bool:
+    """Report whether an OpenSSH server is active (``ssh`` on Debian/Ubuntu, else ``sshd``)."""
+    if commands.which("systemctl") is None:
+        return False
+    return any(
+        commands.run_ok(["systemctl", "is-active", "--quiet", unit], capture=True)
+        for unit in ("ssh", "sshd")
+    )
 
 
 def _ufw_active() -> bool:

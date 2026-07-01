@@ -55,6 +55,7 @@ class _Rc:
     chsh: int = 0
     getglobalstate: int = 0  # the firewall verify probe's exit code
     ufw_status: int = 0  # the `sudo ufw status` verify probe's exit code
+    sshd: int = 3  # `systemctl is-active ssh[d]` — 0 = running, 3 = inactive (systemd's code)
 
 
 def _fake_run(
@@ -89,6 +90,8 @@ def _fake_run(
             code, stdout = rc.getglobalstate, f"Firewall is {firewall}."
         elif argv[:3] == ["sudo", "ufw", "status"]:
             code, stdout = rc.ufw_status, f"Status: {ufw}\n"
+        elif argv[:2] == ["systemctl", "is-active"]:
+            code = rc.sshd
         return subprocess.CompletedProcess(argv, code, stdout=stdout, stderr="")
 
     return run
@@ -490,6 +493,7 @@ def test_setup_linux_runs_ufw_and_skips_touch_id(
     assert ["sudo", "ufw", "default", "deny", "incoming"] in argvs
     assert ["sudo", "ufw", "default", "allow", "outgoing"] in argvs
     assert ["sudo", "ufw", "--force", "enable"] in argvs
+    assert ["sudo", "ufw", "allow", "22/tcp"] not in argvs  # no sshd running -> no hole punched
     assert not any(privileged._SOCKETFILTERFW in a for a in argvs)  # no macOS firewall calls
     assert argvs[-1] == ["sudo", "-k"]
     assert "ufw firewall enabled" in out.getvalue()
@@ -558,3 +562,29 @@ def test_setup_wsl_skips_firewall_entirely(
     assert not _tee_calls(calls, "sudo_local")
     assert ["sudo", "chsh", "-s", fish, privileged._current_username()] in argvs
     assert "privileged setup complete" in out.getvalue()
+
+
+def test_setup_linux_allows_ssh_before_enabling_ufw(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """With sshd active, 22/tcp is allowed BEFORE ufw enables.
+
+    A headless SSH install must not lock out its own operator when default-deny-incoming
+    comes up.
+    """
+    monkeypatch.setattr(privileged, "current_os", lambda: OS.LINUX)
+    _point_paths(monkeypatch, tmp_path)
+    calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(commands, "run", _fake_run(calls, rc=_Rc(sshd=0)))
+    monkeypatch.setattr(commands, "which", lambda _name: "/home/linuxbrew/.linuxbrew/bin/fish")
+    monkeypatch.setenv("SHELL", "/bin/bash")
+    ctx, out = _ctx()
+
+    privileged.privileged_setup(ctx)
+
+    argvs = [c.argv for c in calls]
+    allow = argvs.index(["sudo", "ufw", "allow", "22/tcp"])
+    enable = argvs.index(["sudo", "ufw", "--force", "enable"])
+    assert allow < enable, "the SSH allow rule must land before the firewall comes up"
+    assert "ufw firewall enabled" in out.getvalue()
