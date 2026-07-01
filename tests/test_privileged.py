@@ -38,16 +38,6 @@ if TYPE_CHECKING:
 _PAM_TID = "auth       sufficient     pam_tid.so"
 
 
-@pytest.fixture(autouse=True)
-def _pin_macos(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pin ``current_os()`` to macOS so the suite is deterministic on any host (Linux CI too).
-
-    ``privileged_setup`` branches on the OS and the historical tests assert the macOS path.
-    Tests for the Linux/WSL paths re-pin inside their own bodies (a later setattr wins).
-    """
-    monkeypatch.setattr(privileged, "current_os", lambda: OS.MACOS)
-
-
 def _ctx() -> tuple[InstallContext, io.StringIO]:
     """Build an install context over a wide in-memory console (wide so lines don't wrap)."""
     out = io.StringIO()
