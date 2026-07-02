@@ -22,7 +22,7 @@ REPO = Path(__file__).resolve().parent.parent
 
 @pytest.fixture(autouse=True)
 def _pin_macos(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pin every module's ``current_os()`` to macOS so the suite runs the same on any host.
+    """Pin the OS-branching installer modules' ``current_os()`` to macOS on any host.
 
     The installer's phase bodies and probes branch on ``current_os()``; without a pin the
     same test would exercise different branches on the macOS dev box vs the Linux CI runner.

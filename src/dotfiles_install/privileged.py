@@ -212,7 +212,14 @@ def _enable_ufw_firewall(ctx: InstallContext) -> None:
     ctx.ui.active("enabling the ufw firewall (default deny incoming)")
     if _sshd_running():
         ctx.ui.detail("sshd is running — allowing 22/tcp so the firewall can't cut off SSH")
-        commands.run(["sudo", "ufw", "allow", "22/tcp"], capture=True)
+        if not commands.run_ok(["sudo", "ufw", "allow", "22/tcp"], capture=True):
+            # Enabling default-deny WITHOUT the allow rule would cause the exact SSH lockout
+            # this guard exists to prevent — leave the firewall alone and let the user finish.
+            ctx.ui.warn(
+                "couldn't add the ufw SSH allow rule — leaving the firewall disabled so this "
+                "session isn't cut off; run `sudo ufw allow 22/tcp && sudo ufw enable` yourself",
+            )
+            return
     commands.run(["sudo", "ufw", "default", "deny", "incoming"], capture=True)
     commands.run(["sudo", "ufw", "default", "allow", "outgoing"], capture=True)
     commands.run(["sudo", "ufw", "--force", "enable"], capture=True)
