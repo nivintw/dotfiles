@@ -94,11 +94,13 @@ def _ensure_server_up(ctx: InstallContext) -> None:
         return
 
     ctx.ui.active("starting Ollama (server + login auto-start)")
-    # Prefer the GUI app (it also registers the login item). `open -a` returns once the launch is
-    # accepted, not when the server is listening — so key the fallback on actual API readiness.
-    commands.run(["open", "-a", "Ollama"], capture=True)  # launch is best-effort
-    if _server_responding_with_retry():
-        return
+    # On macOS, prefer the GUI app (it also registers the login item). `open -a` returns once
+    # the launch is accepted, not when the server is listening — so key the fallback on actual
+    # API readiness. Off macOS there is no app bundle to open; go straight to the headless serve.
+    if current_os() == OS.MACOS:
+        commands.run(["open", "-a", "Ollama"], capture=True)  # launch is best-effort
+        if _server_responding_with_retry():
+            return
 
     # Still down: start a headless server, detached so it outlives this process, then probe once
     # more. Popen (not the `commands` seam) because this one call must background, not block.
