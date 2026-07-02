@@ -56,6 +56,7 @@ class _Rc:
     getglobalstate: int = 0  # the firewall verify probe's exit code
     ufw_status: int = 0  # the `sudo ufw status` verify probe's exit code
     sshd: int = 3  # `systemctl is-active ssh[d]` — 0 = running, 3 = inactive (systemd's code)
+    ufw_allow: int = 0  # the `sudo ufw allow 22/tcp` rule add
 
 
 def _fake_run(
@@ -90,6 +91,8 @@ def _fake_run(
             code, stdout = rc.getglobalstate, f"Firewall is {firewall}."
         elif argv[:3] == ["sudo", "ufw", "status"]:
             code, stdout = rc.ufw_status, f"Status: {ufw}\n"
+        elif argv[:3] == ["sudo", "ufw", "allow"]:
+            code = rc.ufw_allow
         elif argv[:2] == ["systemctl", "is-active"]:
             code = rc.sshd
         return subprocess.CompletedProcess(argv, code, stdout=stdout, stderr="")
@@ -588,3 +591,24 @@ def test_setup_linux_allows_ssh_before_enabling_ufw(
     enable = argvs.index(["sudo", "ufw", "--force", "enable"])
     assert allow < enable, "the SSH allow rule must land before the firewall comes up"
     assert "ufw firewall enabled" in out.getvalue()
+
+
+def test_setup_linux_leaves_firewall_off_when_ssh_allow_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A failed SSH allow rule aborts the ufw enable — never bring up default-deny without it."""
+    monkeypatch.setattr(privileged, "current_os", lambda: OS.LINUX)
+    _point_paths(monkeypatch, tmp_path)
+    calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(commands, "run", _fake_run(calls, rc=_Rc(sshd=0, ufw_allow=1)))
+    monkeypatch.setattr(commands, "which", lambda _name: "/home/linuxbrew/.linuxbrew/bin/fish")
+    monkeypatch.setenv("SHELL", "/bin/bash")
+    ctx, _ = _ctx()
+
+    privileged.privileged_setup(ctx)
+
+    argvs = [c.argv for c in calls]
+    assert ["sudo", "ufw", "--force", "enable"] not in argvs  # the lockout never happens
+    assert any("leaving the firewall disabled" in w for w in ctx.ui.warnings)
+    assert argvs[-1] == ["sudo", "-k"]  # ticket still dropped
