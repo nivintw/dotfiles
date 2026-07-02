@@ -401,6 +401,15 @@ def _touch_id_record() -> Record:
 def _firewall_record() -> Record:
     """OK when the OS firewall is enabled (macOS application firewall, or ufw on Linux)."""
     if current_os() == OS.LINUX:
+        # Tell "ufw is off" apart from "ufw isn't installed" — `sudo ufw enable` is only
+        # actionable advice in the first case.
+        if commands.which("ufw") is None:
+            return _record(
+                "ufw firewall active",
+                "ufw is not installed — install it and re-run install.sh (or configure your "
+                "distro's firewall yourself)",
+                passed=False,
+            )
         return _record(
             "ufw firewall active",
             "ufw firewall is OFF — enable it with `sudo ufw enable` (or re-run install.sh)",
