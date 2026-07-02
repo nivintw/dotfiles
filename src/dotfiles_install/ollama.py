@@ -164,9 +164,9 @@ def _pull_model(ctx: InstallContext, model: str, size: str, installed: list[str]
 def _mlx_supported() -> bool:
     """Whether this machine meets the MLX gate: Apple Silicon + >32 GiB RAM + macOS 13+.
 
-    MLX is Apple-only, so any non-macOS host fails the gate up front — before the ``sysctl`` /
-    ``sw_vers`` probes, which don't exist on Linux and would only produce stderr noise on their
-    way to the same closed-gate answer.
+    MLX is Apple-only, so any non-macOS host fails the gate up front and explicitly, rather
+    than via two doomed subprocess probes (``sw_vers`` doesn't exist off macOS, and Linux's
+    ``sysctl`` has no ``hw.memsize`` key — both would just fail closed anyway).
     """
     if current_os() != OS.MACOS:
         return False

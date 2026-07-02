@@ -7,10 +7,11 @@ The unit-testable predicates the summary is built from — resolving a symlink t
 repo, rejecting non-object JSON, matching an ``[include]`` path through ``~`` expansion,
 abbreviating ``$HOME`` to ``~`` for display, and counting enrolled Touch ID templates — plus the
 heavier live-state probes, chosen per OS: ``brew bundle check`` everywhere, the firewall via
-``socketfilterfw`` (macOS) or the ufw systemd unit (Linux), the login shell via ``dscl`` (macOS)
-or the passwd database (Linux), and ``pam_tid`` (macOS only; WSL also skips the firewall — the
-Windows host owns it). :func:`iter_records` aggregates them into ``("OK"|"BAD", msg)`` records,
-and :func:`verify_and_summarize` is the phase-17 body that renders the closing summary.
+``socketfilterfw`` (macOS) or ufw's persistent ``/etc/ufw/ufw.conf`` (Linux), the login shell via
+``dscl`` (macOS) or the passwd database (Linux), and ``pam_tid`` (macOS only; WSL also skips the
+firewall — the Windows host owns it). :func:`iter_records` aggregates them into
+``("OK"|"BAD", msg)`` records, and :func:`verify_and_summarize` is the phase-17 body that renders
+the closing summary.
 
 Ported from install.sh's verification step (predicates pinned by ``tests/test_verify_install.py``).
 This is now the single source of truth for the install summary, the ``dotfiles-install --verify``
