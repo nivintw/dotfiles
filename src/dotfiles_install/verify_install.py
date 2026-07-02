@@ -157,7 +157,12 @@ def login_shell() -> str | None:
     same NSS-backed source ``getent passwd`` uses) — no subprocess needed.
     """
     if current_os() != OS.MACOS:
-        shell = pwd.getpwuid(os.getuid()).pw_shell
+        try:
+            shell = pwd.getpwuid(os.getuid()).pw_shell
+        except KeyError:
+            # A UID with no passwd entry (some containers) must degrade to a BAD record,
+            # not crash the whole verify stream.
+            return None
         return shell or None
     # Resolve the user from the real uid (like bash `id -un`), NOT getpass.getuser(), which
     # trusts $USER/$LOGNAME and would query the wrong account under `su` or a stale env.
