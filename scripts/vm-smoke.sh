@@ -437,12 +437,18 @@ REMOTE
 
   if [ "$NEGATIVE" -eq 1 ]; then
     log "Negative self-test: disabling the firewall in the VM; the gate MUST now fail"
+    # The disable must actually land — swallowing its failure would leave the firewall ON, the
+    # gate would (correctly) pass, and the self-test would then misdiagnose that as "the gate
+    # is not actually checking".
     if [ "$OS_TARGET" = macos ]; then
       ssh_vm 'sudo -n /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off' \
-        >/dev/null 2>&1 || true
+        >/dev/null 2>&1
     else
-      ssh_vm 'sudo -n ufw disable' >/dev/null 2>&1 || true
-    fi
+      ssh_vm 'sudo -n ufw disable' >/dev/null 2>&1
+    fi || {
+      printf 'vm-smoke.sh: could not disable the firewall in the VM — cannot run the negative self-test.\n' >&2
+      return 1
+    }
     if verify_gate "negative"; then
       printf 'vm-smoke.sh: NEGATIVE self-test FAILED — the gate passed with the firewall OFF, so it is not actually checking.\n' >&2
       return 1
