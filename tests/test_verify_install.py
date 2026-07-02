@@ -716,3 +716,19 @@ def test_iter_records_wsl_omits_the_firewall_record(
     expected_checks = 7  # the macOS nine, minus Touch ID and the firewall
     assert len(records) == expected_checks
     assert not any("firewall" in msg for _s, msg in records)
+
+
+def test_iter_records_linux_distinguishes_missing_ufw(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With ufw absent, the Linux firewall BAD says to install it — not to enable it."""
+    monkeypatch.setattr(verify_install, "current_os", lambda: OS.LINUX)
+    repo = _healthy_repo_and_home(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        commands, "which", lambda name: None if name == "ufw" else f"/usr/local/bin/{name}"
+    )
+    _all_probes(monkeypatch, healthy=True)
+    records = list(verify_install.iter_records(repo, core=False))
+    assert any(status == "BAD" and "ufw is not installed" in msg for status, msg in records)
+    assert not any("sudo ufw enable" in msg for _s, msg in records)

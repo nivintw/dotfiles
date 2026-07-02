@@ -51,9 +51,9 @@ def privileged_setup(ctx: InstallContext) -> None:
     """Run the single root-requiring block off one sudo ticket; skip (warn) if auth fails."""
     if not commands.run_ok(["sudo", "-v"]):
         ctx.ui.warn(
-            "couldn't authenticate for sudo — skipping privileged setup (Touch ID for sudo, "
-            "fish as the default shell, firewall); re-run install.sh as an administrator to "
-            "finish these",
+            "couldn't authenticate for sudo — skipping privileged setup (fish as the default "
+            "shell, the firewall, and on macOS Touch ID for sudo); re-run install.sh as an "
+            "administrator to finish these",
         )
         return
     target = current_os()

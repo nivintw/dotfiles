@@ -74,7 +74,7 @@ REGISTRY: tuple[Phase, ...] = (
     Phase(1, "Homebrew packages (brew bundle)", _ALL, run=install_packages),
     Phase(
         2,
-        "Privileged setup (fish shell, firewall, Touch ID)",
+        "Privileged setup (fish shell, firewall; Touch ID on macOS)",
         _ALL,
         privileged=True,
         run=privileged_setup,
