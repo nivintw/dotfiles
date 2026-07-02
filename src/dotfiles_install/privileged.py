@@ -225,12 +225,18 @@ def _enable_ufw_firewall(ctx: InstallContext) -> None:
 
 
 def _sshd_running() -> bool:
-    """Report whether an OpenSSH server is active (``ssh`` on Debian/Ubuntu, else ``sshd``)."""
+    """Report whether an OpenSSH server is enabled, checking every common systemd unit shape.
+
+    Both service names are probed (``ssh`` on Debian/Ubuntu, ``sshd`` elsewhere), plus their
+    ``.socket`` units: Ubuntu 22.10+ ships socket-activated OpenSSH, where ``ssh.service`` is
+    inactive until a client connects — a local-console install there would otherwise skip the
+    allow rule and the new default-deny would block the (intentionally enabled) SSH server.
+    """
     if commands.which("systemctl") is None:
         return False
     return any(
         commands.run_ok(["systemctl", "is-active", "--quiet", unit], capture=True)
-        for unit in ("ssh", "sshd")
+        for unit in ("ssh", "sshd", "ssh.socket", "sshd.socket")
     )
 
 
