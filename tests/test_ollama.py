@@ -6,7 +6,9 @@
 Covers install_ollama_models plus its helpers: the ollama-absent skip, the server-up
 fast path and the launch/retry/detached-serve fallback, the model inventory parse, the
 pull-skip vs pull-success vs pull-failure branches, and the MLX gate (arch / memory /
-macOS-version) both ways.
+macOS-version) both ways. Four role models are covered: the two ungated models
+(fast + vision), pulled on every capable machine, and the two MLX-gated models
+(coding + brainstorm), pulled only when the MLX gate passes.
 
 All subprocess goes through the ``commands`` seam; tests monkeypatch commands.run,
 commands.run_ok, commands.which, and commands.read_text_or_empty at that boundary, and
@@ -27,7 +29,10 @@ from dotfiles_install.os_detect import OS
 from dotfiles_install.ui import UI
 
 _MODELS_FRAGMENT = (
-    'OLLAMA_MODEL="qwen2.5-coder:7b"\nOLLAMA_MLX_MODEL="qwen3.5:35b-a3b-coding-nvfp4"\n'
+    'OLLAMA_MODEL="qwen3:4b-instruct-2507-q4_K_M"\n'
+    'OLLAMA_VISION_MODEL="qwen3-vl:4b-instruct"\n'
+    'OLLAMA_MLX_MODEL="qwen3.5:35b-a3b-coding-nvfp4"\n'
+    'OLLAMA_BRAINSTORM_MODEL="gemma4:26b"\n'
 )
 
 
@@ -85,14 +90,18 @@ def test_ollama_absent_warns_and_returns(monkeypatch: pytest.MonkeyPatch) -> Non
 # --- _read_model_ids --------------------------------------------------------------------------
 
 
-def test_read_model_ids_parses_both(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Both ids are parsed; the OLLAMA_MODEL pattern doesn't swallow the MLX line."""
+def test_read_model_ids_parses_all_four(monkeypatch: pytest.MonkeyPatch) -> None:
+    """All four ids are parsed, keyed by var name; no pattern swallows another's line."""
     _patch_model_ids(monkeypatch)
 
-    model, mlx_model = ollama._read_model_ids()
+    models = ollama._read_model_ids()
 
-    assert model == "qwen2.5-coder:7b"
-    assert mlx_model == "qwen3.5:35b-a3b-coding-nvfp4"
+    assert models == {
+        "OLLAMA_MODEL": "qwen3:4b-instruct-2507-q4_K_M",
+        "OLLAMA_VISION_MODEL": "qwen3-vl:4b-instruct",
+        "OLLAMA_MLX_MODEL": "qwen3.5:35b-a3b-coding-nvfp4",
+        "OLLAMA_BRAINSTORM_MODEL": "gemma4:26b",
+    }
 
 
 def test_read_model_ids_raises_on_unparsable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -100,6 +109,23 @@ def test_read_model_ids_raises_on_unparsable(monkeypatch: pytest.MonkeyPatch) ->
     _patch_model_ids(monkeypatch, content="# nothing useful here\n")
 
     with pytest.raises(RuntimeError, match=r"ollama_models\.sh"):
+        ollama._read_model_ids()
+
+
+@pytest.mark.parametrize(
+    "missing_var",
+    ["OLLAMA_MODEL", "OLLAMA_VISION_MODEL", "OLLAMA_MLX_MODEL", "OLLAMA_BRAINSTORM_MODEL"],
+)
+def test_read_model_ids_raises_naming_missing_var(
+    monkeypatch: pytest.MonkeyPatch, missing_var: str
+) -> None:
+    """When exactly one var is missing, the RuntimeError names that specific var."""
+    lines = [
+        line for line in _MODELS_FRAGMENT.splitlines() if not line.startswith(f'{missing_var}="')
+    ]
+    _patch_model_ids(monkeypatch, content="\n".join(lines) + "\n")
+
+    with pytest.raises(RuntimeError, match=rf"could not parse {missing_var} from"):
         ollama._read_model_ids()
 
 
@@ -118,8 +144,8 @@ def test_install_degrades_to_warning_on_unparsable_models(monkeypatch: pytest.Mo
 # --- install_ollama_models: pull behavior (server already up) ---------------------------------
 
 
-def test_baseline_pulled_when_absent_mlx_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Empty inventory → baseline is pulled; non-MLX machine skips the MLX model with a detail."""
+def test_ungated_pulled_when_absent_mlx_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Empty inventory, non-MLX machine → the two ungated models pull; both gated ones skip."""
     monkeypatch.setattr(commands, "which", lambda _name: "/usr/local/bin/ollama")
     _patch_model_ids(monkeypatch)
     _patch_server_up(monkeypatch)
@@ -143,20 +169,28 @@ def test_baseline_pulled_when_absent_mlx_skipped(monkeypatch: pytest.MonkeyPatch
 
     ollama.install_ollama_models(ctx)
 
-    assert ["ollama", "pull", "qwen2.5-coder:7b"] in run_ok_calls
-    assert not any("qwen3.5" in c[-1] for c in run_ok_calls)  # MLX not pulled
+    assert ["ollama", "pull", "qwen3:4b-instruct-2507-q4_K_M"] in run_ok_calls
+    assert ["ollama", "pull", "qwen3-vl:4b-instruct"] in run_ok_calls
+    assert not any("qwen3.5" in c[-1] for c in run_ok_calls)  # MLX coding model not pulled
+    assert not any("gemma4" in c[-1] for c in run_ok_calls)  # MLX brainstorm model not pulled
     assert "skipping MLX model qwen3.5:35b-a3b-coding-nvfp4" in out.getvalue()
-    assert "Ollama model qwen2.5-coder:7b pulled" in out.getvalue()
+    assert "skipping MLX model gemma4:26b" in out.getvalue()
+    assert "Ollama model qwen3:4b-instruct-2507-q4_K_M pulled" in out.getvalue()
+    assert "Ollama model qwen3-vl:4b-instruct pulled" in out.getvalue()
 
 
 def test_baseline_already_present_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When the baseline is already in the inventory, it's reported present and not pulled."""
+    """When the fast-tier model is already in inventory, it's reported present and not pulled."""
     monkeypatch.setattr(commands, "which", lambda _name: "/usr/local/bin/ollama")
     _patch_model_ids(monkeypatch)
     _patch_server_up(monkeypatch)
     _patch_mlx(monkeypatch, supported=False)
 
-    inventory = "NAME              ID    SIZE\nqwen2.5-coder:7b  abc   4.7GB\n"
+    inventory = (
+        "NAME                            ID    SIZE\n"
+        "qwen3:4b-instruct-2507-q4_K_M   abc   2.5GB\n"
+        "qwen3-vl:4b-instruct            def   3.3GB\n"
+    )
     monkeypatch.setattr(commands, "run", lambda argv, **_k: _completed(argv, 0, stdout=inventory))
 
     pull_calls: list[list[str]] = []
@@ -170,8 +204,10 @@ def test_baseline_already_present_is_skipped(monkeypatch: pytest.MonkeyPatch) ->
 
     ollama.install_ollama_models(ctx)
 
-    assert "Ollama model qwen2.5-coder:7b already present" in out.getvalue()
-    assert ["ollama", "pull", "qwen2.5-coder:7b"] not in pull_calls
+    assert "Ollama model qwen3:4b-instruct-2507-q4_K_M already present" in out.getvalue()
+    assert "Ollama model qwen3-vl:4b-instruct already present" in out.getvalue()
+    assert ["ollama", "pull", "qwen3:4b-instruct-2507-q4_K_M"] not in pull_calls
+    assert ["ollama", "pull", "qwen3-vl:4b-instruct"] not in pull_calls
 
 
 def test_pull_failure_warns(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -186,7 +222,8 @@ def test_pull_failure_warns(monkeypatch: pytest.MonkeyPatch) -> None:
 
     ollama.install_ollama_models(ctx)
 
-    assert any("Ollama pull failed for qwen2.5-coder:7b" in w for w in ctx.ui.warnings)
+    assert any("Ollama pull failed for qwen3:4b-instruct-2507-q4_K_M" in w for w in ctx.ui.warnings)
+    assert any("Ollama pull failed for qwen3-vl:4b-instruct" in w for w in ctx.ui.warnings)
 
 
 def test_list_failure_treated_as_empty_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -208,11 +245,11 @@ def test_list_failure_treated_as_empty_inventory(monkeypatch: pytest.MonkeyPatch
 
     ollama.install_ollama_models(ctx)
 
-    assert ["ollama", "pull", "qwen2.5-coder:7b"] in pull_calls
+    assert ["ollama", "pull", "qwen3:4b-instruct-2507-q4_K_M"] in pull_calls
 
 
-def test_mlx_supported_pulls_both(monkeypatch: pytest.MonkeyPatch) -> None:
-    """On a capable machine both the baseline and the MLX model are pulled."""
+def test_mlx_supported_pulls_all_four(monkeypatch: pytest.MonkeyPatch) -> None:
+    """On a capable machine, all four role models are pulled."""
     monkeypatch.setattr(commands, "which", lambda _name: "/usr/local/bin/ollama")
     _patch_model_ids(monkeypatch)
     _patch_server_up(monkeypatch)
@@ -230,8 +267,10 @@ def test_mlx_supported_pulls_both(monkeypatch: pytest.MonkeyPatch) -> None:
 
     ollama.install_ollama_models(ctx)
 
-    assert ["ollama", "pull", "qwen2.5-coder:7b"] in pull_calls
+    assert ["ollama", "pull", "qwen3:4b-instruct-2507-q4_K_M"] in pull_calls
+    assert ["ollama", "pull", "qwen3-vl:4b-instruct"] in pull_calls
     assert ["ollama", "pull", "qwen3.5:35b-a3b-coding-nvfp4"] in pull_calls
+    assert ["ollama", "pull", "gemma4:26b"] in pull_calls
 
 
 # --- _list_installed_models -------------------------------------------------------------------

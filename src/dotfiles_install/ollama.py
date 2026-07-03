@@ -3,14 +3,18 @@
 
 """Phase 14: pull the local Ollama models for offline AI.
 
-Two consumers, two models, both read from the shared ``scripts/ollama_models.sh`` fragment
-(the single source of truth that also drives ``uninstall.sh``, so the ids can never drift):
+Four role models, all read from the shared ``scripts/ollama_models.sh`` fragment (the single
+source of truth that also drives ``uninstall.sh`` and the stowed ``ollm`` offload helper, so
+the ids can never drift):
 
-* ``OLLAMA_MODEL`` — baseline (~4.7GB), backs GitLens commit-message generation and is the
+* ``OLLAMA_MODEL`` — fast tier (~2.5GB); backs GitLens commit-message generation and is the
   non-MLX fallback; pulled on every capable machine.
-* ``OLLAMA_MLX_MODEL`` — gated MLX reasoning model (~21GB) for Claude bulk-offload; only pulled
-  on Apple Silicon with more than 32 GiB of unified memory and macOS 13+ (the MLX engine's
-  requirements). Other machines keep just the baseline.
+* ``OLLAMA_VISION_MODEL`` — lightweight vision model (~3.3GB, GGUF); pulled everywhere.
+* ``OLLAMA_MLX_MODEL`` — gated MLX coding model (~21GB) for Claude bulk-offload.
+* ``OLLAMA_BRAINSTORM_MODEL`` — gated MLX generalist (~17GB) for brainstorm/summarize work.
+
+The gated models are only pulled on Apple Silicon with more than 32 GiB of unified memory and
+macOS 13+ (the MLX engine's requirements). Other machines keep the two ungated GGUF models.
 
 The phase first makes sure the Ollama API is listening: it probes the daemon, launches the
 menu-bar app (which also registers the login item), retries the probe, and only then falls back
@@ -42,14 +46,23 @@ _MIN_MACOS_MAJOR = 13
 # The Ollama daemon's REST endpoint; a 200 here means the server is listening.
 _API_URL = "http://localhost:11434/api/tags"
 
-# Model ids live in the shared fragment as `NAME="value"`; anchor each at line start so the
-# `OLLAMA_MODEL` pattern can't also match the `OLLAMA_MLX_MODEL` line.
-_MODEL_PATTERN = re.compile(r'^OLLAMA_MODEL="([^"]+)"', re.MULTILINE)
-_MLX_MODEL_PATTERN = re.compile(r'^OLLAMA_MLX_MODEL="([^"]+)"', re.MULTILINE)
+# The fragment's role variables: (shell variable, approximate download size, MLX-gated?).
+# Ungated roles are pulled on every capable machine; gated ones only where _mlx_supported().
+_MODEL_SPECS: tuple[tuple[str, str, bool], ...] = (
+    ("OLLAMA_MODEL", "~2.5GB", False),
+    ("OLLAMA_VISION_MODEL", "~3.3GB", False),
+    ("OLLAMA_MLX_MODEL", "~21GB", True),
+    ("OLLAMA_BRAINSTORM_MODEL", "~17GB", True),
+)
+
+
+def _var_pattern(var: str) -> re.Pattern[str]:
+    """Line-anchored `VAR="value"` matcher, so one role's pattern can't match another's line."""
+    return re.compile(rf'^{var}="([^"]+)"', re.MULTILINE)
 
 
 def install_ollama_models(ctx: InstallContext) -> None:
-    """Phase 14: ensure the Ollama server is up, then pull the baseline (and gated MLX) models."""
+    """Phase 14: ensure the Ollama server is up, then pull the role models (gated ones on MLX)."""
     if commands.which("ollama") is None:
         ctx.ui.warn("skipping Ollama setup (ollama not installed; see Brewfile 'ollama-app')")
         return
@@ -58,34 +71,37 @@ def install_ollama_models(ctx: InstallContext) -> None:
     # whole install — this phase is non-fatal (like the bash original), so degrade to a warning and
     # let phases 15-17 (macOS defaults, Dock, verify) still run.
     try:
-        model, mlx_model = _read_model_ids()
+        models = _read_model_ids()
     except RuntimeError as exc:
         ctx.ui.warn(f"skipping Ollama setup ({exc})")
         return
     _ensure_server_up(ctx)
 
-    # Capture the model inventory once and reuse it for both pull checks; a failed `ollama list`
+    # Capture the model inventory once and reuse it for every pull check; a failed `ollama list`
     # degrades to an empty inventory (each model is then treated as absent → pulled).
     installed = _list_installed_models()
 
-    _pull_model(ctx, model, "~4.7GB", installed)
-    if _mlx_supported():
-        _pull_model(ctx, mlx_model, "~21GB", installed)
-    else:
-        ctx.ui.detail(
-            f"skipping MLX model {mlx_model} (needs Apple Silicon + >32GB RAM + macOS 13+)",
-        )
+    mlx = _mlx_supported()
+    for var, size, gated in _MODEL_SPECS:
+        if gated and not mlx:
+            ctx.ui.detail(
+                f"skipping MLX model {models[var]} (needs Apple Silicon + >32GB RAM + macOS 13+)",
+            )
+            continue
+        _pull_model(ctx, models[var], size, installed)
 
 
-def _read_model_ids() -> tuple[str, str]:
-    """Parse ``(OLLAMA_MODEL, OLLAMA_MLX_MODEL)`` from the shared ``ollama_models.sh`` fragment."""
+def _read_model_ids() -> dict[str, str]:
+    """Parse every role variable from the shared ``ollama_models.sh`` fragment, keyed by name."""
     content = commands.read_text_or_empty(DOTFILES / "scripts" / "ollama_models.sh")
-    model = _MODEL_PATTERN.search(content)
-    mlx_model = _MLX_MODEL_PATTERN.search(content)
-    if model is None or mlx_model is None:
-        msg = "could not parse model ids from scripts/ollama_models.sh"
-        raise RuntimeError(msg)
-    return model.group(1), mlx_model.group(1)
+    models: dict[str, str] = {}
+    for var, _size, _gated in _MODEL_SPECS:
+        match = _var_pattern(var).search(content)
+        if match is None:
+            msg = f"could not parse {var} from scripts/ollama_models.sh"
+            raise RuntimeError(msg)
+        models[var] = match.group(1)
+    return models
 
 
 def _ensure_server_up(ctx: InstallContext) -> None:
