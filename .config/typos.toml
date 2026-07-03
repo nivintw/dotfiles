@@ -4,11 +4,18 @@
 # Repo-level typos config — used by the typos pre-commit hook and in CI.
 # typos is treated as CHECK-ONLY (the hook drops --write-changes).
 
-# Generated / vendored artifacts under docs/ — not prose to spell-check. The
-# asciinema-player bundle is minified third-party code (false positives like
-# "alis"/"seeked"); the .cast files are recorded terminal output, not authored text.
+# Generated / vendored artifacts — not prose to spell-check. The asciinema-player
+# bundle is minified third-party code (false positives like "alis"/"seeked"); the
+# .cast files are recorded terminal output, not authored text; CHANGELOG.md is
+# release-please-generated and quotes commit short-hashes, which are a typo lottery
+# (a hash ending in a word-like fragment, e.g. `aef13ba`, blocked the v1.20.0
+# Release PR's CI). rumdl excludes the changelog for the same generated-file reason.
 [files]
-extend-exclude = ["docs/assets/asciinema-player.*", "docs/casts/*.cast"]
+extend-exclude = [
+  "docs/assets/asciinema-player.*",
+  "docs/casts/*.cast",
+  "CHANGELOG.md",
+]
 
 [default]
 # Ignore whole syntactic categories that are never typos but frequently get mangled.

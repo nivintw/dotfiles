@@ -4,7 +4,7 @@
 .config/.release-please-manifest.json  # release-please-owned version-of-record; changes every release
 .config/licenserc.toml                 # repo-specific hawkeye excludes (.claude frontmatter, binary iterm2 plist, vendored asciinema player)
 .config/rumdl.toml                     # excludes .claude frontmatter markdown + the release-please-generated CHANGELOG
-.config/typos.toml                     # excludes the vendored asciinema player bundle + recorded .cast files
+.config/typos.toml                     # excludes vendored asciinema player, recorded .cast files, and the generated CHANGELOG (hash-fragment false positives)
 .editorconfig                          # adds fish alongside python in the 4-space-indent rule
 .github/workflows/ci.yml               # adds the installer jobs (installer-smoke-macos) + system-tool bootstrap (fish, bats, ripgrep)
 .github/workflows/link-check.yml       # lychee excludes for runner-hostile endpoints (gnu.org blackholes GitHub runners; reuse badge API)
