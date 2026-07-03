@@ -173,3 +173,128 @@ teardown() {
   run offer "do the thing?"
   [ "$status" -ne 0 ]
 }
+
+# --- tier2_ollama_models ------------------------------------------------------------
+# The one host-mutating tier that IS worth pinning: the ${VAR:-} guards around each role
+# variable in the removal loop, and the unquoted OLLAMA_LEGACY_MODELS expansion that folds
+# retired tags into the same offer. Each test runs tier2_ollama_models in a fresh `bash -c`
+# subshell (not the shared setup()/test process) so `set -uo pipefail` can be turned on
+# without risking bats' own harness code, which shares that process. `offer` is spied —
+# redefined to record its question and decline — after sourcing, so each test can assert
+# exactly which models were candidates for removal without needing an interactive y/N
+# answer. `ollama`/`curl` are stubbed on a PATH prepended in front of the ambient one (only
+# those two commands need faking; everything else resolves normally).
+
+# fragment_path DIR — DIR/scripts/<the real shared model-tags fragment's filename>, for a
+# throwaway fixture tree (tier2_ollama_models hardcodes that path under $DOTFILES, so the
+# fixture file must sit there for `. "$DOTFILES/scripts/..."` to find it). The filename is
+# built via concatenation rather than spelled out verbatim, so the coverage gate's
+# literal-token scan (tests/test_coverage.py) can't mistake this fixture for real coverage
+# of the fragment — the same gotcha tests/ollm.bats's header comment documents.
+fragment_path() {
+  printf '%s/scripts/%s\n' "$1" "ollama_model""s.sh"
+}
+
+# write_tier2_stubs BIN LIST_FILE — populate BIN with an `ollama` stub whose `list`
+# subcommand cats LIST_FILE (a header line + one row per "installed" model) and whose `rm`
+# always succeeds, plus a `curl` stub that always exits 0 (simulating a running server).
+# The data file's path is baked in at stub-generation time, mirroring write_curl_stub in
+# tests/ollm.bats.
+write_tier2_stubs() {
+  local bin="$1" list_file="$2"
+  mkdir -p "$bin"
+  cat >"$bin/ollama" <<EOF
+#!/bin/sh
+case "\$1" in
+list) cat "$list_file" ;;
+rm) exit 0 ;;
+*) exit 1 ;;
+esac
+EOF
+  chmod +x "$bin/ollama"
+  printf '#!/bin/sh\nexit 0\n' >"$bin/curl"
+  chmod +x "$bin/curl"
+}
+
+@test "tier2_ollama_models: a fragment missing the three newer vars doesn't abort under set -u; only the defined model is considered" {
+  mkdir -p "$TMP/dotfiles/scripts"
+  printf 'OLLAMA_MODEL="fast-fake:1"\n' >"$(fragment_path "$TMP/dotfiles")"
+  BIN="$TMP/bin"
+  LIST_FILE="$TMP/list.txt"
+  printf 'NAME  ID  SIZE  MODIFIED\nfast-fake:1  x  1B  now\n' >"$LIST_FILE"
+  write_tier2_stubs "$BIN" "$LIST_FILE"
+
+  # shellcheck disable=SC2016  # $TEST_LIB/$TEST_DOTFILES/etc must expand in the inner bash, not here
+  run env PATH="$BIN:$PATH" TEST_LIB="$LIB" TEST_DOTFILES="$TMP/dotfiles" bash -c '
+    set -uo pipefail
+    . "$TEST_LIB"
+    DOTFILES="$TEST_DOTFILES"
+    DRY_RUN=0 ASSUME_YES=0 REMOVED=() DECLINED=() LEFT=() MANUAL=() FAILED=()
+    OFFERED=()
+    offer() { OFFERED+=("$1"); return 1; }
+    tier2_ollama_models
+    [ "${#OFFERED[@]}" -eq 0 ] || printf "OFFERED:%s\n" "${OFFERED[@]}"
+  '
+  [ "$status" -eq 0 ]
+  count="$(printf '%s\n' "$output" | grep -c '^OFFERED:' || true)"
+  [ "$count" -eq 1 ]
+  [[ "$output" == *"OFFERED:Remove Ollama model fast-fake:1?"* ]]
+}
+
+@test "tier2_ollama_models: a model absent from 'ollama list' is skipped (no offer)" {
+  mkdir -p "$TMP/dotfiles/scripts"
+  cat >"$(fragment_path "$TMP/dotfiles")" <<'EOF'
+OLLAMA_MODEL="fast-fake:1"
+OLLAMA_VISION_MODEL="vision-fake:1"
+OLLAMA_MLX_MODEL="bulk-fake:1"
+OLLAMA_BRAINSTORM_MODEL="brainstorm-fake:1"
+EOF
+  BIN="$TMP/bin"
+  LIST_FILE="$TMP/list.txt"
+  printf 'NAME  ID  SIZE  MODIFIED\nsome-other-model:1  x  1B  now\n' >"$LIST_FILE"
+  write_tier2_stubs "$BIN" "$LIST_FILE"
+
+  # shellcheck disable=SC2016  # $TEST_LIB/$TEST_DOTFILES/etc must expand in the inner bash, not here
+  run env PATH="$BIN:$PATH" TEST_LIB="$LIB" TEST_DOTFILES="$TMP/dotfiles" bash -c '
+    set -uo pipefail
+    . "$TEST_LIB"
+    DOTFILES="$TEST_DOTFILES"
+    DRY_RUN=0 ASSUME_YES=0 REMOVED=() DECLINED=() LEFT=() MANUAL=() FAILED=()
+    OFFERED=()
+    offer() { OFFERED+=("$1"); return 1; }
+    tier2_ollama_models
+    [ "${#OFFERED[@]}" -eq 0 ] || printf "OFFERED:%s\n" "${OFFERED[@]}"
+  '
+  [ "$status" -eq 0 ]
+  count="$(printf '%s\n' "$output" | grep -c '^OFFERED:' || true)"
+  [ "$count" -eq 0 ]
+}
+
+@test "tier2_ollama_models: a legacy model present in 'ollama list' is offered too" {
+  mkdir -p "$TMP/dotfiles/scripts"
+  cat >"$(fragment_path "$TMP/dotfiles")" <<'EOF'
+OLLAMA_MODEL="fast-fake:1"
+OLLAMA_VISION_MODEL="vision-fake:1"
+OLLAMA_MLX_MODEL="bulk-fake:1"
+OLLAMA_BRAINSTORM_MODEL="brainstorm-fake:1"
+OLLAMA_LEGACY_MODELS="qwen2.5-coder:7b"
+EOF
+  BIN="$TMP/bin"
+  LIST_FILE="$TMP/list.txt"
+  printf 'NAME  ID  SIZE  MODIFIED\nqwen2.5-coder:7b  x  1B  now\n' >"$LIST_FILE"
+  write_tier2_stubs "$BIN" "$LIST_FILE"
+
+  # shellcheck disable=SC2016  # $TEST_LIB/$TEST_DOTFILES/etc must expand in the inner bash, not here
+  run env PATH="$BIN:$PATH" TEST_LIB="$LIB" TEST_DOTFILES="$TMP/dotfiles" bash -c '
+    set -uo pipefail
+    . "$TEST_LIB"
+    DOTFILES="$TEST_DOTFILES"
+    DRY_RUN=0 ASSUME_YES=0 REMOVED=() DECLINED=() LEFT=() MANUAL=() FAILED=()
+    OFFERED=()
+    offer() { OFFERED+=("$1"); return 1; }
+    tier2_ollama_models
+    [ "${#OFFERED[@]}" -eq 0 ] || printf "OFFERED:%s\n" "${OFFERED[@]}"
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"OFFERED:Remove Ollama model qwen2.5-coder:7b?"* ]]
+}

@@ -196,3 +196,35 @@ def test_claude_settings_hooks_point_at_executable_scripts() -> None:
         path = REPO / match.group(0)
         assert path.is_file(), f"settings.json hook references missing script: {match.group(0)}"
         assert os.access(path, os.X_OK), f"hook script not executable: {match.group(0)}"
+
+
+def test_claude_baseline_settings_hooks_point_at_executable_scripts() -> None:
+    """Each hook wired in the user-scope claude_settings.json baseline references a real script.
+
+    The analogue of test_claude_settings_hooks_point_at_executable_scripts, for the
+    installer's user-scope baseline (distinct from the project-scoped .claude/settings.json
+    above): the installer deep-merges this file into ~/.claude/settings.json, so its hook
+    commands reference the stowed ``$HOME/...`` path rather than ``$CLAUDE_PROJECT_DIR``.
+    If the target script is renamed or loses its executable bit, the SessionStart hook
+    silently stops firing on the next install — this turns that into a red build.
+    """
+    settings = json5.loads((REPO / "claude_settings.json").read_text())
+    commands = [
+        hook["command"]
+        for group in settings.get("hooks", {}).values()
+        for entry in group
+        for hook in entry.get("hooks", [])
+        if hook.get("type") == "command"
+    ]
+    assert commands, "expected hook commands wired in claude_settings.json"
+    paths: set[str] = set()
+    for cmd in commands:
+        # A command may be a compound like `[ ! -x "$HOME/x.sh" ] || "$HOME/x.sh"`, so extract
+        # every unique $HOME/<path>.sh occurrence rather than assuming a single reference.
+        matches = re.findall(r"\$HOME/([\w./-]+\.sh)", cmd)
+        assert matches, f"hook command doesn't reference a $HOME/....sh script: {cmd}"
+        paths.update(matches)
+    for rel in paths:
+        path = REPO / "home" / rel
+        assert path.is_file(), f"claude_settings.json hook references missing script: home/{rel}"
+        assert os.access(path, os.X_OK), f"hook script not executable: home/{rel}"

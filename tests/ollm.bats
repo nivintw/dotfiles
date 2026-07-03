@@ -11,9 +11,9 @@
 # to run). OLLM_MODELS_FILE lets tests point role resolution at a fake fragment instead
 # of the real dotfiles-checkout tags, keeping the ollm tests independent of whatever
 # models the repo's shared model-tags fragment (under scripts/) happens to name. The
-# hook has no such seam — it resolves the fragment relative to its own path — so its
-# tests run the real file in place (this worktree checkout) and assert against the
-# real tags there.
+# hook tests don't use that seam: the hook execs its stowed sibling ollm, which (run
+# with OLLM_MODELS_FILE explicitly unset via `env -u`) resolves this checkout's real
+# fragment — so those tests assert against the real tags.
 #
 # Note for the coverage gate (tests/test_coverage.py): the shared fragment's exact
 # filename is deliberately never spelled out verbatim below (see the fixture var name
@@ -286,7 +286,7 @@ REAL_FAST_TAG="qwen3:4b-instruct-2507-q4_K_M"
   ln -s "$(command -v bash)" "$BIN/bash"
   ln -s "$(command -v curl)" "$BIN/curl"
   ln -s "$(command -v jq)" "$BIN/jq"
-  run env PATH="$BIN" "$HOOK"
+  run env -u OLLM_MODELS_FILE PATH="$BIN" "$HOOK"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
@@ -299,7 +299,7 @@ REAL_FAST_TAG="qwen3:4b-instruct-2507-q4_K_M"
   ln -s "$(command -v readlink)" "$BIN/readlink" # hook resolves its sibling ollm
   printf '#!/bin/sh\nexit 0\n' >"$BIN/ollama"
   chmod +x "$BIN/ollama"
-  run env PATH="$BIN" "$HOOK"
+  run env -u OLLM_MODELS_FILE PATH="$BIN" "$HOOK"
   [ "$status" -eq 0 ]
   [[ "$output" == *"not usable for offload"* ]]
 }
@@ -317,7 +317,7 @@ REAL_FAST_TAG="qwen3:4b-instruct-2507-q4_K_M"
   write_curl_stub "$BIN/curl" # same stub as the ollm tests: reads $WORK/tags.json etc.
   printf '{"models":[{"name":"%s"}]}' "$REAL_FAST_TAG" >"$WORK/tags.json"
 
-  run env PATH="$BIN" "$HOOK"
+  run env -u OLLM_MODELS_FILE PATH="$BIN" "$HOOK"
   [ "$status" -eq 0 ]
   [[ "$output" == *"Local Ollama roster"* ]]
   [[ "$output" == *"$REAL_FAST_TAG"* ]]
@@ -337,7 +337,7 @@ REAL_FAST_TAG="qwen3:4b-instruct-2507-q4_K_M"
   write_curl_stub "$BIN/curl"
   echo 22 >"$WORK/tags_exit"
 
-  run env PATH="$BIN" "$HOOK"
+  run env -u OLLM_MODELS_FILE PATH="$BIN" "$HOOK"
   [ "$status" -eq 0 ]
   [[ "$output" == *"not usable for offload"* ]]
 }

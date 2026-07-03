@@ -67,6 +67,30 @@ def _patch_mlx(monkeypatch: pytest.MonkeyPatch, *, supported: bool) -> None:
     monkeypatch.setattr(ollama, "_mlx_supported", lambda: supported)
 
 
+# --- _read_model_ids against the real fragment -----------------------------------------------
+
+
+def test_read_model_ids_against_real_fragment() -> None:
+    """Unmocked: parses the actual scripts/ollama_models.sh, pinning _MODEL_SPECS's var names.
+
+    Every other test in this file monkeypatches commands.read_text_or_empty so the parser
+    logic can be exercised against controlled fixtures; this one deliberately does not, so
+    it also pins the OTHER half of the contract — that ollama._MODEL_SPECS still names the
+    same four variables the real, checked-in fragment defines. A rename of either side alone
+    (the fragment's vars or _MODEL_SPECS's tuple) would otherwise silently no-op this phase
+    (or raise) without any test catching the drift.
+    """
+    models = ollama._read_model_ids()
+
+    assert set(models) == {
+        "OLLAMA_MODEL",
+        "OLLAMA_VISION_MODEL",
+        "OLLAMA_MLX_MODEL",
+        "OLLAMA_BRAINSTORM_MODEL",
+    }
+    assert all(models.values()), f"expected every model id to be non-empty, got {models}"
+
+
 # --- install_ollama_models: ollama absent -----------------------------------------------------
 
 
@@ -173,8 +197,8 @@ def test_ungated_pulled_when_absent_mlx_skipped(monkeypatch: pytest.MonkeyPatch)
     assert ["ollama", "pull", "qwen3-vl:4b-instruct"] in run_ok_calls
     assert not any("qwen3.5" in c[-1] for c in run_ok_calls)  # MLX coding model not pulled
     assert not any("gemma4" in c[-1] for c in run_ok_calls)  # MLX brainstorm model not pulled
-    assert "skipping MLX model qwen3.5:35b-a3b-coding-nvfp4" in out.getvalue()
-    assert "skipping MLX model gemma4:26b" in out.getvalue()
+    assert "skipping large model qwen3.5:35b-a3b-coding-nvfp4" in out.getvalue()
+    assert "skipping large model gemma4:26b" in out.getvalue()
     assert "Ollama model qwen3:4b-instruct-2507-q4_K_M pulled" in out.getvalue()
     assert "Ollama model qwen3-vl:4b-instruct pulled" in out.getvalue()
 

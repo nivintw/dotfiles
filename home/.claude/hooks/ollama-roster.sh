@@ -25,12 +25,17 @@ esac
 if [ ! -x "$ollm" ]; then
   ollm="$(command -v ollm 2>/dev/null)" || ollm=""
 fi
-[ -n "$ollm" ] || exit 0
+if [ -z "$ollm" ]; then
+  # Ollama is installed but the helper is unfindable — a broken stow, not a normal
+  # machine state. Say so (once per session) instead of impersonating "no fleet here".
+  echo "Local Ollama: installed, but the ollm helper was not found (stow drift?) — offload unavailable."
+  exit 0
+fi
 
 if roster="$("$ollm" --list 2>/dev/null)"; then
   echo "Local Ollama roster (live at session start; offload bulk/mechanical sub-steps via \`ollm\` — see the local-offload skill):"
   printf '%s\n' "$roster" | while IFS= read -r line; do printf '  %s\n' "$line"; done
 else
-  echo "Local Ollama: installed but not usable for offload right now (server down or fleet unprovisioned) — 'open -a Ollama' to start it, 'ollm --list' for details."
+  echo "Local Ollama: installed but not usable for offload right now (server not responding, or ollm failed) — start the Ollama app or 'ollama serve'; 'ollm --list' for details."
 fi
 exit 0

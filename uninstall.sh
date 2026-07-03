@@ -277,8 +277,8 @@ tier2_ollama_models() {
   }
   # The model names come from the same shared fragment the installer provisions from, so we
   # always offer to remove exactly what it pulls — no drift if a model tag changes. Guard the
-  # source: if it fails the vars are unset, and dereferencing them under set -u would abort
-  # the whole run before the summary prints — so degrade to a manual hint instead.
+  # source: if it fails, silently offering nothing would read as "no models installed" —
+  # degrade to an honest manual hint instead.
   # shellcheck source=scripts/ollama_models.sh disable=SC1091
   if ! . "$DOTFILES/scripts/ollama_models.sh" 2>/dev/null || [ -z "${OLLAMA_MODEL:-}" ]; then
     rec_manual "couldn't load the model list; remove models by hand: ollama list, then ollama rm <model>"
@@ -287,7 +287,12 @@ tier2_ollama_models() {
   local present model
   present="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')"
   ui_step "Ollama models provisioned by this repo"
-  for model in "$OLLAMA_MODEL" "$OLLAMA_VISION_MODEL" "$OLLAMA_MLX_MODEL" "$OLLAMA_BRAINSTORM_MODEL"; do
+  # ${VAR:-} defaults: a fragment missing a var (hand-edited, trimmed by a fork) must skip
+  # that role, not abort the whole run under set -u before the summary prints. The legacy
+  # list expands unquoted on purpose — it is a space-separated list of retired tags.
+  # shellcheck disable=SC2086
+  for model in "${OLLAMA_MODEL:-}" "${OLLAMA_VISION_MODEL:-}" "${OLLAMA_MLX_MODEL:-}" "${OLLAMA_BRAINSTORM_MODEL:-}" ${OLLAMA_LEGACY_MODELS:-}; do
+    [ -n "$model" ] || continue
     printf '%s\n' "$present" | grep -qxF "$model" || continue
     if offer "Remove Ollama model $model?"; then
       do_or_echo "ollama rm $model" ollama rm "$model"

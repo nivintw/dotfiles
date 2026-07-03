@@ -15,7 +15,7 @@
 #   - Run install.sh --core DETACHED (nohup; rc -> marker, output -> log), polled over fresh
 #     SSH connections so the run survives the installer toggling the firewall mid-install. The
 #     --core profile installs CLI formulae only — skipping the GUI app/font casks and the
-#     Ollama model pull a headless smoke VM doesn't need — and verify runs core-aware to match.
+#     Ollama models pull a headless smoke VM doesn't need — and verify runs core-aware to match.
 #   - By default install TWICE (idempotency); --once does a single pass.
 #   - Gate on the installer's `dotfiles-install --verify-stream` OK/BAD output, tolerating only
 #     the Touch-ID-no-sensor BAD (a VM has no biometric sensor); everything else stays strict.
@@ -236,7 +236,7 @@ ASK
   run_install() {
     local label="$1" rc
     log "$label: launching install.sh --no-bundles --core (detached) in the VM"
-    # --core: CLI formulae only — skip the heavy GUI app/font casks and the Ollama model
+    # --core: CLI formulae only — skip the heavy GUI app/font casks and the Ollama models
     # pull, which a headless smoke VM doesn't need and which would dominate the run time.
     # Run the preconditions (cd) in the FOREGROUND so a launch failure propagates as a
     # non-zero SSH exit and fails fast here — rather than only surfacing later as an rc-marker

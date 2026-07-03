@@ -11,17 +11,19 @@ the ids can never drift):
   non-MLX fallback; pulled on every capable machine.
 * ``OLLAMA_VISION_MODEL`` — lightweight vision model (~3.3GB, GGUF); pulled everywhere.
 * ``OLLAMA_MLX_MODEL`` — gated MLX coding model (~21GB) for Claude bulk-offload.
-* ``OLLAMA_BRAINSTORM_MODEL`` — gated MLX generalist (~17GB) for brainstorm/summarize work.
+* ``OLLAMA_BRAINSTORM_MODEL`` — gated generalist (~17GB, GGUF) for brainstorm/summarize work.
 
 The gated models are only pulled on Apple Silicon with more than 32 GiB of unified memory and
-macOS 13+ (the MLX engine's requirements). Other machines keep the two ungated GGUF models.
+macOS 13+ (the MLX engine's floor, and a sane big-model floor generally). Other machines keep
+the two ungated small models.
 
 The phase first makes sure the Ollama API is listening: it probes the daemon, launches the
 menu-bar app (which also registers the login item), retries the probe, and only then falls back
 to a detached headless ``ollama serve``. Every step is non-fatal — a missing ``ollama`` binary,
 an unreachable server, or a failed pull degrades to a warning and the install continues.
 
-Ported from ``install.sh`` phase 14.
+Originally ported from ``install.sh`` phase 14 (two models); since extended to the
+four-role fleet.
 """
 
 from __future__ import annotations
@@ -38,8 +40,8 @@ from dotfiles_install.os_detect import OS, current_os
 if TYPE_CHECKING:
     from dotfiles_install.context import InstallContext
 
-# MLX-engine gate: 32 GiB in bytes (require strictly more, so exactly-32GB machines fall back to
-# the baseline) and the minimum supported macOS major version.
+# Big-model gate: 32 GiB in bytes (require strictly more, so exactly-32GB machines keep just
+# the ungated models) and the minimum supported macOS major version.
 _MEM_32_GIB_BYTES = 34359738368
 _MIN_MACOS_MAJOR = 13
 
@@ -85,7 +87,7 @@ def install_ollama_models(ctx: InstallContext) -> None:
     for var, size, gated in _MODEL_SPECS:
         if gated and not mlx:
             ctx.ui.detail(
-                f"skipping MLX model {models[var]} (needs Apple Silicon + >32GB RAM + macOS 13+)",
+                f"skipping large model {models[var]} (needs Apple Silicon + >32GB RAM + macOS 13+)",
             )
             continue
         _pull_model(ctx, models[var], size, installed)
