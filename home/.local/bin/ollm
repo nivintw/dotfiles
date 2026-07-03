@@ -177,12 +177,6 @@ main() {
     return 0
   fi
 
-  # An image with no explicit role means the vision model.
-  if [ -n "$image" ] && [ -z "$role" ] && [ -z "$model" ]; then
-    role="vision"
-  fi
-  [ -n "$model" ] || model="$(role_to_model "${role:-fast}")"
-
   # Prompt = joined args, then piped stdin after a blank line.
   local prompt="" stdin_data=""
   [ ${#prompt_args[@]} -gt 0 ] && prompt="${prompt_args[*]}"
@@ -197,6 +191,12 @@ $stdin_data"
     prompt="$stdin_data"
   fi
   [ -n "$prompt" ] || usage_err "no prompt (pass arguments or pipe stdin)"
+
+  # An image with no explicit role means the vision model.
+  if [ -n "$image" ] && [ -z "$role" ] && [ -z "$model" ]; then
+    role="vision"
+  fi
+  [ -n "$model" ] || model="$(role_to_model "${role:-fast}")"
 
   server_up || die "Ollama server not responding at $OLLM_URL (start the Ollama app or run 'ollama serve')"
 

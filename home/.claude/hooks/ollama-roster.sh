@@ -49,6 +49,6 @@ if [ -n "$fragment" ] && [ -r "$fragment" ]; then
     printf '  ollm --role %-11s %-38s %s\n' "$role" "$model" "$state"
   done
 else
-  printf '%s\n' "$installed" | sed 's/^/  /'
+  printf '%s\n' "$installed" | while IFS= read -r line; do printf '  %s\n' "$line"; done
 fi
 exit 0
