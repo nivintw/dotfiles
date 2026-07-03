@@ -161,6 +161,15 @@
         </div>
       </section>
 
+      <section class="wrap" id="local-ai-offload">
+        <h2><span class="hash">#</span>Local AI offload</h2>
+        <p class="section-lede">One command fronting the local <a href="https://ollama.com/" rel="noopener">Ollama</a> fleet the installer provisions (see <a href="stack.html">The Stack</a>). Unlike the fish functions above it's a plain bash script stowed onto <code>PATH</code> (<code>~/.local/bin/ollm</code>), so it works from any shell — including Claude Code's non-interactive one, its primary caller.</p>
+        <div class="feature">
+          <span class="feature__mark">◇</span>
+          <div><h3><code>ollm</code></h3><p>One-shot generation against a local model picked by <strong>role</strong> — <code>--role fast|bulk|brainstorm|vision</code>, with the role→model mapping read from <code>scripts/ollama_models.sh</code> so it can never drift from what the installer pulled. Prompt from arguments, context piped via stdin (<code>git diff | ollm "summarize this diff"</code>), <code>--image</code> for the vision model, and only the model's text on stdout so it composes in pipes. It disables hidden thinking by default (reasoning models otherwise return an empty response after burning their token budget) and fails fast with a clear message when the server is down. <code>ollm --list</code> prints the roster with installed state — the same table a <code>SessionStart</code> hook injects into Claude Code so it knows what's available for offload.</p></div>
+        </div>
+      </section>
+
       <section class="wrap">
         <h2><span class="hash">#</span>Abbreviations &amp; aliases</h2>
         <p class="section-lede">The muscle-memory layer, in <a href="https://github.com/nivintw/dotfiles/tree/main/home/.config/fish/conf.d" rel="noopener"><code>conf.d/</code></a>. <a href="https://fishshell.com/docs/current/cmds/abbr.html" rel="noopener">Abbreviations</a> expand inline as you type (you see the real command before it runs); aliases are interactive-only, so scripts still get the real binaries.</p>

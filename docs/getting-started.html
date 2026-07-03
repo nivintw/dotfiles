@@ -94,9 +94,11 @@
               <tr><td>10</td><td>git clone hook</td><td>A stowed <code>post-checkout</code> template hook <strong>notifies</strong> on every fresh clone that defines pre-commit hooks — running nothing from the clone, so the default is safe. Opt into auto-install with <code>git config --file ~/.gitconfig_local dotfiles.autoInstallHooks true</code> and the hook runs <a href="https://github.com/j178/prek" rel="noopener">prek</a> install itself</td></tr>
               <tr><td>11</td><td><a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a></td><td>Native installer (self-updating) → <code>~/.local/bin/claude</code></td></tr>
               <tr><td>12</td><td>MCP servers</td><td>Replay <code>claude_mcp.json</code> (deep-merged with an optional <code>~/.config/dotfiles/claude_mcp.local.json</code> overlay) into <code>~/.claude.json</code> — secrets via <code>op inject</code>, or a <code>GITHUB_PERSONAL_ACCESS_TOKEN</code> from the environment without 1Password</td></tr>
-              <tr><td>13</td><td><a href="https://ollama.com/" rel="noopener">Ollama</a></td><td>Start the server &amp; pull <a href="https://ollama.com/library/qwen2.5-coder" rel="noopener"><code>qwen2.5-coder:7b</code></a> (~4.7&nbsp;GB) for <a href="https://www.gitkraken.com/gitlens" rel="noopener">GitLens</a>' local AI; on Apple&nbsp;Silicon with &gt;32&nbsp;GB unified memory (macOS&nbsp;13+) it also pulls the MLX model <code>qwen3.5:35b-a3b-coding-nvfp4</code> (~21&nbsp;GB) for Claude's local bulk-offload — skip both by dropping the <code>ollama-app</code> cask</td></tr>
-              <tr><td>14</td><td>macOS defaults</td><td><code>macos.sh</code> system tweaks</td></tr>
-              <tr><td>15</td><td>Dock</td><td>Declarative Dock layout via <code>dock.sh</code></td></tr>
+              <tr><td>13</td><td>Claude settings</td><td>Generate <code>~/.claude/settings.json</code> by deep-merging the tracked <code>claude_settings.json</code> baseline with the untracked <code>~/.config/dotfiles/claude_settings.local.json</code> overlay (arrays union; the overlay wins per scalar)</td></tr>
+              <tr><td>14</td><td><a href="https://ollama.com/" rel="noopener">Ollama</a></td><td>Start the server &amp; pull the role models from <code>scripts/ollama_models.sh</code>: <a href="https://ollama.com/library/qwen3" rel="noopener"><code>qwen3:4b-instruct-2507</code></a> (~2.5&nbsp;GB, fast tier + <a href="https://www.gitkraken.com/gitlens" rel="noopener">GitLens</a>) and <a href="https://ollama.com/library/qwen3-vl" rel="noopener"><code>qwen3-vl:4b-instruct</code></a> (~3.3&nbsp;GB, vision) everywhere; on Apple&nbsp;Silicon with &gt;32&nbsp;GB unified memory (macOS&nbsp;13+) also the MLX pair <code>qwen3.5:35b-a3b-coding-nvfp4</code> (~21&nbsp;GB, bulk coding) and <code>gemma4:26b</code> (~17&nbsp;GB, generalist) — all driven through the <a href="commands.html#local-ai-offload"><code>ollm</code></a> CLI; skip by dropping the <code>ollama-app</code> cask</td></tr>
+              <tr><td>15</td><td>macOS defaults</td><td><code>macos.sh</code> system tweaks</td></tr>
+              <tr><td>16</td><td>Dock</td><td>Declarative Dock layout via <code>dock.sh</code></td></tr>
+              <tr><td>17</td><td>Verify</td><td>Re-check the install end state and print the summary (the same checks <code>dotfiles-doctor</code> runs)</td></tr>
             </tbody>
           </table>
         </div>
@@ -106,8 +108,8 @@
         </div>
         <div class="note">
           <div class="note__title">Several of these steps are <em>my</em> taste</div>
-          The package list (1), MCP servers (12), the Ollama models (13), the macOS
-          defaults (14), and the Dock (15) encode my preferences and my accounts — that
+          The package list (1), MCP servers (12), the Ollama models (14), the macOS
+          defaults (15), and the Dock (16) encode my preferences and my accounts — that
           1Password path is my vault, not yours. They're the first things to change when
           you fork. <a href="#make-it-yours">Make it yours</a> walks the exact files.
         </div>
