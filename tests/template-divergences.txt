@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+.config/.release-please-manifest.json  # release-please-owned version-of-record; changes every release
+.config/licenserc.toml                 # repo-specific hawkeye excludes (.claude frontmatter, binary iterm2 plist, vendored asciinema player)
+.config/rumdl.toml                     # excludes .claude frontmatter markdown + the release-please-generated CHANGELOG
+.config/typos.toml                     # excludes the vendored asciinema player bundle + recorded .cast files
+.editorconfig                          # adds fish alongside python in the 4-space-indent rule
+.github/workflows/ci.yml               # adds the installer jobs (installer-smoke-macos) + system-tool bootstrap (fish, bats, ripgrep)
+.github/workflows/link-check.yml       # lychee excludes for runner-hostile endpoints (gnu.org blackholes GitHub runners; reuse badge API)
+.github/workflows/main.yml             # release docs describe the pyproject + uv.lock version mirroring via extra-files
+.gitignore                             # mirrors the global ignore so VS Code explorer.excludeGitIgnore matches git, plus repo rules
+.pre-commit-config.yaml                # emoji hook names + grouped sections; repo hooks (fish, ssh, installer); pre-push vm-smoke stage
+CHANGELOG.md                           # release-please-generated; grows every release
+pyproject.toml                         # real installer package (deps, console script, dev groups) vs the template stub
+README.md                              # real project README vs the template stub
+REUSE.toml                             # repo-specific annotations (home/ + .claude trees, iterm2 plist, casts, vendored player)
+tests/conftest.py                      # real shared helpers for the config-validation suite vs the template stub
+tests/smoke.bats                       # deleted: placeholder superseded by the real bats suite
+tests/test_smoke.py                    # deleted: placeholder superseded by the real pytest suite
+
+# ---------------------------------------------------------------------------------------
+# What this file is (kept below the entries — hawkeye rewrites leading comment blocks):
+# the divergence registry for the copier template (gh:nivintw/copier-everything, pinned in
+# .copier-answers.yml). Every template-owned file that INTENTIONALLY differs from (or was
+# deleted relative to) the rendered template is listed above with a one-line reason.
+#
+# The invariant, enforced by tests/template_sync.bats: a template-rendered file NOT listed
+# here must be byte-identical to the template at the pinned _commit. When that test fails,
+# either re-sync the file or register the divergence — never let drift sit undocumented.
+# When a divergence is a clean improvement worth porting back, file it upstream and note it
+# here as: filed upstream: nivintw/copier-everything#N.
+#
+# Format: <repo-relative path>  # reason   (first whitespace-delimited field is the path;
+# a "deleted:" reason marks a file intentionally absent from the repo).
