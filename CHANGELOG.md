@@ -7,6 +7,28 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.20.0](https://github.com/nivintw/dotfiles/compare/v1.19.0...v1.20.0) (2026-07-03)
+
+
+### Features
+
+* **installer:** Linux privileged setup + OS-aware verification (completes [#34](https://github.com/nivintw/dotfiles/issues/34)) ([e0a3fd5](https://github.com/nivintw/dotfiles/commit/e0a3fd50776d59202cb302926151c9afd8c394b0))
+* **installer:** Linuxbrew package install on Linux + a Linux Tart smoke ([5c27bc4](https://github.com/nivintw/dotfiles/commit/5c27bc4ef7569e1cb1246b08bb0d2ffe733ceb66))
+* **offload:** Rework local-model offload — role fleet, ollm CLI, roster hook, skill ([80eb3d4](https://github.com/nivintw/dotfiles/commit/80eb3d493e29ea3645265e6726ca61874c4d6932))
+
+
+### Bug Fixes
+
+* **ci:** Exclude the generated CHANGELOG from the typos hook ([3c12563](https://github.com/nivintw/dotfiles/commit/3c12563e846154642190fe1bf7fd562243e7ce78))
+* **installer:** Abort the ufw enable when the SSH allow rule fails ([ab6ca16](https://github.com/nivintw/dotfiles/commit/ab6ca169ec2d33e9edcf8e1182c367f302873e03))
+* **installer:** Address review — Linux re-run assert, bundle gating, comments ([aef13ba](https://github.com/nivintw/dotfiles/commit/aef13ba605ba9dddcbf75bbe83c1bf203b6ea0b8))
+* **installer:** Allow SSH through ufw before enabling it (headless lockout) ([d0ec8fb](https://github.com/nivintw/dotfiles/commit/d0ec8fb838cb93b4ce0ea66d5fad2a60cb22836b))
+* **installer:** Cover socket-activated OpenSSH; correct two docstrings ([0adc4f4](https://github.com/nivintw/dotfiles/commit/0adc4f419f4766fe9f694324a99450d9f63478c5))
+* **installer:** Degrade to a BAD record when the UID has no passwd entry ([5b22537](https://github.com/nivintw/dotfiles/commit/5b22537aa52c2625290b96644f6b41bb30afc512))
+* **installer:** Gate the Ollama app launch to macOS; fail the negative test loudly ([793082a](https://github.com/nivintw/dotfiles/commit/793082af9e8077adb4f72e23f9e86ba66b97154d))
+* **installer:** OS-honest messaging for phase 2 and the Linux firewall check ([2769083](https://github.com/nivintw/dotfiles/commit/276908372ac48f536488b9e8aba43d6be7b36c46))
+* **offload:** Harden ollm and the roster hook per review battery ([0a301aa](https://github.com/nivintw/dotfiles/commit/0a301aa49caa135df9022a105fba420b6a99776c))
+
 ## [1.19.0](https://github.com/nivintw/dotfiles/compare/v1.18.0...v1.19.0) (2026-06-30)
 
 
