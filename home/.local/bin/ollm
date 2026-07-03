@@ -72,9 +72,21 @@ models_file() {
   esac
 }
 
-role_to_model() {
+ROLES=(fast bulk brainstorm vision)
+
+# Source the fragment once per process, populating the OLLAMA_* role vars. Subshells
+# inherit both the vars and the guard, so $(role_to_model ...) doesn't re-source.
+load_models() {
+  [ -z "${_OLLM_MODELS_LOADED:-}" ] || return 0
+  local file
+  file="$(models_file)"
   # shellcheck source=../../../scripts/ollama_models.sh disable=SC1091
-  . "$(models_file)" 2>/dev/null || die "cannot read models fragment $(models_file)"
+  . "$file" 2>/dev/null || die "cannot read models fragment $file"
+  _OLLM_MODELS_LOADED=1
+}
+
+role_to_model() {
+  load_models
   case "$1" in
   fast) printf '%s\n' "${OLLAMA_MODEL:?}" ;;
   bulk) printf '%s\n' "${OLLAMA_MLX_MODEL:?}" ;;
@@ -98,9 +110,11 @@ supports_thinking() {
 }
 
 list_models() {
+  server_up || die "Ollama server not responding at $OLLM_URL (start the Ollama app or run 'ollama serve')"
+  load_models
   local installed role model marker
   installed="$(curl -fsS -m 5 "$OLLM_URL/api/tags" 2>/dev/null | jq -r '.models[].name' 2>/dev/null)" || installed=""
-  for role in fast bulk brainstorm vision; do
+  for role in "${ROLES[@]}"; do
     model="$(role_to_model "$role")"
     marker="missing"
     if printf '%s\n' "$installed" | grep -qxF "$model"; then
