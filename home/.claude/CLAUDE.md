@@ -49,14 +49,19 @@ Follow the conventional-commit format. Capitalize the first word of the descript
 
 ## Referencing GitHub issues, PRs & discussions
 
-When you mention a GitHub issue, PR, or discussion, never leave a bare `#46` — it's ambiguous and not clickable. Every reference must:
+These rules govern **prose addressed to me** (chat, summaries, reports). They do NOT apply to GitHub's machine-parsed keywords: `Closes #N` / `Fixes #N` trailers in commit messages and PR bodies must stay **bare** so auto-close works.
 
-- **Name the type.** "issue #46", "PR #46", "discussion #46" — never a bare number.
-- **Be a clickable link.** Render the `#46` as a markdown link to the thing itself — `[#46](https://github.com/owner/repo/issues/46)` (PRs use `/pull/46`, discussions `/discussions/46`). Claude Code renders these in the terminal, so I can click straight through.
-- **Tell me what it is.** Don't assume I remember the ticket — add a short title or one-line gloss: `PR [#46](https://github.com/owner/repo/pull/46) (add release-please gate)`. If you don't know the title, look it up (GitHub MCP) rather than referencing it blind.
-- **Qualify cross-repo refs.** When it lives in a different repo than the one we're working in, repo-qualify the visible text but still link to the item itself — `[owner/repo#46](https://github.com/owner/repo/issues/46)` — so it's unambiguous which repo without losing the click-through.
+**Always, no exceptions — and not subject to "do it quick" (it's cheap):** never write a bare `#46` in prose. Every `#N` is a **typed, clickable markdown link** — `[issue #46](https://github.com/owner/repo/issues/46)`, `[PR #46](https://github.com/owner/repo/pull/46)`, `[discussion #46](https://github.com/owner/repo/discussions/46)`. Claude Code renders these in the terminal, so I can click straight through. This includes numbers inside tables, lists, and summaries.
 
-Mention status — open / closed / merged / draft — when it bears on the point.
+**On first mention in a message, also:**
+
+- **Gloss it.** Add a short title or one-line description so I don't have to remember the ticket: `[PR #46](https://github.com/owner/repo/pull/46) (add release-please gate)`. If you don't know the title, look it up (GitHub MCP) rather than referencing it blind.
+- **State status** — open / closed / merged / draft — when it bears on the point.
+- **Qualify cross-repo refs.** When it lives in a different repo than the one we're working in, repo-qualify the visible text but still link to the item — `[owner/repo#46](https://github.com/owner/repo/issues/46)` — so it's unambiguous which repo without losing the click-through.
+
+**Subsequent mentions in the same message** may drop the gloss but must keep the typed link.
+
+**Before sending any message that contains `#N`, scan it:** is every reference a typed markdown link? If not, fix it before sending.
 
 ## Local model offload
 
