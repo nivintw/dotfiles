@@ -275,7 +275,7 @@ tier2_ollama_models() {
     rec_left "Ollama models not checked (server not running); start Ollama and re-run to manage them"
     return 0
   }
-  # The model names come from the same shared fragment install.sh provisions from, so we
+  # The model names come from the same shared fragment the installer provisions from, so we
   # always offer to remove exactly what it pulls — no drift if a model tag changes. Guard the
   # source: if it fails the vars are unset, and dereferencing them under set -u would abort
   # the whole run before the summary prints — so degrade to a manual hint instead.
@@ -287,7 +287,7 @@ tier2_ollama_models() {
   local present model
   present="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')"
   ui_step "Ollama models provisioned by this repo"
-  for model in "$OLLAMA_MODEL" "$OLLAMA_MLX_MODEL"; do
+  for model in "$OLLAMA_MODEL" "$OLLAMA_VISION_MODEL" "$OLLAMA_MLX_MODEL" "$OLLAMA_BRAINSTORM_MODEL"; do
     printf '%s\n' "$present" | grep -qxF "$model" || continue
     if offer "Remove Ollama model $model?"; then
       do_or_echo "ollama rm $model" ollama rm "$model"

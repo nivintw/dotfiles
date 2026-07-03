@@ -38,6 +38,18 @@
       "autoUpdate": true
     }
   },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/hooks/ollama-roster.sh\""
+          }
+        ]
+      }
+    ]
+  },
   "effortLevel": "high",
   "skipWorkflowUsageWarning": true,
   "theme": "dark",

@@ -116,7 +116,7 @@ def test_run_on_linux_walks_the_os_agnostic_phases(monkeypatch: pytest.MonkeyPat
     assert "[1] Homebrew packages" in result.output
     assert "[2] Privileged setup" in result.output
     assert "[3] dotfiles symlinks (stow)" in result.output
-    assert "[14] Ollama model" in result.output
+    assert "[14] Ollama models" in result.output
     assert "[17] Verification & summary" in result.output
     # ...while the macOS-purpose phases (iTerm2, macos.sh, the Dock) are gated out.
     assert "[8] iTerm2 preferences" not in result.output

@@ -311,7 +311,7 @@
   },
   "workbench.iconTheme": "vira-icons-carbon",
   "yaml.customTags": ["!encrypted/pkcs1-oaep scalar", "!vault scalar"],
-  "gitlens.ai.model": "ollama:qwen2.5-coder:7b",
+  "gitlens.ai.model": "ollama:qwen3:4b-instruct-2507-q4_K_M",
   "gitlens.ai.ollama.url": "http://localhost:11434",
   "workbench.productIconTheme": "viraUIIcons",
   "terminal.integrated.profiles.osx": {

@@ -65,13 +65,16 @@ These rules govern **prose addressed to me** (chat, summaries, reports). They do
 
 ## Local model offload
 
-When a task is **bulk and mechanical** — and a local model is available on this machine — prefer routing it to that local model to conserve Claude tokens, rather than doing the grunt work inline. Pick the tier by stakes and latency: a fast small model for high-volume, low-stakes work (classification, log/diff triage, quick summaries, simple boilerplate); a larger local model when quality matters more than speed (non-trivial codegen, careful summarization, first-pass analysis).
+When a task contains a **bounded, mechanical sub-step** — and a local model is available on this machine — route that sub-step through the `ollm` CLI to conserve Claude tokens (the `local-offload` skill has the playbook; a session-start hook injects the live model roster).
 
-- **It's an offload target, not a replacement.** Anything agentic, multi-file, or high-stakes stays on Claude. Treat local output as an untrusted first-pass draft and **always verify it** before use.
-- **Mechanism.** Claude Code subagents can't run on a local model natively, so the driving agent shells out to it — e.g. via Bash to an OpenAI-compatible endpoint (`curl http://localhost:11434/...`) or the model's own CLI.
-- **Degrades gracefully.** This only applies when a local model is actually present and responding; on a machine without one (a work laptop, CI) it's a no-op — never block on it.
+One gate decides: offload when *(assemble context + verify output)* is cheaper than doing the sub-step yourself.
 
-Which models, the endpoint, and benchmarks are per-machine specifics — they live in the untracked machine-local file imported below, so they vary by machine without churning this file.
+- **Trigger on sub-steps, not whole tasks.** Big tasks usually contain offloadable chunks — log/diff triage, summaries, boilerplate, commit-message drafts, first-pass analysis — even when the task itself stays on Claude.
+- **Scale verification to stakes.** A commit-message draft gets a glance; generated boilerplate gets a read-through; load-bearing code gets real review. Judge by stakes × verifiability, not file count — a mechanical three-file rename is a fine offload; a one-line safety-critical change is not.
+- **Hard limits.** Local output is untrusted until verified at the level the stakes demand; never offload where a silently wrong answer is costly; judgment and synthesis stay with Claude.
+- **Degrades gracefully.** On a machine without a local model (a work laptop, CI), `ollm` fails fast with a clear error and the work proceeds on Claude as usual — never block on it.
+
+Which models back which roles is machine data, not prose: `scripts/ollama_models.sh` in the dotfiles repo defines the roster, `ollm --list` shows it live, and the session-start hook keeps it current. Per-machine notes (benchmarks, quirks) stay in the untracked machine-local file imported below.
 
 ## Machine-local instructions
 
