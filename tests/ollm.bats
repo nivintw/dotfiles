@@ -266,11 +266,11 @@ run_ollm() {
 
 # --- ollama-roster.sh (SessionStart hook) -----------------------------------------------
 #
-# The hook has no OLLM_MODELS_FILE-style override: it resolves the shared model-tags
-# fragment relative to its OWN path (readlink -f "$0"). Run in place from this worktree
-# checkout, that resolves to this checkout's real fragment under scripts/ — so these
-# tests assert against the real tags (qwen3:4b-instruct-2507-q4_K_M, qwen3-vl:4b-instruct,
-# qwen3.5:35b-a3b-coding-nvfp4, gemma4:26b) rather than a fake fixture.
+# The hook delegates roster rendering to its stowed sibling `ollm --list`, resolving it
+# relative to its OWN path (readlink -f "$0"). Run in place from this worktree checkout,
+# that resolves to this checkout's ollm, which in turn (no OLLM_MODELS_FILE set) resolves
+# this checkout's real fragment under scripts/ — so the happy-path test asserts against
+# the real fast-tier tag rather than a fake fixture.
 #
 # Each test builds a curated PATH from scratch (symlinking in only the real tools it
 # needs) rather than subtracting directories from the ambient $PATH: jq/ollama/curl live
@@ -291,25 +291,27 @@ REAL_FAST_TAG="qwen3:4b-instruct-2507-q4_K_M"
   [ -z "$output" ]
 }
 
-@test "ollama-roster.sh exits 0 silently when jq is not on PATH" {
+@test "ollama-roster.sh degrades to the not-usable notice when jq is missing" {
+  # ollm hard-requires jq; the hook must catch its failure and stay fail-open.
   BIN="$WORK/no-jq-bin"
   mkdir -p "$BIN"
   ln -s "$(command -v bash)" "$BIN/bash"
-  ln -s "$(command -v curl)" "$BIN/curl"
+  ln -s "$(command -v readlink)" "$BIN/readlink" # hook resolves its sibling ollm
   printf '#!/bin/sh\nexit 0\n' >"$BIN/ollama"
   chmod +x "$BIN/ollama"
   run env PATH="$BIN" "$HOOK"
   [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  [[ "$output" == *"not usable for offload"* ]]
 }
 
-@test "ollama-roster.sh lists the roster with installed state when the server responds" {
+@test "ollama-roster.sh lists the roster via ollm --list when the server responds" {
   BIN="$WORK/happy-bin"
   mkdir -p "$BIN"
   ln -s "$(command -v bash)" "$BIN/bash"
   ln -s "$(command -v jq)" "$BIN/jq"
-  ln -s "$(command -v grep)" "$BIN/grep"         # the installed/missing marker loop shells out to grep
-  ln -s "$(command -v readlink)" "$BIN/readlink" # resolves the hook's own path to find the fragment
+  ln -s "$(command -v grep)" "$BIN/grep"         # ollm's installed/missing marker loop
+  ln -s "$(command -v readlink)" "$BIN/readlink" # hook→ollm and ollm→fragment resolution
+  ln -s "$(command -v dirname)" "$BIN/dirname"   # ollm's models_file()
   printf '#!/bin/sh\nexit 0\n' >"$BIN/ollama"
   chmod +x "$BIN/ollama"
   write_curl_stub "$BIN/curl" # same stub as the ollm tests: reads $WORK/tags.json etc.
@@ -317,15 +319,19 @@ REAL_FAST_TAG="qwen3:4b-instruct-2507-q4_K_M"
 
   run env PATH="$BIN" "$HOOK"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ollm --role fast"* ]]
-  [[ "$output" == *"installed"* ]]
+  [[ "$output" == *"Local Ollama roster"* ]]
+  [[ "$output" == *"$REAL_FAST_TAG"* ]]
+  [[ "$(printf '%s\n' "$output" | grep ' fast ')" == *installed* ]]
+  [[ "$(printf '%s\n' "$output" | grep ' bulk ')" == *missing* ]]
 }
 
-@test "ollama-roster.sh reports the server not responding without failing the session" {
+@test "ollama-roster.sh reports not-usable when the server is down, still exiting 0" {
   BIN="$WORK/down-bin"
   mkdir -p "$BIN"
   ln -s "$(command -v bash)" "$BIN/bash"
   ln -s "$(command -v jq)" "$BIN/jq"
+  ln -s "$(command -v readlink)" "$BIN/readlink"
+  ln -s "$(command -v dirname)" "$BIN/dirname"
   printf '#!/bin/sh\nexit 0\n' >"$BIN/ollama"
   chmod +x "$BIN/ollama"
   write_curl_stub "$BIN/curl"
@@ -333,5 +339,5 @@ REAL_FAST_TAG="qwen3:4b-instruct-2507-q4_K_M"
 
   run env PATH="$BIN" "$HOOK"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"server is not responding"* ]]
+  [[ "$output" == *"not usable for offload"* ]]
 }
