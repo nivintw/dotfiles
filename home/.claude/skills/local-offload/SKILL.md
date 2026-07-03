@@ -51,7 +51,9 @@ ollm --list    # roles, resolved tags, installed state
 
 Thinking is disabled by default (hidden reasoning otherwise consumes the whole token
 budget and returns an empty response); `--think` opts in on models that support it.
-`--num-predict` (default 4096) bounds output length.
+`--num-predict` (default 4096) bounds output length. When not piping context in,
+redirect `</dev/null` (or pass `--no-input`) — with a non-TTY stdin held open and
+empty, `ollm` would otherwise wait for EOF like any Unix filter.
 
 ## Degrades gracefully
 

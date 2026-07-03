@@ -48,9 +48,9 @@ UNTESTED_SCRIPTS = {
     " by the opt-in VM smoke harness; the shim itself is host-mutating glue guarded by shellcheck",
     "macos.sh": "writes macOS defaults; covered by shellcheck + the opt-in VM smoke harness",
     "dock.sh": "rebuilds the Dock via dockutil; covered by shellcheck + the VM smoke harness",
-    "ollama_models.sh": "pure data — the two Ollama model identifiers shared by the installer"
-    " (read by dotfiles_install.ollama) and uninstall.sh; no logic to unit-test"
-    " (guarded by shellcheck)",
+    "ollama_models.sh": "pure data — the four Ollama role model identifiers (plus a legacy"
+    " list) shared by the installer (read by dotfiles_install.ollama), uninstall.sh, and the"
+    " stowed ollm helper; no logic to unit-test (guarded by shellcheck)",
     "refresh-binary-checksums.sh": "template-authored (copier-everything); recomputes the CI"
     " binary SHA256 pins by downloading upstream release assets, so its real behavior is"
     " network-dependent and a poor fit for the offline bats suite. Coverage is integration-level"
