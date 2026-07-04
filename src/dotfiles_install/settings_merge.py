@@ -168,10 +168,10 @@ def generate_settings(
     Consumer-agnostic: ``spec`` declares the paths and ``label`` (named in UI messages).
     ``extra_overlay``, when given, **seeds** any of its keys the overlay doesn't already carry —
     a caller-computed per-machine default (e.g. a resolved tool path) that should persist into
-    the tracked overlay file once, without the caller reading or writing that file itself. Seed,
-    not overwrite: a key already present (from a prior seed, or a hand-edit) is left alone, so a
-    later run re-deriving a different value never silently reverts it. Warn-and-continue
-    throughout so one consumer's failure never aborts the run.
+    the machine-local overlay file once, without the caller reading or writing that file
+    itself. Seed, not overwrite: a key already present (from a prior seed, or a hand-edit) is
+    left alone, so a later run re-deriving a different value never silently reverts it.
+    Warn-and-continue throughout so one consumer's failure never aborts the run.
     """
     # Read via the degrade-to-empty helper so a missing/unreadable tracked baseline routes to the
     # same warn-skip path as a non-object one, rather than crashing the phase with an OSError.
