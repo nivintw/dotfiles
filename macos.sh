@@ -118,8 +118,8 @@ dwrite write com.apple.screencapture disable-shadow -bool true
 # ---------------------------------------------------------------------------
 # Keep the Dock always visible (no auto-hide).
 dwrite write com.apple.dock autohide -bool false
-# Default icon size (48); scale (not genie) minimize.
-dwrite write com.apple.dock tilesize -int 48
+# Default icon size (61); scale (not genie) minimize.
+dwrite write com.apple.dock tilesize -int 61
 dwrite write com.apple.dock mineffect -string "scale"
 # Minimize windows into their application's Dock icon.
 dwrite write com.apple.dock minimize-to-application -bool true
