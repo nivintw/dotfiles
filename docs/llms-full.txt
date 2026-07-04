@@ -1,0 +1,544 @@
+# dotfiles
+
+> Tyler Nivin's personal, idempotent bootstrap for macOS, Linux, and WSL2 — one command
+> (`install.sh`) converges a fresh machine to a declared state via Homebrew, GNU Stow, and
+> fish. Built to be forked: the machinery is generic, the package list/Dock/keys are his.
+
+This file inlines the full content of every page linked from `llms.txt`, for tools that want
+the whole corpus in one fetch.
+
+---
+
+## Getting Started
+
+On my own machines this is the whole story: clone, run, done — no toolchain to set up
+first, since `install.sh` installs Homebrew and uv if they're missing. Runs the same way on
+**macOS, Linux, and WSL2** — steps marked *macOS only* below just skip themselves elsewhere.
+
+```bash
+git clone https://github.com/nivintw/dotfiles ~/dotfiles
+~/dotfiles/install.sh
+```
+
+**It's idempotent — re-run it any time.** `install.sh` converges the machine to the
+declared state instead of clobbering it: `brew bundle` adopts already-installed casks in
+place, `stow` refuses to overwrite existing real files, and the MCP/symlink/shell steps
+no-op once they're done. The two declarative system steps are the deliberate exception —
+`macos.sh` re-asserts its preferences and `dock.sh` rebuilds the Dock from its list every
+run (pass `--no-dock` to skip it, or it skips itself if `dockutil` can't read the current
+Dock state). That's by design: they reset those surfaces to the repo's definition rather
+than preserving local tweaks.
+
+### What the bootstrap does
+
+In order — privileged steps are grouped into a single `sudo` session so you authenticate
+once.
+
+| # | Step | What happens |
+| --- | --- | --- |
+| 0 | Toolchain | Install Homebrew & uv if missing |
+| 1 | `brew bundle` | All baseline CLI tools, fish, GUI casks, the MesloLGS NF font — then an fzf multi-select for opt-in bundles (`personal`, `homelab`, `1password`) |
+| 2 | Privileged block | fish as login shell everywhere, plus one sudo prompt for the OS-specific bit: Touch ID for sudo & the app firewall (macOS), `ufw` (native Linux), or nothing (WSL2 — the Windows host owns the firewall) |
+| 3 | Stow | Symlink `home/` into `$HOME` |
+| 4 | Overlays | Seed untracked machine-local overlay files (SSH, git, fish, `Brewfile.local`, `CLAUDE.local.md`, `claude_mcp.local.json`, `macos.local.sh`) with commented examples; disable commit signing if 1Password is absent |
+| 5 | fisher | fish plugins from `fish_plugins` (tide, fzf.fish) |
+| 6 | TPM | tmux plugin manager + plugins from `tmux.conf` |
+| 7 | atuin | Backfill existing shell history into atuin's DB |
+| 8 | iTerm2 *(macOS only)* | Point iTerm at the tracked `iterm2/` prefs folder |
+| 9 | uv tools | Install the Python CLIs in `uv_tools.txt` |
+| 10 | git clone hook | A stowed `post-checkout` template hook **notifies** on every fresh clone that defines pre-commit hooks — running nothing from the clone, so the default is safe. Opt into auto-install with `git config --file ~/.gitconfig_local dotfiles.autoInstallHooks true` |
+| 11 | Claude Code | Native installer (self-updating) → `~/.local/bin/claude` |
+| 12 | MCP servers | Replay `claude_mcp.json` (deep-merged with an optional `~/.config/dotfiles/claude_mcp.local.json` overlay) into `~/.claude.json` — secrets via `op inject`, or a `GITHUB_PERSONAL_ACCESS_TOKEN` from the environment without 1Password |
+| 13 | Claude settings | Generate `~/.claude/settings.json` by deep-merging the tracked `claude_settings.json` baseline with the untracked `~/.config/dotfiles/claude_settings.local.json` overlay (arrays union; the overlay wins per scalar) |
+| 14 | Ollama | Start the server & pull the role models: `qwen3:4b-instruct-2507-q4_K_M` (~2.5 GB, fast tier + GitLens) and `qwen3-vl:4b-instruct` (~3.3 GB, vision) everywhere; on Apple Silicon with >32 GB unified memory also the big pair — `qwen3.5:35b-a3b-coding-nvfp4` (~21 GB, bulk coding, MLX) and `gemma4:26b` (~17 GB, generalist) — all driven through the `ollm` CLI; skipped by dropping the `ollama-app` cask (so also skipped under `--core`) |
+| 15 | macOS defaults *(macOS only)* | `macos.sh` system tweaks |
+| 16 | Dock *(macOS only)* | Declarative Dock layout via `dock.sh` |
+| 17 | VS Code settings *(macOS only)* | Generate `settings.json` by deep-merging the tracked `vscode_settings.json` baseline with an untracked overlay, auto-seeding the Homebrew `rg` path the todo-tree extension needs |
+| 18 | Verify | Re-check the install end state and print the summary (the same checks `dotfiles-doctor` runs) |
+
+The iTerm2 step takes effect on iTerm's next launch — fully quit it first if it's already
+open. Several of these steps are personal taste — the package list (1), MCP servers (12),
+the Ollama models (14), the macOS defaults (15), and the Dock (16) encode Tyler's
+preferences and accounts. They're the first things to change on a fork.
+
+### Make it yours
+
+This is a personal repo, not a configurable framework — adopting it means **forking and
+editing**, not flipping options. The machinery (Stow, the overlays, the idempotent
+bootstrap, the hook suite) is generic and worth keeping as-is; what changes is the
+*contents*.
+
+| Change first | File | Why |
+| --- | --- | --- |
+| Your apps & CLIs | `Brewfile`, `Brewfile.d/*.brewfile` | The single most personal file. |
+| The Dock | `dock.sh` | It rebuilds your Dock from this list on every run. |
+| macOS defaults | `macos.sh` | System tweaks to personal taste; re-asserts every run. |
+| Git identity | `~/.gitconfig_local` | The tracked `home/.gitconfig` ships no `[user]` block. A pre-existing `~/.gitconfig` is backed up and folded into the overlay on first install. |
+| Claude MCP servers | `claude_mcp.json` | Repoint the secret refs at your own 1Password vault, or supply a `GITHUB_PERSONAL_ACCESS_TOKEN`. |
+| Terminal & SSH | `iterm2/`, `home/.ssh/config` | iTerm prefs are personal; the SSH config is a generic baseline. |
+
+Once forked, there's nothing to "pull from upstream" — the overlay pattern is how one repo
+serves every machine without per-machine branches, so a fork shouldn't need to fork again
+per box.
+
+### The human-only steps
+
+- **Claude Code login** — the CLI installs automatically; first run needs a one-time
+  browser sign-in.
+- **GitHub MCP token** — with 1Password: store a PAT at `op://MCP/github-claude-pat/credential`,
+  enable the 1Password CLI integration, re-run. Without: export
+  `GITHUB_PERSONAL_ACCESS_TOKEN` and re-run.
+- **VS Code & 1Password** — sign in to VS Code to sync; enable the opt-in `1password`
+  bundle for the desktop app / browser extensions.
+- **AppCleaner SmartDelete** — a one-time GUI toggle that installs a privileged helper;
+  can't be scripted via `defaults`.
+
+### Per-machine setup
+
+Per-machine specifics live in untracked overlay files the bootstrap seeds; each machine
+fills in only what it needs (see Architecture's "Machine-local overlays" for the full
+mechanism).
+
+- **Opt-in software bundles** — an fzf multi-select for `personal`/`homelab`; persists to
+  `~/.config/dotfiles/bundles`. `--bundle NAME` / `--no-bundles` / `--keep-bundles` control
+  it non-interactively.
+- **Machine-private software** — work-only or sensitive casks go in untracked
+  `~/.config/dotfiles/Brewfile.local`.
+- **SSH hosts, git identity, fish tweaks** — `~/.ssh/config.local`, `~/.gitconfig_local`,
+  `~/.config/dotfiles/local.fish`.
+
+### Updating
+
+- **New CLI tool / app** — add a `brew`/`cask` line to the `Brewfile`, then
+  `brew bundle install --file=~/dotfiles/Brewfile`.
+- **Dotfile change** — edit the file under `home/` (or its symlink in `$HOME` — same file)
+  and commit.
+- **Find untracked installs** — `brew bundle cleanup --file=~/dotfiles/Brewfile` reports
+  prune candidates.
+- **New opt-in bundle** — drop a `Brewfile.d/<name>.brewfile` (hawkeye stamps its SPDX
+  header automatically), then select it on machines that want it.
+
+### Uninstalling
+
+`~/dotfiles/uninstall.sh --dry-run` previews exactly what it would remove, changing
+nothing. It auto-removes the provably-ours, reversible setup (stow symlinks, Claude MCP
+registrations, the iTerm2 prefs pointer), *offers* (default no) to remove things it can't
+prove it owns (the TPM clone, uv tools, Ollama models), and *asks* before lossy system
+changes (login shell, the Touch-ID PAM file). Machine-local data and genuinely irreversible
+setup (macOS defaults, the Dock, Homebrew itself) is left in place and listed with
+copy-paste commands to finish by hand.
+
+---
+
+## Architecture
+
+A symlink farm with a single source of truth, and a bootstrap that's careful never to
+fight the machine it's setting up. Runs on macOS, Linux, and WSL2 — the installer's phase
+registry OS-gates each phase; the ones whose entire purpose is macOS state (iTerm2,
+`macos.sh`, the Dock, VS Code settings) skip themselves on Linux/WSL2, and every other
+phase runs everywhere.
+
+### home/ mirrors $HOME
+
+The repo's `home/` directory is a literal mirror of `$HOME`. GNU Stow walks it and creates
+a symlink in `$HOME` for every file, so the file in the repo *is* the file on disk. Editing
+either side edits the same bytes — no copy step, no "apply" command, no drift.
+
+**Why Stow:** one `stow home` creates the whole symlink farm and is itself idempotent. It
+refuses to overwrite an existing real file — so a conflict is a loud error, never silent
+data loss. The bootstrap removes only known *generated* real files first (never existing
+symlinks) so Stow can take them over.
+
+### Repository layout
+
+| Path | Role |
+| --- | --- |
+| `home/` | Everything symlinked into `$HOME` |
+| `Brewfile` | Baseline formulae + casks, installed by `brew bundle` |
+| `Brewfile.d/` | Opt-in `<name>.brewfile` bundles layered on the baseline per machine |
+| `uv_tools.txt` | Python CLIs, one `uv tool install` arg-list per line |
+| `claude_mcp.json` | Claude Code MCP servers, replayed into `~/.claude.json` |
+| `vscode_settings.json` | VS Code `settings.json` baseline, deep-merged with a machine-local overlay at install time |
+| `install.sh` | Thin entry-point shim — guards on macOS/Linux (WSL2 reports as Linux), bootstraps `uv`, then hands off to the installer |
+| `src/dotfiles_install/` | The idempotent installer: a Python package (`dotfiles-install` console script) that walks an ordered phase registry |
+| `macos.sh` · `dock.sh` | macOS defaults & declarative Dock |
+| `iterm2/` | iTerm2 prefs (pointed at directly, not stowed) |
+| `scripts/` | Helper scripts referenced by hooks |
+| `tests/` | bats (fish behavior) + pytest (config validity) |
+| `docs/` | This documentation site |
+
+### What isn't stowed — and why
+
+- **iTerm2 preferences** — pointed at the `iterm2/` folder directly via `defaults`. It
+  rewrites its plist on quit, which would clobber a symlink.
+- **~/.claude.json** — machine-local state (project history, OAuth). The declarative
+  source of truth is `claude_mcp.json`, replayed in idempotently.
+- **~/.claude/settings.json** — generated, not symlinked: Claude Code's `/config` and
+  `/plugin` write live state through it, so the tracked `claude_settings.json` baseline is
+  deep-merged with a machine-local overlay and written as a real file.
+- **VS Code settings.json** — generated with the same mechanism, for a machine-drift
+  reason rather than a live-rewrite one: the todo-tree extension's bundled-ripgrep path
+  moves between VS Code releases and isn't expressible in a single tracked baseline. So the
+  tracked `vscode_settings.json` baseline is deep-merged with a machine-local overlay —
+  auto-seeded with this machine's `rg` path.
+- **Machine-local overlays** — untracked files outside the repo the tracked config
+  `Include`s or sources; seeded with commented examples, never symlinked.
+
+### Machine-local overlays
+
+This is how one repo runs across every machine — a laptop, a work box, a homelab node —
+from a single branch. Anything machine-specific lives in untracked files *outside* the repo
+that the tracked config reads, so `git pull` never conflicts and nothing machine-specific
+leaks into the public repo.
+
+| Tool | Tracked baseline | Untracked overlay | Wiring |
+| --- | --- | --- | --- |
+| SSH | `home/.ssh/config` | `~/.ssh/config.local` | `Include`d by the tracked config |
+| git | `home/.gitconfig` | `~/.gitconfig_local` | `[include]`d **last** (overlay wins every key, incl. identity); a pre-existing `~/.gitconfig` is backed up + folded in |
+| fish | `home/.config/fish/**` | `~/.config/dotfiles/local.fish` | sourced by `conf.d/zzz-local.fish` |
+| Homebrew | `Brewfile` + `Brewfile.d/*.brewfile` | `~/.config/dotfiles/Brewfile.local` | loaded by `install.sh` |
+| Claude memory | `home/.claude/CLAUDE.md` | `~/.config/dotfiles/CLAUDE.local.md` | `@`-imported by the tracked `CLAUDE.md` |
+| Claude settings | `claude_settings.json` | `~/.config/dotfiles/claude_settings.local.json` | deep-merged by the installer (arrays union) into a real `~/.claude/settings.json` |
+| Claude MCP | `claude_mcp.json` | `~/.config/dotfiles/claude_mcp.local.json` | deep-merged by the installer |
+| VS Code settings | `vscode_settings.json` | `~/.config/dotfiles/vscode_settings.local.json` | deep-merged by the installer (arrays union) into a real `settings.json`; auto-seeded with this machine's `rg` path |
+| macOS defaults | `macos.sh` | `~/.config/dotfiles/macos.local.sh` | sourced by `macos.sh` |
+
+The bootstrap seeds each overlay with a commented example on first run — idempotently, so
+it never clobbers content already added. This is also how 1Password stays optional: the
+baseline keeps it as the personal default, but a machine without it gets graceful
+fallbacks (commit signing disabled, the GitHub MCP token read from the environment) and
+skips the opt-in `1password` bundle. Per-directory git identity (a work email/signing key
+only in work repos) uses `[includeIf "gitdir:~/work/"]` in `~/.gitconfig_local`.
+
+**Opt-in Brewfile bundles** — software not wanted on every machine lives in tracked
+`Brewfile.d/<name>.brewfile` bundles, picked via an fzf multi-select persisted to
+`~/.config/dotfiles/bundles`. `brew bundle` ignores the filename; the `.brewfile` extension
+exists so hawkeye auto-maintains each bundle's SPDX header.
+
+### XDG-native git config
+
+The global git ignore lives at `home/.config/git/ignore`; a copy is also mirrored into the
+repo's own `.gitignore` because VS Code's `explorer.excludeGitIgnore` only reads an
+in-workspace `.gitignore`, never the global `core.excludesFile` — git behavior itself is
+unchanged.
+
+### The idempotency contract
+
+- **Adopt, don't clobber** — `brew bundle` adopts a cask whose app is already in
+  `/Applications` in place.
+- **Guarded mutations** — every step checks before it acts: `/etc/shells` gets the fish
+  line only if absent, MCP servers are removed-then-added, Ollama model pulls are skipped
+  when already present.
+- **Re-run is the test** — running `install.sh` a second time should exit 0 with no step
+  redoing work (the declarative `macos.sh`/`dock.sh` steps are the deliberate exception —
+  they converge rather than no-op).
+
+---
+
+## The Stack
+
+The headline tools, by role.
+
+### Shell
+
+fish as the login shell, with a curated set of modern replacements wired into
+`config.fish`: tide (prompt), fzf.fish, atuin, zoxide, eza, bat, fd, ripgrep, sd, jq, jless,
+delta, difftastic. atuin owns Ctrl+R (SQLite history search); up-arrow stays normal fish
+history. eza aliases `ls`/`ll`/`la`/`lt`. zoxide is initialized in `config.fish` (no longer
+a fisher plugin).
+
+### Terminal & multiplexer
+
+iTerm2 (macOS only — skipped on Linux/WSL2), tmux, TPM, extrakto, tmux-yank,
+vim-tmux-navigator, MesloLGS NF. iTerm reads its preferences straight from the tracked
+`iterm2/` folder; tmux plugins are declared in `tmux.conf` and installed by TPM on every
+OS.
+
+### Package managers
+
+- **Homebrew** — formulae, GUI casks, and fonts, all declared in the `Brewfile`, installed
+  with `brew bundle`. On Linux/WSL2, `install.sh` self-bootstraps Homebrew's own Linux build
+  (`/home/linuxbrew/.linuxbrew`) the same way; Homebrew's Linux build has no cask support,
+  so `--core` (formulae only, casks stripped) is required there, not just preferred.
+- **uv** — Python toolchain and CLI tools (`uv tool install` from `uv_tools.txt`): ansible,
+  checkov, commitizen, copier, prek, reuse, rumdl, yq, jc.
+
+### Editor
+
+VS Code, with extensions declared in the Brewfile so they install with everything else:
+Ruff, Pylance, GitLens, Even Better TOML, rumdl, Prettier, ShellCheck, hadolint,
+EditorConfig. rumdl owns `.md`; Prettier handles everything else
+(`prettier.disableLanguages: ["markdown"]`). `settings.json` is generated at install time
+from the tracked `vscode_settings.json` baseline (see Architecture's "Machine-local
+overlays") — it's no longer a stowed symlink. If VS Code Settings Sync is also on, a cloud
+pull wins — pick one source of truth, not both.
+
+### AI tooling
+
+- **Claude Code** — installed via the native, self-updating installer. MCP servers are
+  declared in `claude_mcp.json` and registered at install time.
+- **Ollama → a local role fleet for GitLens & Claude offload** — role models from
+  `scripts/ollama_models.sh`: a fast tier (`qwen3:4b-instruct-2507-q4_K_M`, also serving
+  GitLens' AI features entirely offline), a vision tier (`qwen3-vl:4b-instruct`), and — on
+  Apple Silicon with >32 GB unified memory — the big pair: bulk coding
+  (`qwen3.5:35b-a3b-coding-nvfp4`, MLX) and a brainstorm generalist (`gemma4:26b`). All
+  pulls are idempotent. The `ollm` CLI fronts the fleet — picks the model by role, disables
+  hidden thinking by default, and a SessionStart hook shows Claude Code the live roster.
+
+---
+
+## Quality & Testing
+
+Guiding principle: don't build a test suite heavier than the thing it tests. A broken
+alias costs seconds; a leaked secret or a bricked bootstrap costs real money — spend the
+budget there.
+
+### The testing pyramid
+
+```
+  many  ┌─ Layer 1 · Static analysis (every commit + CI) ─┐  shellcheck, fish -n,
+        │         lint · secret scan · syntax           │  typos, gitleaks, taplo
+        ├─ Layer 2 · Unit + config tests (CI) ───────────┤  bats: fish behavior
+        │         logic + declarative-config checks      │  pytest: config validity
+        ├─ Layer 3 · Integration (CI smoke + local VM)  ┤  install.sh on ephemeral CI runners,
+  few   └─        idempotency · real bootstrap ──────────┘  Tart VM (2× run) locally
+```
+
+### Layer 1 — the hook suite
+
+Run on every commit by prek and re-run identically in CI. Most hooks self-bootstrap a
+pinned environment.
+
+- **Git hygiene** — large-file block, conflict markers, main-branch protection,
+  case-conflict (macOS FS), shebang ⇄ exec-bit, LF endings, trailing whitespace, EOF
+  newline.
+- **Security** — gitleaks secret scan, `detect-private-key`, a custom
+  no-concrete-ssh-hosts guard.
+- **Config & format** — YAML/JSON/TOML validity, taplo (TOML), rumdl (Markdown), ruff
+  check + format, ty type-check, validate-pyproject, uv-lock sync.
+- **Languages** — shellcheck + `bash -n`, fish -n + `fish_indent`, typos (check-only).
+- **Licensing & commits** — hawkeye SPDX headers, REUSE compliance, Conventional Commits
+  via commitizen, release-please releases.
+
+```bash
+prek run --all-files     # validate the whole tree
+prek install              # install the git hook
+```
+
+### Layer 2 — tests
+
+Two runners, each idiomatic for its half — they don't overlap.
+
+| Suite | File | Asserts |
+| --- | --- | --- |
+| bats (fish behavior) | `git_prune_local.bats` | The full branch-state matrix — merged, squash-merged, gone-remote, current-branch |
+| | `fish_functions.bats` | Usage / guard paths of the wrapper helpers |
+| | `check_ssh_config.bats` | The SSH-host guard both ways — generic passes, a planted host/IP/user fails |
+| pytest (config & coverage) | `test_data_files.py` | Every `*.toml` parses; JSON/JSONC/plist load |
+| | `test_secret_hygiene.py` | No literal token in `claude_mcp.json`; GitHub auth stays an `op://` reference |
+| | `test_manifests.py` | Brewfile directives & `uv_tools.txt` lines are well-formed |
+| | `test_consistency.py` | Tools used by hooks are in the Brewfile; managed files are stowed |
+| | `test_coverage.py` | Inventory coverage — every function & script is tested or on a documented allowlist |
+| | `pytest --cov` | Line coverage of the installer core stays above a floor (`pyproject.toml` `[tool.coverage]`) |
+
+```bash
+bats tests/          # fish behavior
+uv run pytest --cov  # config validity, consistency + installer-core line-coverage gate
+```
+
+### Layer 3 & CI
+
+CI runs the real bootstrap directly on ephemeral GitHub-hosted runners — no VM needed
+there, since a fresh Actions runner already *is* a clean machine for one pass.
+`installer-smoke-macos` and `installer-smoke-linux` each run `install.sh --core` once, then
+gate on the installer's `--verify-stream` output — tolerating only the no-Touch-ID-sensor
+case on macOS; Linux runs fully strict (it never emits that record). What CI can't cheaply
+prove is idempotency — that means running the installer twice, and macOS's Touch ID sudo
+prompt makes that awkward without a disposable environment — so that's still
+`scripts/vm-smoke.sh`'s job: it boots a clean Tart VM (macOS or Linux), runs
+`install.sh --core` from scratch *twice*, and gates on the same `--verify-stream` output.
+It's heavy and opt-in, so it runs on demand — `scripts/vm-smoke.sh` or
+`DOTFILES_VM_SMOKE=1 uv run pytest -m integration` — never in the default suite.
+
+`ci.yml` defines four jobs: **lint-and-test** (`ubuntu-latest`) runs the same prek hooks,
+plus `bats tests/` and `uv run pytest --cov`, followed by an informational `kcov` step
+reporting shell line-coverage of the bats-exercised `scripts/`. A shared
+**installer-path-gate** job computes once (via a single full-history checkout) whether this
+push/PR touched an installer path, separately for macOS and Linux since they skip different
+phases. **installer-smoke-macos** (`macos-latest`) and **installer-smoke-linux**
+(`ubuntu-latest`) each depend on that gate and, when it says so, run the real `--core`
+install once on an ephemeral runner — path-gated to installer-touching changes so most PRs
+skip the heavy work while still reporting a stable, always-green success. All four are kept
+green-fast so they run on every push.
+
+### Licensing
+
+The repo is REUSE 3.3 compliant. Every file that can carry a comment gets an SPDX header,
+maintained by hawkeye from a single templated source; the handful that can't (strict JSON,
+the binary iTerm plist, generated lockfiles) are annotated in `REUSE.toml` instead — plus
+`docs/llms.txt`/`docs/llms-full.txt`, which *could* carry a `#`-comment header but are
+excluded for a spec-conformance reason (a header would parse as a stray heading ahead of
+the file's real first-H1 title).
+
+---
+
+## Security
+
+### Secrets
+
+No credential is ever committed. Secret-bearing config (the GitHub MCP token) is stored
+as a 1Password reference and resolved only at install time:
+
+```json
+"Authorization": "Bearer {{ op://MCP/github-claude-pat/credential }}"
+```
+
+`op inject` resolves it into `~/.claude.json` (mode `0600`) as you, using the desktop app's
+CLI integration — the token never lands in the repo. On a machine without 1Password, the
+same secret is sourced from a `GITHUB_PERSONAL_ACCESS_TOKEN` in the environment instead —
+the tracked file keeps its `op://` placeholder either way.
+
+### One sudo authentication, fenced off the bootstrappers
+
+Touch ID for sudo is enabled *first*, then sudo is acquired **once** for the single
+privileged block that runs *after* `brew bundle` — Touch ID PAM, `/etc/shells` + `chsh`,
+the firewall. On a re-run you authenticate once — a fingerprint tap. It is deliberately
+*not* carried across `brew bundle`: `brew bundle` invalidates the sudo timestamp, so a
+ticket acquired beforehand would be gone by the time the bundle finishes — acquiring it
+*afterward* is what actually yields a single prompt.
+
+**What the fence still guarantees:** the ticket is dropped (`sudo -k`) at the end of the
+privileged block, *before any `curl | bash` installer runs*. Homebrew and uv bootstrap
+before sudo is ever acquired; fisher and Claude Code after it's dropped — so those upstream
+installers never run with a warm sudo ticket, and a compromised or MITM'd one can't
+silently escalate. An `EXIT` trap drops the ticket even if the run aborts.
+
+### SSH-host hygiene
+
+The tracked `~/.ssh/config` holds only a generic `Host *` block, the `Include`, and
+`Host github.com`. Real hosts, IPs, and usernames live in the untracked
+`~/.ssh/config.local`. A custom `no-concrete-ssh-hosts` hook fails the commit when a
+concrete host slips into the tracked config — a non-generic `Host`, a `HostName`/`User`, a
+`ProxyJump`/`ProxyCommand`/`Match`/forward directive, or an IPv4/IPv6 literal. Tested both
+ways (passes generic, fails on a planted host).
+
+### Defense in depth
+
+| Control | What it does |
+| --- | --- |
+| gitleaks | Scans every commit for secret & token shapes before they can land |
+| detect-private-key | Blocks committed private keys outright |
+| App firewall + stealth (macOS) / ufw (Linux) | Enabled during the bootstrap — macOS stops answering pings/port scans; Linux gets default-deny-incoming via `ufw` (with an explicit SSH allow-rule first, so an active session can't be locked out). WSL2 skips this entirely — the Windows host owns the firewall. |
+| Touch ID for sudo (macOS only) | Via `/etc/pam.d/sudo_local` (survives OS updates) + pam_reattach for tmux |
+| `transfer.fsckObjects` | git validates object integrity on every fetch |
+| Pinned CI binaries | Every release binary CI downloads (osv-scanner, hawkeye, taplo) is checked against a committed SHA256 before it runs |
+| SSH commit signing | Commits are signed with a 1Password-held SSH key by default; a machine without 1Password gets signing disabled so commits still succeed |
+
+---
+
+## Commands
+
+Beyond the third-party tools on The Stack, the repo adds a small set of custom fish
+functions in `home/.config/fish/functions/`. The interesting ones are fzf-driven — fuzzy
+git checkout, live full-text search, a process picker — demoed as recorded terminal casts
+on the live site (this text rendition omits the embedded casts themselves).
+
+### Fuzzy git
+
+fzf pickers over git, each with a commit-log preview pane. Type to filter, Enter to act.
+
+- `fco` — fuzzy-checkout any branch, local or remote (remotes get a tracking branch
+  automatically).
+- `fcor` · `gcor` — two recency-oriented siblings of `fco`: `fcor` lists local branches by
+  most-recent commit; `gcor` pulls from the reflog, so it surfaces branches visited even
+  after their remote was deleted.
+- `gccd` — `git clone` then `cd` into the new directory in one step.
+
+### Search & jump to code
+
+ripgrep into fzf into `$EDITOR` — pick a match and land on the exact `file:line`.
+
+- `fif` — "find in files": ripgrep re-runs on every keystroke with a preview pane; Enter
+  opens the hit in your editor.
+- `fsearch` — the one-shot variant: run ripgrep once for a pattern, fuzzy-filter the
+  results, open the pick. Lighter than `fif` when you already know the term.
+
+### Processes & the shell
+
+- `fkill` — multi-select process picker over `ps` in fzf: filter, Tab to mark several,
+  Enter to kill. Sends SIGTERM by default (`fkill 9` for SIGKILL), and offers to retry
+  under `sudo` if a kill is denied.
+- `wtfis` — "what is this?": resolves a name to alias / function / builtin / binary,
+  following symlinks.
+- `pset` — set an environment variable from a hidden prompt — the value never touches the
+  command line or shell history.
+- `pubkey` — print an SSH public key and copy it to the clipboard in one move. With no
+  argument it discovers the key from the running agent (1Password, the macOS keychain, or
+  a plain ssh-agent), falling back to `~/.ssh/*.pub`; an fzf picker when more than one is
+  found. Pass a path to copy a specific key.
+- `dnsflush` — flush the macOS DNS cache and bounce `mDNSResponder`.
+
+### Many directories at once
+
+Fan a command out across a tree — both handle paths with spaces/newlines safely.
+
+- `gs-all` — `git status` across every repo under `$PWD` at once. `gp-all` is the
+  `git pull --ff-only` sibling.
+- `eachdir` · `forrepos` — the generic engines underneath. `eachdir <cmd>` runs a command
+  in each immediate subdirectory; `forrepos <cmd>` runs it at the root of every git repo in
+  the tree (recursively). `gs-all`/`gp-all` are just `forrepos` with a fixed command.
+  **No dry-run, no confirmation** — `forrepos` runs your command in every repo it finds,
+  with no preview.
+
+### Housekeeping
+
+- `pyclean --dry-run` — preview the Python caches (`__pycache__`, `.pytest_cache`,
+  `.mypy_cache`, `.ruff_cache`, `*.pyc`) it would delete; drop `--dry-run` to remove them.
+- `git_prune_local` — delete local branches already merged into `main`, detecting normal,
+  rebase, *and* squash merges, and keeping a branch whose remote is gone but whose commits
+  aren't in `main` yet. `--dry-run` shows the plan first. The one function with its own
+  full bats matrix, because a bug here deletes work.
+- `launch-docs` — serve this docs site locally (`python -m http.server`), pick a free port,
+  open the browser once it's up.
+- `dotfiles-doctor` — re-derive the intended install end state and report it (Homebrew
+  packages, login shell, Touch ID for sudo, the firewall, key symlinks, generated Claude
+  settings, the gitconfig overlay, the pre-push hook's provenance), exiting non-zero if
+  anything needs attention. Read-only, never needs sudo — runs `dotfiles-install --verify`
+  under the hood.
+
+### Local AI offload
+
+One command fronting the local Ollama fleet the installer provisions (see The Stack).
+Unlike the fish functions above it's a plain bash script stowed onto `PATH`
+(`~/.local/bin/ollm`), so it works from any shell — including Claude Code's non-interactive
+one, its primary caller.
+
+- `ollm` — one-shot generation against a local model picked by role
+  (`--role fast|bulk|brainstorm|vision`), with the role→model mapping read from
+  `scripts/ollama_models.sh` so it can never drift from what the installer pulled. Prompt
+  from arguments, context piped via stdin (`git diff | ollm "summarize this diff"`),
+  `--image` for the vision model, and only the model's text on stdout so it composes in
+  pipes. Disables hidden thinking by default and fails fast with a clear message when the
+  server is down. `ollm --list` prints the roster with installed state.
+
+### Abbreviations & aliases
+
+The muscle-memory layer, in `conf.d/`. Abbreviations expand inline as you type (you see
+the real command before it runs); aliases are interactive-only, so scripts still get the
+real binaries.
+
+| Type | Short | Expands to |
+| --- | --- | --- |
+| abbr | `gco` | `git checkout` |
+| abbr | `gst` | `git status` |
+| abbr | `gp` | `git pull` |
+| abbr | `gl` | `git log --oneline --graph --decorate` |
+| abbr | `k` | `kubectl` |
+| abbr | `ka` | `kubectl apply -f` |
+| alias (eza) | `ls` | `eza --group-directories-first` |
+| alias (eza) | `ll` | `eza -l --git --icons=auto …` |
+| alias (eza) | `la` | `eza -la --git --icons=auto …` |
+| alias (eza) | `lt` | `eza --tree --level=2 --icons=auto` |
+
+These are personal — bend them to your own habits. `wtfis <name>` is the quickest way to
+see what any short command currently resolves to on your machine.

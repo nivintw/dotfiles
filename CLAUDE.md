@@ -63,6 +63,17 @@ for those paths, skipping cleanly when Tart isn't installed.
   Manage deps with `uv` (`uv add` / `uv add --group dev`), never by hand.
 - **SPDX headers are required** — reuse/hawkeye enforce them; new files need a
   license header (the hooks add/format them).
+- **`docs/llms.txt`/`docs/llms-full.txt` are hand-maintained, not generated.** No script
+  ties them to `docs/*.html` — they're a separate source of truth that drifts silently on
+  the next docs edit unless someone re-syncs them by hand (a real instance of this already
+  happened once: a clause dropped from `llms-full.txt`'s security table mid-authoring,
+  caught only by a `/simplify` review pass). `.txt` is in hawkeye's `SCRIPT_STYLE` mapping
+  (`.config/licenserc.toml`), so both files are explicitly excluded there and licensed via
+  `REUSE.toml` instead — a `#`-comment header would parse as a stray H1 ahead of the real
+  one, breaking the llms.txt spec's "first H1 is the title" contract. `link-check.yml`'s
+  path/glob includes both files, so at least broken links self-report; prose drift does
+  not. Treat both as reconciliation targets on every future docs refresh (`/dev-kit:generate-docs`
+  or by hand), not just the HTML pages.
 - **Serena is self-hosted in `claude_mcp.json`, not the marketplace plugin.** The
   official `serena@claude-plugins-official` plugin runs `serena start-mcp-server` with
   no flags, which means: no `--project-from-cwd` (so it can't tell which project you're

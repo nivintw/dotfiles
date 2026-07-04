@@ -10,11 +10,12 @@ name: link-check
 
 on:
   pull_request:
-    # lychee only crawls Markdown, so a PR touching no docs gains nothing from running it —
-    # and re-crawling every PR needlessly exposes them to third-party-uptime flakiness.
-    # `**/*.md` covers any subdirectory depth; `*.md` covers root-level files — together
-    # they match every Markdown file regardless of how the filter engine treats `**`.
-    paths: ['**/*.md', '*.md']
+    # lychee only crawls Markdown (plus docs/llms*.txt, which is markdown-shaped content
+    # under a spec-mandated .txt extension), so a PR touching neither gains nothing from
+    # running it — and re-crawling every PR needlessly exposes them to third-party-uptime
+    # flakiness. `**/*.md` covers any subdirectory depth; `*.md` covers root-level files —
+    # together they match every Markdown file regardless of how the filter engine treats `**`.
+    paths: ['**/*.md', '*.md', 'docs/llms.txt', 'docs/llms-full.txt']
   workflow_dispatch:
 
 permissions:
@@ -43,8 +44,9 @@ jobs:
           # And exclude api.reuse.software/info/: the README's REUSE badge links to its /info/
           # page, which 404s until reuse.software has crawled this repo (the /badge/ SVG itself
           # 200s and stays validated). Self-heals once registered.
-          # (lychee excludes mailto: by default.) Scope to Markdown so LICENSES/lockfiles aren't crawled.
-          args: "--no-progress --max-retries 5 --timeout 30 --exclude 'github\\.com/nivintw/dotfiles/compare/' --exclude 'gnu\\.org' --exclude 'api\\.reuse\\.software/info/' '**/*.md'"
+          # (lychee excludes mailto: by default.) Scope to Markdown (+ the markdown-shaped
+          # llms.txt/llms-full.txt) so LICENSES/lockfiles aren't crawled.
+          args: "--no-progress --max-retries 5 --timeout 30 --exclude 'github\\.com/nivintw/dotfiles/compare/' --exclude 'gnu\\.org' --exclude 'api\\.reuse\\.software/info/' '**/*.md' 'docs/llms.txt' 'docs/llms-full.txt'"
           fail: true
         env:
           # Authenticated requests raise GitHub's rate limit, so github.com links don't flake.
