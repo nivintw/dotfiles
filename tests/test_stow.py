@@ -100,9 +100,12 @@ def _setup_repo(tmp_path: Path) -> tuple[Path, Path]:
 
 
 def test_managed_files_contains_expected_paths() -> None:
-    """MANAGED_FILES is a three-element tuple with the expected $HOME-relative paths."""
+    """MANAGED_FILES is a two-element tuple with the expected $HOME-relative paths.
+
+    VS Code's settings.json is deliberately absent: it's generated (vscode_setup.py), not
+    stowed, as of #40.
+    """
     assert stow.MANAGED_FILES == (
-        "Library/Application Support/Code/User/settings.json",
         ".config/atuin/config.toml",
         ".config/topgrade.toml",
     ), f"MANAGED_FILES changed unexpectedly: {stow.MANAGED_FILES!r}"

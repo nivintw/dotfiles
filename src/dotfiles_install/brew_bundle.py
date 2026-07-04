@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING
 from dotfiles_install import commands
 from dotfiles_install.brewfile import brewfile_core, brewfile_taps
 from dotfiles_install.bundle_select import fzf_preselect_bind, parse_bundles, write_bundles
-from dotfiles_install.layout import BUNDLES_DIR, DOTFILES, discover_bundles
+from dotfiles_install.layout import BUNDLES_DIR, DOTFILES, config_dir, discover_bundles
 from dotfiles_install.os_detect import OS, current_os
 from dotfiles_install.privileged import enable_touch_id_sudo
 
@@ -39,21 +39,14 @@ if TYPE_CHECKING:
 _BREWFILE = DOTFILES / "Brewfile"
 
 
-# Home-based paths are resolved lazily (not module constants) so they honor ``$HOME`` at call
-# time — which keeps them correct in a long-lived process and redirectable in tests.
-def _config_dir() -> Path:
-    """Return the machine-private dotfiles config dir (``~/.config/dotfiles``)."""
-    return Path.home() / ".config" / "dotfiles"
-
-
 def _selection_file() -> Path:
     """Return the opt-in bundle selection file (``~/.config/dotfiles/bundles``)."""
-    return _config_dir() / "bundles"
+    return config_dir() / "bundles"
 
 
 def _brewfile_local() -> Path:
     """Return the machine-private ``Brewfile.local`` path (``~/.config/dotfiles``)."""
-    return _config_dir() / "Brewfile.local"
+    return config_dir() / "Brewfile.local"
 
 
 def install_packages(ctx: InstallContext) -> None:

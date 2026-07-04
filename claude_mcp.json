@@ -21,5 +21,23 @@
     "type": "stdio",
     "command": "npx",
     "args": ["-y", "@playwright/mcp@latest"]
+  },
+  "serena": {
+    "type": "stdio",
+    "command": "uvx",
+    "args": [
+      "--from",
+      "git+https://github.com/oraios/serena",
+      "serena",
+      "start-mcp-server",
+      "--project-from-cwd",
+      "--context",
+      "claude-code",
+      "--open-web-dashboard",
+      "False"
+    ],
+    "env": {
+      "MCP_TIMEOUT": "200000"
+    }
   }
 }

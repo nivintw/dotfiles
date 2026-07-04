@@ -27,7 +27,10 @@
     "claude-code-setup@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
     "session-report@claude-plugins-official": true,
-    "pr-review-toolkit@claude-plugins-official": true
+    "pr-review-toolkit@claude-plugins-official": true,
+    "worktree-guard@nivintw-claude-skills": true,
+    "serena@claude-plugins-official": false,
+    "claude-hud@claude-hud": false
   },
   "extraKnownMarketplaces": {
     "nivintw-claude-skills": {
@@ -36,6 +39,12 @@
         "repo": "nivintw/nivintw-claude-skills"
       },
       "autoUpdate": true
+    },
+    "claude-hud": {
+      "source": {
+        "source": "github",
+        "repo": "jarrodwatts/claude-hud"
+      }
     }
   },
   "hooks": {
