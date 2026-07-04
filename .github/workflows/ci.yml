@@ -292,7 +292,10 @@ jobs:
           # gate exists to keep honest. Fail open instead: run both installers rather than let a
           # git-plumbing hiccup masquerade as a green build.
           if ! changed="$(git diff --name-only "$range" 2>&1)"; then
-            echo "::warning title=installer-path-gate::couldn't compute changed paths ($changed) — defaulting to running both installer smoke jobs"
+            # Print the raw error as a plain log line, not inside the ::warning command itself —
+            # workflow commands need %/\r/\n escaped in their fields, and git's error text isn't.
+            printf '%s\n' "$changed"
+            echo "::warning title=installer-path-gate::couldn't compute changed paths — defaulting to running both installer smoke jobs"
             echo "run-macos=true" >>"$GITHUB_OUTPUT"
             echo "run-linux=true" >>"$GITHUB_OUTPUT"
             exit 0
@@ -415,6 +418,20 @@ jobs:
         if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-linux == 'true'
         timeout-minutes: 30
         run: ./install.sh --no-bundles --core
+
+      # Each GH Actions step is a fresh shell, so brew/fish landing on PATH within the step
+      # above (via install.sh's own subprocess) doesn't carry over on its own — $GITHUB_PATH
+      # is the mechanism that persists a PATH change to later steps in this job. bootstrap.py
+      # checks both locations, so add both (harmless if one doesn't exist).
+      - name: Add Homebrew to PATH for later steps
+        if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-linux == 'true'
+        run: |
+          printf '%s\n' \
+            "/home/linuxbrew/.linuxbrew/bin" \
+            "/home/linuxbrew/.linuxbrew/sbin" \
+            "$HOME/.linuxbrew/bin" \
+            "$HOME/.linuxbrew/sbin" \
+            >>"$GITHUB_PATH"
 
       - name: Verify the install (fully strict — Linux never emits the Touch-ID BAD)
         if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-linux == 'true'
