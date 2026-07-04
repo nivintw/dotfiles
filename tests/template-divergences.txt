@@ -9,6 +9,7 @@
 .github/workflows/ci.yml               # adds the installer jobs (installer-smoke-macos) + system-tool bootstrap (fish, bats, ripgrep)
 .github/workflows/link-check.yml       # lychee excludes for runner-hostile endpoints (gnu.org blackholes GitHub runners; reuse badge API)
 .github/workflows/main.yml             # release docs describe the pyproject + uv.lock version mirroring via extra-files
+.github/workflows/refresh-binary-checksums.yml  # TEMPORARY: Renovate action bumps ahead of the template; filed upstream: nivintw/copier-everything#112 — drop this entry when copier update re-syncs
 .gitignore                             # mirrors the global ignore so VS Code explorer.excludeGitIgnore matches git, plus repo rules
 .pre-commit-config.yaml                # emoji hook names + grouped sections; repo hooks (fish, ssh, installer); pre-push vm-smoke stage
 CHANGELOG.md                           # release-please-generated; grows every release
