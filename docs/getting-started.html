@@ -99,7 +99,8 @@
               <tr><td>14</td><td><a href="https://ollama.com/" rel="noopener">Ollama</a></td><td>Start the server &amp; pull the role models from <code>scripts/ollama_models.sh</code>: <a href="https://ollama.com/library/qwen3" rel="noopener"><code>qwen3:4b-instruct-2507-q4_K_M</code></a> (~2.5&nbsp;GB, fast tier + <a href="https://www.gitkraken.com/gitlens" rel="noopener">GitLens</a>) and <a href="https://ollama.com/library/qwen3-vl" rel="noopener"><code>qwen3-vl:4b-instruct</code></a> (~3.3&nbsp;GB, vision) everywhere; on Apple&nbsp;Silicon with &gt;32&nbsp;GB unified memory (macOS&nbsp;13+) also the big pair: the MLX <code>qwen3.5:35b-a3b-coding-nvfp4</code> (~21&nbsp;GB, bulk coding) and <code>gemma4:26b</code> (~17&nbsp;GB, generalist) — all driven through the <a href="commands.html#local-ai-offload"><code>ollm</code></a> CLI; skip by dropping the <code>ollama-app</code> cask</td></tr>
               <tr><td>15</td><td>macOS defaults</td><td><code>macos.sh</code> system tweaks</td></tr>
               <tr><td>16</td><td>Dock</td><td>Declarative Dock layout via <code>dock.sh</code></td></tr>
-              <tr><td>17</td><td>Verify</td><td>Re-check the install end state and print the summary (the same checks <code>dotfiles-doctor</code> runs)</td></tr>
+              <tr><td>17</td><td>VS Code settings</td><td>Generate <code>settings.json</code> by deep-merging the tracked <code>vscode_settings.json</code> baseline with an untracked <code>~/.config/dotfiles/vscode_settings.local.json</code> overlay, auto-seeding the Homebrew <code>rg</code> path the todo-tree extension needs</td></tr>
+              <tr><td>18</td><td>Verify</td><td>Re-check the install end state and print the summary (the same checks <code>dotfiles-doctor</code> runs)</td></tr>
             </tbody>
           </table>
         </div>

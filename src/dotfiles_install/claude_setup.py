@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from dotfiles_install import commands
-from dotfiles_install.layout import DOTFILES
+from dotfiles_install.layout import DOTFILES, config_dir
 from dotfiles_install.settings_merge import ArrayMerge, SettingsSpec, generate_settings, merge
 
 if TYPE_CHECKING:
@@ -35,11 +35,6 @@ if TYPE_CHECKING:
     from dotfiles_install.settings_merge import JSONValue
 
 _OP_REF = "op://"  # an unresolved 1Password secret reference marker
-
-
-def _config_dir() -> Path:
-    """Return the machine-private dotfiles config dir (``~/.config/dotfiles``)."""
-    return Path.home() / ".config" / "dotfiles"
 
 
 # --- Phase 12: MCP servers ---------------------------------------------------------------------
@@ -63,7 +58,7 @@ def register_mcp_servers(ctx: InstallContext) -> None:
 def _merged_mcp(ctx: InstallContext) -> dict[str, JSONValue]:
     """Deep-merge the baseline ``claude_mcp.json`` with the optional machine-local overlay."""
     baseline: dict[str, JSONValue] = json.loads((DOTFILES / "claude_mcp.json").read_text())
-    overlay_path = _config_dir() / "claude_mcp.local.json"
+    overlay_path = config_dir() / "claude_mcp.local.json"
     if not overlay_path.is_file():
         return baseline
     overlay = _load_json_object(overlay_path)
@@ -169,7 +164,7 @@ def write_user_settings(ctx: InstallContext) -> None:
         ctx,
         SettingsSpec(
             baseline_path=DOTFILES / "claude_settings.json",
-            overlay_path=_config_dir() / "claude_settings.local.json",
+            overlay_path=config_dir() / "claude_settings.local.json",
             output_path=Path.home() / ".claude" / "settings.json",
             label="Claude settings",
         ),

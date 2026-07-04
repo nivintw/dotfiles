@@ -108,11 +108,11 @@
         </div>
         <div class="note">
           <div class="note__title">rumdl vs Prettier</div>
-          Both format Markdown, so the split is explicit: <strong>rumdl owns <code>.md</code></strong>, Prettier handles everything else (<code>prettier.disableLanguages: ["markdown"]</code> in the stowed settings).
+          Both format Markdown, so the split is explicit: <strong>rumdl owns <code>.md</code></strong>, Prettier handles everything else (<code>prettier.disableLanguages: ["markdown"]</code> in the generated settings — see below).
         </div>
         <div class="note note--warn">
           <div class="note__title">Settings Sync</div>
-          <code>settings.json</code> is stowed from the repo. If VS Code Settings Sync is also on, a cloud pull wins — pick one source of truth, not both for the same file.
+          <code>settings.json</code> is generated at install time from the tracked <code>vscode_settings.json</code> baseline (see <a href="architecture.html#overlays">Machine-local overlays</a>) — it's no longer a stowed symlink. If VS Code Settings Sync is also on, a cloud pull wins — pick one source of truth, not both for the same file.
         </div>
       </section>
 

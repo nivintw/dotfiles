@@ -63,6 +63,48 @@ for those paths, skipping cleanly when Tart isn't installed.
   Manage deps with `uv` (`uv add` / `uv add --group dev`), never by hand.
 - **SPDX headers are required** — reuse/hawkeye enforce them; new files need a
   license header (the hooks add/format them).
+- **Serena is self-hosted in `claude_mcp.json`, not the marketplace plugin.** The
+  official `serena@claude-plugins-official` plugin runs `serena start-mcp-server` with
+  no flags, which means: no `--project-from-cwd` (so it can't tell which project you're
+  in across worktrees), a hardcoded 60s tool timeout (Serena's first-run LSP indexing on
+  a large repo can exceed that), and its dashboard auto-opens a browser tab on every
+  session start. The self-hosted `claude_mcp.json` entry pins `--project-from-cwd`, the
+  `claude-code` built-in context (not a custom vendored one — Serena ships this context
+  specifically for this client), `--open-web-dashboard False` (dashboard still reachable
+  manually, just no surprise tab), and `MCP_TIMEOUT=200000` in `env` (Claude Code's own
+  client-side MCP timeout, not Serena's `--tool-timeout`). `claude_settings.json`
+  explicitly sets `serena@claude-plugins-official: false` so a fresh install doesn't
+  register both. **This only disables it on a fresh install.** `generate_settings`
+  (`settings_merge.py`) re-reads the *live* `~/.claude/settings.json` every run and folds
+  any drift from the baseline back into the overlay — so the *first* run after this landed
+  on a machine where the plugin was already live-enabled (`true`) permanently **caches**
+  `true` into `~/.config/dotfiles/claude_settings.local.json`. From then on the overlay
+  itself keeps re-asserting `true` on every run regardless of the live file — verified by
+  driving `merge`/`diff` directly: running `claude plugin disable
+  serena@claude-plugins-official` (which only flips the *live* file) does **not** fix it,
+  because the next run reads live `false` (no new drift, since it now matches the
+  baseline) but still folds the overlay's stale cached `true` into the merge, and writes
+  `true` right back out — silently undoing the disable in the same run that reads it. The
+  overlay is the actual source of truth here, not the live file. **The real fix**: edit
+  `~/.config/dotfiles/claude_settings.local.json` and remove (or set `false`) the
+  `serena@claude-plugins-official` key under `enabledPlugins`, *and* disable the plugin
+  live via Claude Code (`claude plugin disable serena@claude-plugins-official`) — both, not
+  either — then re-run install. Skipping either one leaves it re-enabling itself: overlay
+  alone reverts on the next run's drift-fold (live is still `true`), live alone reverts
+  because the overlay's stale cached `true` never gets cleared by a later run (the merge
+  engine only *adds* drift, per its own documented limitation — it never removes an overlay
+  key on its own).
+- **The vetted plugin baseline has three tiers, not two.** `claude_settings.json`'s
+  `enabledPlugins` distinguishes tracked-and-default-on (`true` — e.g. `castify`,
+  `worktree-guard`), tracked-but-opt-in (`false` — vetted and known, e.g. `serena`,
+  `claude-hud`; flip to `true` in your local overlay to enable), and untracked/ad-hoc
+  (installed via `/plugin` on one machine, never added here — fine for a one-off, but it
+  won't reproduce on a fresh install). `claude-hud`'s marketplace is `extraKnownMarketplaces`-registered
+  here too, but its `statusLine` command block is **not** hand-copied into this repo —
+  that command string is plugin-version-resolving (it globs
+  `plugins/cache/*/claude-hud/*/` for the newest installed copy) and would go stale the
+  moment claude-hud restructures its own directories. Enable the plugin, then run
+  `/claude-hud:setup` (its own configurator) to write the real command for your machine.
 
 ## Git & releases
 

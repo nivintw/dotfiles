@@ -26,7 +26,9 @@
       "other": true,
       "strings": true
     },
-    "gitlens.codeLens.scopes": ["document"]
+    "gitlens.codeLens.scopes": [
+      "document"
+    ]
   },
   "application.shellEnvironmentResolutionTimeout": 30,
   "better-comments.tags": [
@@ -218,12 +220,6 @@
   "todo-tree.filtering.includeHiddenFiles": true,
   "todo-tree.filtering.useBuiltInExcludes": "file and search excludes",
   "todo-tree.highlights.useColourScheme": true,
-  // Todo Tree ships no ripgrep of its own — it borrows VS Code's bundled copy.
-  // VS Code 1.122 relocated that binary to node_modules/@vscode/ripgrep-universal/
-  // bin/<platform>/, a path Todo Tree 0.0.226's hardcoded lookup doesn't know, so it
-  // fails with "Failed to find vscode-ripgrep". Pinning to our Brewfile-managed rg
-  // fixes it and stays stable across VS Code updates (the bundled path keeps moving).
-  "todo-tree.ripgrep.ripgrep": "/opt/homebrew/bin/rg",
   "workbench.colorCustomizations": {
     "activityBar.activeBorder": "#80CBC4",
     "activityBarBadge.background": "#80CBC4",
@@ -310,23 +306,32 @@
     "*.ipynb": "jupyter-notebook"
   },
   "workbench.iconTheme": "vira-icons-carbon",
-  "yaml.customTags": ["!encrypted/pkcs1-oaep scalar", "!vault scalar"],
+  "yaml.customTags": [
+    "!encrypted/pkcs1-oaep scalar",
+    "!vault scalar"
+  ],
   "gitlens.ai.model": "ollama:qwen3:4b-instruct-2507-q4_K_M",
   "gitlens.ai.ollama.url": "http://localhost:11434",
   "workbench.productIconTheme": "viraUIIcons",
   "terminal.integrated.profiles.osx": {
     "bash": {
       "path": "bash",
-      "args": ["-l"],
+      "args": [
+        "-l"
+      ],
       "icon": "terminal-bash"
     },
     "zsh": {
       "path": "zsh",
-      "args": ["-l"]
+      "args": [
+        "-l"
+      ]
     },
     "fish": {
       "path": "/opt/homebrew/bin/fish",
-      "args": ["-l"]
+      "args": [
+        "-l"
+      ]
     },
     "tmux": {
       "path": "tmux",

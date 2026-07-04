@@ -296,3 +296,58 @@ def test_generate_settings_folds_live_drift_into_overlay(tmp_path: Path) -> None
 
     assert json.loads(overlay.read_text()) == {"a": 1, "b": 2}
     assert json.loads(output.read_text()) == {"theme": "dark", "a": 1, "b": 2}
+
+
+def test_generate_settings_folds_extra_overlay_into_overlay_and_output(tmp_path: Path) -> None:
+    """``extra_overlay`` is folded in alongside existing overlay content, in one read/write."""
+    baseline = tmp_path / "base.json"
+    baseline.write_text(json.dumps({"editor.fontSize": 13}), encoding="utf-8")
+    overlay = tmp_path / "over.json"
+    overlay.write_text(json.dumps({"editor.tabSize": 4}), encoding="utf-8")
+    output = tmp_path / "settings.json"
+
+    generate_settings(
+        _ctx(),
+        SettingsSpec(
+            baseline_path=baseline,
+            overlay_path=overlay,
+            output_path=output,
+            label="VS Code settings",
+        ),
+        extra_overlay={"todo-tree.ripgrep.ripgrep": "/opt/homebrew/bin/rg"},
+    )
+
+    assert json.loads(overlay.read_text()) == {
+        "editor.tabSize": 4,
+        "todo-tree.ripgrep.ripgrep": "/opt/homebrew/bin/rg",
+    }
+    assert json.loads(output.read_text()) == {
+        "editor.fontSize": 13,
+        "editor.tabSize": 4,
+        "todo-tree.ripgrep.ripgrep": "/opt/homebrew/bin/rg",
+    }
+
+
+def test_generate_settings_extra_overlay_seeds_but_never_overwrites_an_existing_key(
+    tmp_path: Path,
+) -> None:
+    """A key ``extra_overlay`` proposes is left alone when the overlay already carries it."""
+    baseline = tmp_path / "base.json"
+    baseline.write_text(json.dumps({"editor.fontSize": 13}), encoding="utf-8")
+    overlay = tmp_path / "over.json"
+    overlay.write_text(json.dumps({"todo-tree.ripgrep.ripgrep": "/custom/rg"}), encoding="utf-8")
+    output = tmp_path / "settings.json"
+
+    generate_settings(
+        _ctx(),
+        SettingsSpec(
+            baseline_path=baseline,
+            overlay_path=overlay,
+            output_path=output,
+            label="VS Code settings",
+        ),
+        extra_overlay={"todo-tree.ripgrep.ripgrep": "/opt/homebrew/bin/rg"},
+    )
+
+    assert json.loads(overlay.read_text()) == {"todo-tree.ripgrep.ripgrep": "/custom/rg"}
+    assert json.loads(output.read_text())["todo-tree.ripgrep.ripgrep"] == "/custom/rg"

@@ -51,7 +51,7 @@ def _no_real_installs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     etc_shells = tmp_path / "shells"
     etc_shells.write_text("/bin/zsh\n", encoding="utf-8")
     monkeypatch.setattr(privileged, "_ETC_SHELLS", etc_shells)
-    # Phase 17 (verify & summary) runs in the walk too; stub its emitter so the CLI tests don't
+    # Phase 18 (verify & summary) runs in the walk too; stub its emitter so the CLI tests don't
     # shell out to brew/dscl/socketfilterfw or read the host's /etc. The verify logic itself is
     # covered by tests/test_verify_install.py.
     monkeypatch.setattr(verify_install, "iter_records", lambda *_a, **_k: iter(()))
@@ -111,17 +111,18 @@ def test_run_on_linux_walks_the_os_agnostic_phases(monkeypatch: pytest.MonkeyPat
     result = runner.invoke(app, [])
     assert result.exit_code == 0
     assert "dotfiles bootstrap" in result.output
-    # Packages (0-1), the privileged block (2), stow (3), ollama (14), and verify (17) all run...
+    # Packages (0-1), the privileged block (2), stow (3), ollama (14), and verify (18) all run...
     assert "[0] Bootstrap toolchain" in result.output
     assert "[1] Homebrew packages" in result.output
     assert "[2] Privileged setup" in result.output
     assert "[3] dotfiles symlinks (stow)" in result.output
     assert "[14] Ollama models" in result.output
-    assert "[17] Verification & summary" in result.output
-    # ...while the macOS-purpose phases (iTerm2, macos.sh, the Dock) are gated out.
+    assert "[18] Verification & summary" in result.output
+    # ...while the macOS-purpose phases (iTerm2, macos.sh, Dock, VS Code) are gated out.
     assert "[8] iTerm2 preferences" not in result.output
     assert "[15] macOS system defaults" not in result.output
     assert "[16] Dock layout" not in result.output
+    assert "[17] VS Code user settings" not in result.output
 
 
 def test_run_with_no_applicable_phases_exits_one(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -158,7 +159,7 @@ def test_run_on_macos_walks_all_phases(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "not yet ported" not in result.output
     # Every phase header is printed, from phase 0 through the final verification phase.
     assert "[0] Bootstrap toolchain (Homebrew + uv)" in result.output
-    assert "[17] Verification & summary" in result.output
+    assert "[18] Verification & summary" in result.output
 
 
 @pytest.mark.usefixtures("_no_real_installs")
@@ -226,7 +227,7 @@ def test_run_drops_the_sudo_ticket_when_a_phase_raises(monkeypatch: pytest.Monke
         msg = "phase exploded"
         raise RuntimeError(msg)
 
-    raising = Phase(0, "boom", frozenset({OS.MACOS}), run=_boom)
+    raising = Phase("boom", frozenset({OS.MACOS}), run=_boom)
     monkeypatch.setattr(cli, "phases_for", lambda _target=None: [raising])
 
     result = runner.invoke(app, [])

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © 2026 Tyler Nivin
 # SPDX-License-Identifier: MIT
 
-"""Verify-install checks, OK/BAD emitter, and the phase-17 summary.
+"""Verify-install checks, OK/BAD emitter, and the phase-18 summary.
 
 The unit-testable predicates the summary is built from — resolving a symlink target into the
 repo, rejecting non-object JSON, matching an ``[include]`` path through ``~`` expansion,
@@ -12,7 +12,7 @@ everywhere, the firewall via ``socketfilterfw`` (macOS) or ufw's persistent
 ``/etc/ufw/ufw.conf`` (Linux), the login shell via ``dscl`` (macOS) or the passwd database
 (Linux), and ``pam_tid`` (macOS only; WSL also skips the firewall — the Windows host owns it).
 :func:`iter_records` aggregates them into
-``("OK"|"BAD", msg)`` records, and :func:`verify_and_summarize` is the phase-17 body that renders
+``("OK"|"BAD", msg)`` records, and :func:`verify_and_summarize` is the phase-18 body that renders
 the closing summary.
 
 Ported from install.sh's verification step (predicates pinned by ``tests/test_verify_install.py``).
@@ -223,7 +223,7 @@ def iter_records(dotfiles: Path, *, core: bool) -> Iterator[Record]:
     """Yield an ``("OK"|"BAD", message)`` record per post-install check.
 
     Re-derives the intended end state and reports it; never mutates anything and never needs
-    sudo (every probe reads as the user). The single source of truth for the phase-17 install
+    sudo (every probe reads as the user). The single source of truth for the phase-18 install
     summary, the ``dotfiles-install --verify`` re-check (``dotfiles-doctor``), and the
     ``--verify-stream`` record stream the vm-smoke harness gates on.
 
@@ -245,9 +245,9 @@ def iter_records(dotfiles: Path, *, core: bool) -> Iterator[Record]:
 
 
 def verify_and_summarize(ctx: InstallContext) -> None:
-    """Phase 17: render the closing post-install summary (reads only, never gates).
+    """Phase 18: render the closing post-install summary (reads only, never gates).
 
-    The cli registry loop already prints the ``[17] Verification & summary`` step header, so this
+    The cli registry loop already prints the ``[18] Verification & summary`` step header, so this
     adds no banner of its own. It closes with the same two detail lines as the bash phase 17.
     """
     _summarize(ctx)

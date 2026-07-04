@@ -10,11 +10,10 @@ machine-local drift and ``merge(baseline, that delta)`` reproduces the live sett
 
 ``merge`` takes an :class:`ArrayMerge` policy so two kinds of consumer can share one core:
 
-- **User settings** (Claude Code today; a per-OS VS Code consumer could reuse
-  ``generate_settings`` later) merge with :data:`ArrayMerge.UNION` — a machine adds one
-  permission/hook without clobbering the baseline list (Claude Code's cross-scope unioning,
-  *not* jq's array-replace ``*``). This is the orchestration's only policy, so ``diff`` and
-  ``generate_settings`` are UNION-only.
+- **User settings** (Claude Code, VS Code) merge with :data:`ArrayMerge.UNION` — a machine
+  adds one permission/hook without clobbering the baseline list (Claude Code's cross-scope
+  unioning, *not* jq's array-replace ``*``). This is the orchestration's only policy, so
+  ``diff`` and ``generate_settings`` are UNION-only.
 - **MCP server registration** calls ``merge`` directly with :data:`ArrayMerge.REPLACE` — jq
   ``*`` semantics, where a per-server overlay fully redefines a server (its ``args``/``env``
   arrays replace, never union). It does not use ``diff``/``generate_settings``.
@@ -57,9 +56,9 @@ class ArrayMerge(enum.Enum):
 class SettingsSpec:
     """A file-backed settings consumer: where its baseline, overlay, and output live.
 
-    Each generated-settings consumer (Claude Code today; a per-OS VS Code consumer later)
-    declares one of these and ``generate_settings`` does the rest. ``label`` names the consumer
-    in UI messages. Settings consumers always UNION arrays, so there is no array-policy field.
+    Each generated-settings consumer (Claude Code, VS Code) declares one of these and
+    ``generate_settings`` does the rest. ``label`` names the consumer in UI messages. Settings
+    consumers always UNION arrays, so there is no array-policy field.
     """
 
     baseline_path: Path
@@ -158,11 +157,21 @@ def _contains(items: list[JSONValue], needle: JSONValue) -> bool:
 # --- Reusable generate orchestration -----------------------------------------------------------
 
 
-def generate_settings(ctx: InstallContext, spec: SettingsSpec) -> None:
+def generate_settings(
+    ctx: InstallContext,
+    spec: SettingsSpec,
+    *,
+    extra_overlay: dict[str, JSONValue] | None = None,
+) -> None:
     """Generate ``spec.output_path`` from baseline ⊕ overlay (UNION), folding in live drift.
 
     Consumer-agnostic: ``spec`` declares the paths and ``label`` (named in UI messages).
-    Warn-and-continue throughout so one consumer's failure never aborts the run.
+    ``extra_overlay``, when given, **seeds** any of its keys the overlay doesn't already carry —
+    a caller-computed per-machine default (e.g. a resolved tool path) that should persist into
+    the tracked overlay file once, without the caller reading or writing that file itself. Seed,
+    not overwrite: a key already present (from a prior seed, or a hand-edit) is left alone, so a
+    later run re-deriving a different value never silently reverts it. Warn-and-continue
+    throughout so one consumer's failure never aborts the run.
     """
     # Read via the degrade-to-empty helper so a missing/unreadable tracked baseline routes to the
     # same warn-skip path as a non-object one, rather than crashing the phase with an OSError.
@@ -181,6 +190,11 @@ def generate_settings(ctx: InstallContext, spec: SettingsSpec) -> None:
     # delta is the live drift beyond the baseline; fold it into the overlay so prefs accrue.
     delta_json = diff(baseline_json, current_json)
     overlay_json = _fold_overlay(ctx, spec.overlay_path, delta_json)
+    if extra_overlay and isinstance(overlay_json, dict):
+        additions = {key: value for key, value in extra_overlay.items() if key not in overlay_json}
+        if additions:
+            ctx.ui.detail(f"seeding {spec.label} overlay: {', '.join(sorted(additions))}")
+            overlay_json = merge(overlay_json, additions)
     merged_json = merge(baseline_json, overlay_json)
 
     spec.overlay_path.parent.mkdir(parents=True, exist_ok=True)

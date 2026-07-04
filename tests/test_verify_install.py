@@ -5,7 +5,7 @@
 
 The path/JSON/include predicates (ported from ``tests/verify_install.bats``), the live-state
 probes (``pam_tid``, the firewall, the login shell), the :func:`iter_records` emitter, and the
-phase-17 :func:`verify_and_summarize` renderer.
+phase-18 :func:`verify_and_summarize` renderer.
 """
 
 from __future__ import annotations
@@ -645,7 +645,7 @@ def test_iter_records_core_strips_casks(
 
 
 def test_verify_and_summarize_renders_partitioned_summary(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Phase 17 splits records into Verified / Needs-attention and closes with the bash hints."""
+    """Phase 18 splits records into Verified / Needs-attention and closes with the bash hints."""
     monkeypatch.setattr(
         verify_install,
         "iter_records",
