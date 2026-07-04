@@ -7,6 +7,13 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.20.1](https://github.com/nivintw/dotfiles/compare/v1.20.0...v1.20.1) (2026-07-04)
+
+
+### Bug Fixes
+
+* **installer:** Make Dock rebuild opt-out/safe and catch a silently hijacked pre-push hook ([36624d3](https://github.com/nivintw/dotfiles/commit/36624d3c843f9572c98a80d874f04290e2ce8c18)), closes [#41](https://github.com/nivintw/dotfiles/issues/41) [#124](https://github.com/nivintw/dotfiles/issues/124)
+
 ## [1.20.0](https://github.com/nivintw/dotfiles/compare/v1.19.0...v1.20.0) (2026-07-03)
 
 
