@@ -236,14 +236,19 @@ jobs:
         if: inputs.skip-quality-gate != true
         run: uv run pytest --cov
 
-  # End-to-end installer gate on a real macOS runner. The ubuntu lint-and-test job above can't
-  # run install.sh (it's macOS-only) and the unit suite stubs every host mutation, so this is the
-  # only CI check that actually RUNS the installer. It runs for real on the ephemeral runner (a
-  # near-clean Mac); GitHub runners can't nest-virt, so Tart is the LOCAL pre-push gate and this
-  # is the CI complement. Make `ci / installer-smoke-macos` a required status check — it's a
-  # stable, always-reporting check thanks to the path gate below.
-  installer-smoke-macos:
-    runs-on: macos-latest
+  # Computes ONE shared decision for both installer-smoke jobs below: did this push/PR touch
+  # an installer path, and — since macOS and Linux each skip different phases — separately for
+  # each OS. Factored out (not duplicated per job) so the predicate has one source of truth and
+  # the one full-history checkout it needs never happens on the pricier macos-latest runner.
+  installer-path-gate:
+    runs-on: ubuntu-latest
+    # An unset output (the decide step below skipped, e.g. during skip-quality-gate) resolves to
+    # an empty string — every downstream `if:` must keep comparing `== 'true'` (empty-string-safe)
+    # and never `!= 'false'` (which an empty string would satisfy), or a skipped decide step would
+    # silently start running both installers on a release bump.
+    outputs:
+      run-macos: ${{ steps.decide.outputs.run-macos }}
+      run-linux: ${{ steps.decide.outputs.run-linux }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -251,11 +256,12 @@ jobs:
           # Full history so the path gate can diff this PR/push against its base.
           fetch-depth: 0
 
-      # Heavy install: run it ONLY when an installer-path file changed (and never for
-      # release-please's bump commit). On every other PR the steps below no-op, so the job still
-      # reports success — keeping it a stable REQUIRED check without burning macOS minutes.
-      - name: Decide whether installer paths changed
-        id: changed
+      # Heavy installs run ONLY when an installer-path file changed (and never for
+      # release-please's bump commit). On every other PR the smoke jobs' steps no-op, so they
+      # still report success — keeping them stable REQUIRED-check candidates without burning
+      # runner minutes.
+      - name: Decide whether installer paths changed (macOS + Linux)
+        id: decide
         if: inputs.skip-quality-gate != true
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -263,12 +269,13 @@ jobs:
         run: |
           set -euo pipefail
           # release-please's version-bump commit only rewrites version/CHANGELOG/lock (no installer
-          # logic) yet it touches pyproject.toml + uv.lock, which the path predicate below matches.
-          # Skip it explicitly so a release doesn't burn macOS minutes on a pure bump. (On the push
+          # logic) yet it touches pyproject.toml + uv.lock, which the path predicates below match.
+          # Skip it explicitly so a release doesn't burn runner minutes on a pure bump. (On the push
           # to main, main.yml already sets skip-quality-gate; this also covers the Release PR's CI.)
           if git log -1 --format=%s | grep -q '^chore(main): release '; then
-            echo "run=false" >>"$GITHUB_OUTPUT"
-            echo "::notice title=installer-smoke-macos::release-please bump — skipping the macOS install."
+            echo "run-macos=false" >>"$GITHUB_OUTPUT"
+            echo "run-linux=false" >>"$GITHUB_OUTPUT"
+            echo "::notice title=installer-path-gate::release-please bump — skipping both installer smoke jobs."
             exit 0
           fi
           if [ -n "${BASE_SHA:-}" ]; then
@@ -278,16 +285,65 @@ jobs:
           else
             range="HEAD~1...HEAD"                               # new branch/unknown base: tip commit
           fi
-          if git diff --name-only "$range" \
+          # A stale/unreachable base or before SHA (e.g. a force-push in between event dispatch
+          # and this job running) can make `git diff` itself fail. This job feeding two `needs:`
+          # dependents means a failure HERE would make them report skipped — which GitHub's
+          # branch protection treats as passed, silently defeating the two required checks this
+          # gate exists to keep honest. Fail open instead: run both installers rather than let a
+          # git-plumbing hiccup masquerade as a green build.
+          if ! changed="$(git diff --name-only "$range" 2>&1)"; then
+            echo "::warning title=installer-path-gate::couldn't compute changed paths ($changed) — defaulting to running both installer smoke jobs"
+            echo "run-macos=true" >>"$GITHUB_OUTPUT"
+            echo "run-linux=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # macOS also cares about macos.sh/dock.sh — Linux skips both phases entirely, so a
+          # change there would be wasted runner time on that job.
+          if printf '%s\n' "$changed" \
             | grep -Eq '^(install\.sh|macos\.sh|dock\.sh|scripts/vm-smoke\.sh|src/dotfiles_install/|Brewfile($|\.d/)|pyproject\.toml|uv\.lock)'; then
-            echo "run=true" >>"$GITHUB_OUTPUT"
+            echo "run-macos=true" >>"$GITHUB_OUTPUT"
           else
-            echo "run=false" >>"$GITHUB_OUTPUT"
-            echo "::notice title=installer-smoke-macos::No installer-path changes — skipping the macOS install."
+            echo "run-macos=false" >>"$GITHUB_OUTPUT"
+            echo "::notice title=installer-path-gate::No macOS-relevant installer-path changes — skipping installer-smoke-macos."
+          fi
+          if printf '%s\n' "$changed" \
+            | grep -Eq '^(install\.sh|scripts/vm-smoke\.sh|src/dotfiles_install/|Brewfile($|\.d/)|pyproject\.toml|uv\.lock)'; then
+            echo "run-linux=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "run-linux=false" >>"$GITHUB_OUTPUT"
+            echo "::notice title=installer-path-gate::No Linux-relevant installer-path changes — skipping installer-smoke-linux."
           fi
 
+  # End-to-end installer gate on a real macOS runner. The ubuntu lint-and-test job above only
+  # lints/tests — the unit suite stubs every host mutation — so this is the CI check that
+  # actually RUNS the installer on macOS. It runs for real on the ephemeral runner (a near-clean
+  # Mac); GitHub runners can't nest-virt, so Tart is the LOCAL pre-push gate and this is the CI
+  # complement. Make `ci / installer-smoke-macos` a required status check — it's a stable,
+  # always-reporting check thanks to installer-path-gate above.
+  installer-smoke-macos:
+    needs: installer-path-gate
+    runs-on: macos-latest
+    # Without `always()`, a failure in installer-path-gate (not just its "nothing changed"
+    # outcome) would make this job SKIP rather than run — and GitHub's branch protection
+    # treats a skipped required check as passing. The guard step below turns that back into a
+    # real, red failure instead of a silent pass.
+    if: always()
+    steps:
+      - name: Fail loudly if installer-path-gate itself failed
+        if: needs.installer-path-gate.result == 'failure'
+        run: |
+          echo "::error title=installer-smoke-macos::installer-path-gate failed — failing this required check explicitly rather than silently skipping it."
+          exit 1
+
+      # Shallow checkout: the path-gate decision already happened in installer-path-gate, so
+      # this job only needs the working tree to actually run the installer, not its history.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: needs.installer-path-gate.result == 'success'
+        with:
+          persist-credentials: false
+
       - name: Set up uv (+ managed Python)
-        if: inputs.skip-quality-gate != true && steps.changed.outputs.run == 'true'
+        if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-macos == 'true'
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           enable-cache: true
@@ -297,16 +353,73 @@ jobs:
       # ~10× ubuntu's, so CI proves "installs clean on a fresh Mac" and the local gate proves
       # re-runnable.
       - name: Run the installer (baseline, core profile)
-        if: inputs.skip-quality-gate != true && steps.changed.outputs.run == 'true'
+        if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-macos == 'true'
         run: ./install.sh --no-bundles --core
 
       - name: Verify the install (tolerating only the no-Touch-ID-sensor BAD)
-        if: inputs.skip-quality-gate != true && steps.changed.outputs.run == 'true'
+        if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-macos == 'true'
         run: |
           set -euo pipefail
           # vm-smoke.sh is sourceable (its main() only runs from the entrypoint guard), so reuse
           # its evaluate_stream gate — CI then tolerates exactly the one headless BAD (no Touch ID
           # sensor) the local harness does, and fails closed if the VERIFY_DONE sentinel is absent.
+          # shellcheck source=scripts/vm-smoke.sh disable=SC1091
+          source scripts/vm-smoke.sh
+          uv run --no-dev --project "$PWD" dotfiles-install --core --verify-stream | evaluate_stream
+
+  # End-to-end installer gate on a real Linux runner — the native-runner counterpart to
+  # installer-smoke-macos above, proving the --core profile installs clean on ubuntu-latest.
+  # Tart (the local VM-smoke harness) is Apple-Virtualization-Framework-only and can't run on an
+  # x86_64 GH runner, so this runs the installer directly on the runner instead of through a VM —
+  # a different mechanism, not a Tart port. `--core` strips ollama-app (a cask), so the Ollama
+  # phase has nothing to pull and warns-and-skips, same as it already does on macOS CI; ufw
+  # (Linux's firewall) isn't preinstalled on ubuntu-latest (unlike some fuller server images), so
+  # a dedicated step below installs it before the privileged phase enables it; `is_tolerated`
+  # only tolerates the Touch-ID-no-sensor BAD, which Linux never emits — this job runs fully
+  # strict, matching the Tart-based Linux VM smoke path's own comment on the same point.
+  installer-smoke-linux:
+    needs: installer-path-gate
+    runs-on: ubuntu-latest
+    # See installer-smoke-macos's identical comment on `always()` above.
+    if: always()
+    steps:
+      - name: Fail loudly if installer-path-gate itself failed
+        if: needs.installer-path-gate.result == 'failure'
+        run: |
+          echo "::error title=installer-smoke-linux::installer-path-gate failed — failing this required check explicitly rather than silently skipping it."
+          exit 1
+
+      # Shallow checkout — see installer-smoke-macos's identical comment above.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: needs.installer-path-gate.result == 'success'
+        with:
+          persist-credentials: false
+
+      - name: Set up uv (+ managed Python)
+        if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-linux == 'true'
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+
+      # ubuntu-latest doesn't ship ufw (unlike the fuller server-style image the local Tart
+      # Linux VM uses) — install it so the privileged phase has something to enable, matching
+      # what a real Ubuntu machine running this installer would need too.
+      - name: Install ufw (not preinstalled on ubuntu-latest)
+        if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-linux == 'true'
+        run: sudo apt-get update && sudo apt-get install -y ufw
+
+      # Homebrew isn't preinstalled on ubuntu-latest — phase 0 self-bootstraps it
+      # (NONINTERACTIVE=1), which takes real wall-clock time (source builds/bottles), unlike
+      # macOS's pre-installed Homebrew.
+      - name: Run the installer (baseline, core profile)
+        if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-linux == 'true'
+        timeout-minutes: 30
+        run: ./install.sh --no-bundles --core
+
+      - name: Verify the install (fully strict — Linux never emits the Touch-ID BAD)
+        if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-linux == 'true'
+        run: |
+          set -euo pipefail
           # shellcheck source=scripts/vm-smoke.sh disable=SC1091
           source scripts/vm-smoke.sh
           uv run --no-dev --project "$PWD" dotfiles-install --core --verify-stream | evaluate_stream

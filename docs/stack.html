@@ -83,14 +83,14 @@
           <a class="pill" href="https://github.com/laktak/extrakto" rel="noopener">extrakto</a><a class="pill" href="https://github.com/tmux-plugins/tmux-yank" rel="noopener">tmux-yank</a><a class="pill" href="https://github.com/christoomey/vim-tmux-navigator" rel="noopener">vim-tmux-navigator</a>
           <a class="pill" href="https://github.com/ryanoasis/nerd-fonts" rel="noopener">MesloLGS NF</a>
         </div>
-        <p>iTerm reads its preferences straight from the tracked <code>iterm2/</code> folder; tmux plugins are declared in <code>tmux.conf</code> and installed by TPM during the bootstrap.</p>
+        <p>iTerm reads its preferences straight from the tracked <code>iterm2/</code> folder — macOS only, skipped on Linux/WSL2; tmux plugins are declared in <code>tmux.conf</code> and installed by TPM during the bootstrap on every OS.</p>
       </section>
 
       <section class="wrap">
         <h2><span class="hash">#</span>Package managers</h2>
         <div class="feature">
           <span class="feature__mark">🍺</span>
-          <div><h3><a href="https://brew.sh" rel="noopener">Homebrew</a></h3><p>Formulae, GUI casks, and fonts — all declared in the <code>Brewfile</code>, installed with <code>brew bundle</code>.</p></div>
+          <div><h3><a href="https://brew.sh" rel="noopener">Homebrew</a></h3><p>Formulae, GUI casks, and fonts — all declared in the <code>Brewfile</code>, installed with <code>brew bundle</code>. On Linux/WSL2, <code>install.sh</code> self-bootstraps Homebrew's own Linux build (<code>/home/linuxbrew/.linuxbrew</code>) the same way; Homebrew's Linux build has no cask support, so <code>--core</code> (formulae only, casks stripped) is required there, not just preferred.</p></div>
         </div>
         <div class="feature">
           <span class="feature__mark">⚡</span>

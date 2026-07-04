@@ -3,13 +3,18 @@
 
 version = 1
 
-# Files that can't carry an SPDX header (no comment syntax / generated). Everything
-# else gets a real header from hawkeye (see .config/licenserc.toml).
+# Files that can't carry an SPDX header (no comment syntax / generated), or that could but
+# a header would break their format. Everything else gets a real header from hawkeye (see
+# .config/licenserc.toml).
 # Markdown is included here (not headered inline by hawkeye) because this project has
 # frontmatter-first markdown where a line-1 SPDX comment would break the YAML.
 # The .claude/ tree is annotated wholesale (SPDX headers break Claude Code's frontmatter
 # parsers); fish_plugins reads every non-blank line as a plugin (a '#' isn't a comment);
 # the iterm2 plist is binary; .nojekyll is an empty marker; .cast files are JSON-lines.
+# llms.txt/llms-full.txt *could* carry hawkeye's '#'-comment header (.txt is mapped in
+# licenserc.toml's SCRIPT_STYLE) but are excluded for a different reason: the llms.txt spec
+# requires the file's first line to be its H1 title, and an injected header comment would
+# parse as a stray heading ahead of it.
 [[annotations]]
 path = [
   "**/*.json",
@@ -22,6 +27,8 @@ path = [
   "home/.config/fish/fish_plugins",
   "docs/.nojekyll",
   "docs/casts/**",
+  "docs/llms.txt",
+  "docs/llms-full.txt",
 ]
 SPDX-FileCopyrightText = "© 2026 Tyler Nivin"
 SPDX-License-Identifier = "MIT"

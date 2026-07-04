@@ -40,6 +40,12 @@ excludes = [
   "home/.config/fish/fish_plugins",
   "docs/.nojekyll",
   "docs/assets/asciinema-player.*",
+  # llms.txt/llms-full.txt are markdown content wearing a .txt extension (the llms.txt spec
+  # mandates that exact filename) — a '#'-comment header would parse as a stray H1 ahead of
+  # the real one, breaking the spec's "first H1 is the project title" contract. Annotated in
+  # REUSE.toml instead (a different reason than **/*.md above, but the same mechanism).
+  "docs/llms.txt",
+  "docs/llms-full.txt",
 ]
 
 # '#'-comment files hawkeye doesn't map by default: fish/bats/uv_tools.txt and the

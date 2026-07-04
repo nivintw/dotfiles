@@ -20,11 +20,12 @@ set -euo pipefail
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Supported platforms only — fail fast before fetching anything. macOS is fully
-# supported; Linux/WSL2 run the OS-agnostic phases (stow, fish, atuin, the Claude/uv
-# steps) — the package, privileged, and system-tweak phases are macOS-gated, with
-# Linux ports tracked under issue #34. The installer re-checks per phase via
-# os_detect; this guard just rejects platforms it can't target (e.g. Windows, BSD)
-# before bootstrapping uv. WSL2 reports `Linux` to uname, so it passes here.
+# supported; Linux/WSL2 run every phase except the ones whose entire purpose is macOS
+# state (iTerm2, macos.sh, the Dock, VS Code settings) — package installs, the privileged
+# block, stow, fish, atuin, and the Claude/uv steps all run on Linux/WSL2 too, branching
+# internally per-OS where needed. The installer re-checks per phase via os_detect; this
+# guard just rejects platforms it can't target (e.g. Windows, BSD) before bootstrapping
+# uv. WSL2 reports `Linux` to uname, so it passes here.
 case "$(uname)" in
 Darwin | Linux) ;;
 *)

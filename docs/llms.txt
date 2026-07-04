@@ -1,0 +1,19 @@
+# dotfiles
+
+> Tyler Nivin's personal, idempotent bootstrap for macOS, Linux, and WSL2 — one command
+> (`install.sh`) converges a fresh machine to a declared state via Homebrew, GNU Stow, and
+> fish. Built to be forked: the machinery is generic, the package list/Dock/keys are his.
+
+## Docs
+
+- [Getting Started](https://nivintw.github.io/dotfiles/getting-started.html): Clone, run `install.sh`, and what each of its phases does (0 through verify); which phases are macOS-only vs. cross-platform; forking ("make it yours"); the human-only steps; per-machine setup via overlays; uninstalling.
+- [Architecture](https://nivintw.github.io/dotfiles/architecture.html): How `home/` mirrors `$HOME` via GNU Stow, the repo layout, what isn't stowed and why (iTerm2 prefs, `~/.claude.json`, generated `~/.claude/settings.json` and VS Code `settings.json`), the machine-local overlay pattern (tracked baseline ⊕ untracked per-machine file), and the idempotency contract.
+- [The Stack](https://nivintw.github.io/dotfiles/stack.html): The tools by role — fish shell and its modern-CLI replacements, terminal/multiplexer (iTerm2 is macOS-only; tmux/TPM are cross-platform), package managers (Homebrew on macOS, Homebrew's Linux build on Linux/WSL2 — casks unsupported there, hence `--core`), the VS Code editor setup, and the local Ollama AI model fleet.
+- [Commands](https://nivintw.github.io/dotfiles/commands.html): The custom fish functions (fuzzy git operations, live search, process kill, DNS flush, clipboard/open helpers, local AI offload via `ollm`, …) with recorded asciinema demos.
+- [Quality & Testing](https://nivintw.github.io/dotfiles/quality.html): The prek hook suite (lint/format/security/license/spelling), the bats (fish behavior) and pytest (config validity + installer-core coverage) test layers, the four-job CI pipeline (`lint-and-test`, a shared `installer-path-gate`, `installer-smoke-macos`, `installer-smoke-linux`), the opt-in Tart VM idempotency harness, and REUSE 3.3 licensing.
+- [Security](https://nivintw.github.io/dotfiles/security.html): 1Password-based secret handling (`op://` references resolved at install time, never committed), SSH-host hygiene (a custom hook blocks concrete hosts in the tracked config), and the defense-in-depth control list (firewall/ufw, Touch ID for sudo, pinned CI binaries, SSH commit signing).
+
+## Optional
+
+- [README](https://github.com/nivintw/dotfiles/blob/main/README.md): The GitHub landing page — quick start, repo layout, machine-local overlays, day-to-day workflow, uninstalling.
+- [Source](https://github.com/nivintw/dotfiles): The repository itself — `Brewfile`, `src/dotfiles_install/` (the Python installer package), `scripts/`, git hooks, and the test suite.

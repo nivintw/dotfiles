@@ -55,7 +55,7 @@
       <div class="wrap page-head">
         <nav class="crumb" aria-label="Breadcrumb"><a href="index.html">Home</a> <span>/</span> <span>Architecture</span></nav>
         <h1>Architecture</h1>
-        <p class="section-lede">A symlink farm with a single source of truth, and a bootstrap that's careful never to fight the machine it's setting up.</p>
+        <p class="section-lede">A symlink farm with a single source of truth, and a bootstrap that's careful never to fight the machine it's setting up. Runs on macOS, Linux, and WSL2 — the installer's phase registry OS-gates each phase; the ones whose entire purpose is macOS state (iTerm2, <code>macos.sh</code>, the Dock, VS Code settings) skip themselves on Linux/WSL2, and every other phase runs everywhere.</p>
       </div>
 
       <section class="wrap">
@@ -83,7 +83,7 @@
               <tr><td><code>uv_tools.txt</code></td><td>Python CLIs, one <code>uv tool install</code> arg-list per line</td></tr>
               <tr><td><code>claude_mcp.json</code></td><td><a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a> MCP servers, replayed into <code>~/.claude.json</code></td></tr>
               <tr><td><code>vscode_settings.json</code></td><td>VS Code <code>settings.json</code> baseline, deep-merged with a machine-local overlay at install time</td></tr>
-              <tr><td><code>install.sh</code></td><td>Thin entry-point shim — macOS guard, bootstraps <code>uv</code>, then hands off to the installer</td></tr>
+              <tr><td><code>install.sh</code></td><td>Thin entry-point shim — guards on macOS/Linux (WSL2 reports as Linux), bootstraps <code>uv</code>, then hands off to the installer</td></tr>
               <tr><td><code>src/dotfiles_install/</code></td><td>The idempotent installer: a Python package (the <code>dotfiles-install</code> console script) that walks an ordered phase registry</td></tr>
               <tr><td><code>macos.sh</code> · <code>dock.sh</code></td><td>macOS defaults &amp; declarative Dock</td></tr>
               <tr><td><code>iterm2/</code></td><td><a href="https://iterm2.com/" rel="noopener">iTerm2</a> prefs (pointed at directly — see below)</td></tr>

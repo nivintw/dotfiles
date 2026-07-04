@@ -13,12 +13,15 @@ SPDX-License-Identifier: MIT
 
 **_Setting up my new computer: clone. run. done._**
 
-The one repo I clone onto every Mac I own — and it's **built to be forked.**
+The one repo I clone onto every machine I own — Mac, Linux, or WSL2 — and it's
+**built to be forked.**
 
 [![CI](https://github.com/nivintw/dotfiles/actions/workflows/main.yml/badge.svg)](https://github.com/nivintw/dotfiles/actions/workflows/main.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![REUSE compliant](https://api.reuse.software/badge/github.com/nivintw/dotfiles)](https://api.reuse.software/info/github.com/nivintw/dotfiles)
 ![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white)
+![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)
+![WSL2](https://img.shields.io/badge/WSL2-4D4D4D?logo=windowsterminal&logoColor=white)
 
 **[📖 Read the docs →](https://nivintw.github.io/dotfiles/)**
 
@@ -35,9 +38,12 @@ git clone https://github.com/nivintw/dotfiles ~/dotfiles
 ~/dotfiles/install.sh
 ```
 
-That one command converges a fresh Mac to my exact setup: CLI tools, fish, GUI
-apps, the MesloLGS NF font, macOS defaults, and the Dock. It's safe to re-run — it
-_converges_ the machine to the declared state rather than clobbering what's there.
+That one command converges a fresh machine to my exact setup: CLI tools, fish,
+and — on macOS — GUI apps, the MesloLGS NF font, macOS defaults, and the Dock.
+On Linux and WSL2 it runs the same OS-agnostic core (Homebrew/Linuxbrew, fish,
+Stow, tmux, Claude Code, …); the macOS-only steps just skip themselves. It's
+safe to re-run — it _converges_ the machine to the declared state rather than
+clobbering what's there.
 
 > **Forking?** `install.sh` installs _my_ taste — package list, Dock, keys, macOS
 > defaults. Review and edit those before you run it.
@@ -52,7 +58,7 @@ _converges_ the machine to the declared state rather than clobbering what's ther
 | 🔗 **GNU Stow** | `home/` mirrors `$HOME` via symlinks — editing `~/.config/fish/config.fish` edits the repo file directly. |
 | ♻️ **Idempotent bootstrap** | Re-run `install.sh` anytime; it adopts existing packages and symlinks instead of clobbering them. |
 | 🧩 **Machine-local overlays** | One branch across every machine — work box, homelab, personal — with nothing machine-specific leaking into the public repo. |
-| ✅ **Quality gate** | A prek hook suite (lint, format, license, spelling) plus bats and pytest — run identically by you locally and by CI on every PR — and an opt-in Tart VM smoke test that runs `install.sh --core` end-to-end on a clean macOS VM. |
+| ✅ **Quality gate** | A prek hook suite (lint, format, license, spelling) plus bats and pytest — run identically by you locally and by CI on every PR — CI installer-smoke jobs that run `install.sh --core` end-to-end on ephemeral macOS _and_ Linux runners, and an opt-in local Tart VM harness (macOS or Linux) that does it twice to prove idempotency. |
 | 🎬 **Live demos** | asciinema casts of the fish functions actually running, embedded on the docs site. |
 | 🤖 **Local AI fleet** | Role-based Ollama models (fast / bulk / brainstorm / vision) provisioned by the installer; the `ollm` CLI routes mechanical work to them, GitLens gets offline AI, and a session-start hook shows Claude Code the live roster. |
 
