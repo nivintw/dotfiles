@@ -7,6 +7,13 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.21.1](https://github.com/nivintw/dotfiles/compare/v1.21.0...v1.21.1) (2026-07-04)
+
+
+### Bug Fixes
+
+* **ci:** Persist Homebrew's PATH across steps in installer-smoke-linux ([304238e](https://github.com/nivintw/dotfiles/commit/304238ece0c0b9613cddd00a559a5e05c3675678))
+
 ## [1.21.0](https://github.com/nivintw/dotfiles/compare/v1.20.1...v1.21.0) (2026-07-04)
 
 
