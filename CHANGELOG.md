@@ -7,6 +7,13 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.21.0](https://github.com/nivintw/dotfiles/compare/v1.20.1...v1.21.0) (2026-07-04)
+
+
+### Features
+
+* **installer:** Generate VS Code settings and register Serena + claude-hud ([a2188a9](https://github.com/nivintw/dotfiles/commit/a2188a9e8eaa3414fdce448b3624a10500aa6cca))
+
 ## [1.20.1](https://github.com/nivintw/dotfiles/compare/v1.20.0...v1.20.1) (2026-07-04)
 
 
