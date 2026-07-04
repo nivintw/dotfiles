@@ -69,8 +69,9 @@
           MCP/symlink/shell steps no-op once they're done. The two declarative system
           steps are the deliberate exception — <code>macos.sh</code> re-asserts its
           preferences and <code>dock.sh</code> rebuilds the Dock from its list every run
-          (the Dock step prompts first when interactive). That's by design: they reset
-          those surfaces to the repo's definition rather than preserving local tweaks.
+          (pass <code>--no-dock</code> to skip it, or it skips itself if <code>dockutil</code>
+          can't read the current Dock state). That's by design: they reset those surfaces
+          to the repo's definition rather than preserving local tweaks.
         </div>
       </section>
 

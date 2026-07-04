@@ -5,11 +5,13 @@
 
 The unit-testable predicates the summary is built from — resolving a symlink target into the
 repo, rejecting non-object JSON, matching an ``[include]`` path through ``~`` expansion,
-abbreviating ``$HOME`` to ``~`` for display, and counting enrolled Touch ID templates — plus the
-heavier live-state probes, chosen per OS: ``brew bundle check`` everywhere, the firewall via
-``socketfilterfw`` (macOS) or ufw's persistent ``/etc/ufw/ufw.conf`` (Linux), the login shell via
-``dscl`` (macOS) or the passwd database (Linux), and ``pam_tid`` (macOS only; WSL also skips the
-firewall — the Windows host owns it). :func:`iter_records` aggregates them into
+abbreviating ``$HOME`` to ``~`` for display, counting enrolled Touch ID templates, and resolving
+the repo's pre-push hook path (via git, so a custom ``core.hooksPath`` and worktrees both
+resolve correctly) — plus the heavier live-state probes, chosen per OS: ``brew bundle check``
+everywhere, the firewall via ``socketfilterfw`` (macOS) or ufw's persistent
+``/etc/ufw/ufw.conf`` (Linux), the login shell via ``dscl`` (macOS) or the passwd database
+(Linux), and ``pam_tid`` (macOS only; WSL also skips the firewall — the Windows host owns it).
+:func:`iter_records` aggregates them into
 ``("OK"|"BAD", msg)`` records, and :func:`verify_and_summarize` is the phase-17 body that renders
 the closing summary.
 
@@ -36,6 +38,7 @@ from dotfiles_install.brewfile import brewfile_core
 from dotfiles_install.bundle_select import parse_bundles
 from dotfiles_install.layout import DOTFILES
 from dotfiles_install.os_detect import OS, current_os
+from dotfiles_install.stow import PREK_SHIM_MARKER
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -96,6 +99,24 @@ def gitconfig_includes(cfg: Path, want: Path | str) -> bool:
     )
     wanted = Path(str(want)).expanduser()
     return any(Path(line).expanduser() == wanted for line in result.stdout.splitlines())
+
+
+def prepush_hook_path(dotfiles: Path) -> Path | None:
+    """Resolve the dotfiles repo's pre-push hook path via git, or ``None`` if unresolvable.
+
+    Always asks git itself — never assumes ``.git/hooks`` — so a custom ``core.hooksPath``
+    and a worktree's shared git-common-dir (its own ``.git`` is a file pointing elsewhere)
+    both resolve correctly. Returns ``None`` when ``dotfiles`` isn't inside a git repo at all.
+    """
+    result = commands.run(
+        ["git", "-C", str(dotfiles), "rev-parse", "--git-path", "hooks/pre-push"],
+        capture=True,
+    )
+    path = (result.stdout or "").strip()
+    if result.returncode != 0 or not path:
+        return None
+    hook = Path(path)
+    return hook if hook.is_absolute() else dotfiles / hook
 
 
 def tilde(path: Path | str) -> str:
@@ -220,6 +241,7 @@ def iter_records(dotfiles: Path, *, core: bool) -> Iterator[Record]:
     yield from _symlink_records(dotfiles)
     yield _settings_record()
     yield _gitconfig_include_record()
+    yield _prepush_hook_record(dotfiles)
 
 
 def verify_and_summarize(ctx: InstallContext) -> None:
@@ -456,4 +478,26 @@ def _gitconfig_include_record() -> Record:
         f"{tilde(gitconfig)} includes {tilde(gitconfig_local)}",
         f"{tilde(gitconfig)} does not [include] {tilde(gitconfig_local)}",
         passed=gitconfig_includes(gitconfig, gitconfig_local),
+    )
+
+
+def _prepush_hook_record(dotfiles: Path) -> Record:
+    """OK unless something other than prek occupies the repo's pre-push hook slot.
+
+    Hooks are opt-in here (phase 10 only notifies on clone, never force-installs), so a
+    genuinely MISSING pre-push hook is fine. Anything else occupying the slot and not
+    prek's — a foreign hook, an empty/unreadable file, a dangling symlink — means another
+    tool (typically ``git lfs install``, if it ran first) silently claimed it, so prek's
+    checks — including the VM-smoke pre-push gate — never run on push. See issue #124.
+    """
+    hook = prepush_hook_path(dotfiles)
+    if hook is None or not (hook.is_symlink() or hook.exists()):
+        return ("OK", "no pre-push hook installed (opt-in; nothing else owns it)")
+    contents = commands.read_text_or_empty(hook)
+    return _record(
+        "pre-push hook is prek-generated",
+        f"{tilde(hook)} exists but isn't prek-generated — another tool (e.g. git-lfs) likely "
+        "silently took over the slot, so prek's pre-push checks never run. Re-run "
+        "`prek install` (its migration mode chains any existing hook to `.legacy`).",
+        passed=PREK_SHIM_MARKER in contents,
     )

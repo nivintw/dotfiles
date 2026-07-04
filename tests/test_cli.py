@@ -161,6 +161,16 @@ def test_run_on_macos_walks_all_phases(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "[17] Verification & summary" in result.output
 
 
+@pytest.mark.usefixtures("_no_real_installs")
+def test_no_dock_flag_skips_the_dock_phase(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--no-dock`` still walks phase 16 (header prints) but its body skips dock.sh."""
+    monkeypatch.setattr(cli, "current_os", lambda: OS.MACOS)
+    result = runner.invoke(app, ["--no-dock"])
+    assert result.exit_code == 0
+    assert "[16] Dock layout (dock.sh)" in result.output
+    assert "Dock layout skipped (--no-dock)" in result.output
+
+
 def test_verify_flag_exits_zero_when_healthy(monkeypatch: pytest.MonkeyPatch) -> None:
     """``--verify`` short-circuits the install and exits 0 when run_check finds no problems."""
     monkeypatch.setattr(verify_install, "run_check", lambda _ctx: 0)

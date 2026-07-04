@@ -25,3 +25,4 @@ class InstallContext:
     no_bundles: bool = False
     keep_bundles: bool = False
     requested_bundles: tuple[str, ...] = field(default_factory=tuple)
+    no_dock: bool = False

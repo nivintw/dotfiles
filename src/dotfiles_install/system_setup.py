@@ -21,6 +21,10 @@ from dotfiles_install.layout import DOTFILES
 if TYPE_CHECKING:
     from dotfiles_install.context import InstallContext
 
+# Must match dock.sh's SKIPPED_EXIT: a deliberate no-op bail (not macOS, dockutil
+# missing/broken), distinct from 0 (actually rebuilt) so a skip can't read as success.
+_DOCK_SKIPPED_EXIT = 2
+
 
 def apply_macos_defaults(ctx: InstallContext) -> None:
     """Phase 15: run ``macos.sh`` (curated ``defaults write`` tweaks); non-fatal."""
@@ -35,9 +39,20 @@ def apply_macos_defaults(ctx: InstallContext) -> None:
 
 
 def apply_dock_layout(ctx: InstallContext) -> None:
-    """Phase 16: rebuild the Dock from ``dock.sh`` (dockutil); non-fatal."""
-    if commands.run_ok(["bash", str(DOTFILES / "dock.sh")]):
+    """Phase 16: rebuild the Dock from ``dock.sh`` (dockutil); opt-out, non-fatal.
+
+    dock.sh reports a deliberate no-op bail with a distinct exit code (``_DOCK_SKIPPED_EXIT``)
+    so it can't be mistaken for a real rebuild — a plain zero-exit check would report the Dock
+    "applied" even when dock.sh took one look at an unreadable Dock state and touched nothing.
+    """
+    if ctx.no_dock:
+        ctx.ui.detail("Dock layout skipped (--no-dock)")
+        return
+    result = commands.run(["bash", str(DOTFILES / "dock.sh")])
+    if result.returncode == 0:
         ctx.ui.ok("Dock layout applied")
+    elif result.returncode == _DOCK_SKIPPED_EXIT:
+        ctx.ui.detail("Dock layout skipped (not macOS, or dockutil is missing/unreadable)")
     else:
         ctx.ui.warn(
             "dock.sh exited non-zero — continuing (the Dock may need a GUI session; "
