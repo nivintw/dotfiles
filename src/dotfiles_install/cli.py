@@ -54,6 +54,10 @@ def main(
         bool,
         typer.Option("--core", help="Core profile: CLI formulae only, skip casks."),
     ] = False,
+    no_dock: Annotated[
+        bool,
+        typer.Option("--no-dock", help="Skip rebuilding the Dock layout (dock.sh)."),
+    ] = False,
     verify: Annotated[
         bool,
         typer.Option(
@@ -91,6 +95,7 @@ def main(
         no_bundles=no_bundles,
         keep_bundles=keep_bundles,
         requested_bundles=requested,
+        no_dock=no_dock,
     )
     _run(ctx)
 
