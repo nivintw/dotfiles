@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING
 import pytest
 from rich.console import Console
 
-from dotfiles_install import commands, privileged, shell_select
+from dotfiles_install import commands, privileged, shell_select, verify_install
 from dotfiles_install.context import InstallContext
 from dotfiles_install.os_detect import OS
 from dotfiles_install.ui import UI
@@ -252,7 +252,9 @@ def test_setup_happy_path_runs_every_step_then_drops_the_ticket(
     calls: list[SimpleNamespace] = []
     monkeypatch.setattr(commands, "run", _fake_run(calls, brew_prefix=str(tmp_path)))
     monkeypatch.setattr(commands, "which", lambda _name: fish)
-    monkeypatch.setenv("SHELL", "/bin/zsh")  # differs from fish → chsh runs
+    monkeypatch.setattr(
+        verify_install, "login_shell", lambda: "/bin/zsh"
+    )  # differs from fish → chsh runs
     ctx, out = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -282,7 +284,7 @@ def test_setup_warns_when_firewall_cannot_be_confirmed(
         _fake_run(calls, brew_prefix=str(tmp_path), firewall="disabled"),
     )
     monkeypatch.setattr(commands, "which", lambda _name: "/opt/homebrew/bin/fish")
-    monkeypatch.setenv("SHELL", "/bin/zsh")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/bin/zsh")
     ctx, _ = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -295,13 +297,13 @@ def test_setup_skips_shell_steps_when_already_default_and_registered(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Fish already in /etc/shells and already $SHELL → no `tee -a` and no `chsh`."""
+    """Fish already in /etc/shells and already the login shell → no `tee -a` and no `chsh`."""
     fish = "/opt/homebrew/bin/fish"
     _point_paths(monkeypatch, tmp_path, shells=f"/bin/bash\n{fish}\n")
     calls: list[SimpleNamespace] = []
     monkeypatch.setattr(commands, "run", _fake_run(calls, brew_prefix=str(tmp_path)))
     monkeypatch.setattr(commands, "which", lambda _name: fish)
-    monkeypatch.setenv("SHELL", fish)
+    monkeypatch.setattr(verify_install, "login_shell", lambda: fish)
     ctx, out = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -424,7 +426,7 @@ def test_firewall_unconfirmed_when_getglobalstate_exits_nonzero(
         _fake_run(calls, brew_prefix=str(tmp_path), firewall="enabled", rc=_Rc(getglobalstate=1)),
     )
     monkeypatch.setattr(commands, "which", lambda _name: "/opt/homebrew/bin/fish")
-    monkeypatch.setenv("SHELL", "/bin/zsh")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/bin/zsh")
     ctx, _ = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -444,7 +446,7 @@ def test_setup_warns_when_chsh_fails(
         commands, "run", _fake_run(calls, brew_prefix=str(tmp_path), rc=_Rc(chsh=1))
     )
     monkeypatch.setattr(commands, "which", lambda _name: fish)
-    monkeypatch.setenv("SHELL", "/bin/zsh")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/bin/zsh")
     ctx, out = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -464,7 +466,7 @@ def test_setup_chshes_to_zsh_when_persisted_choice_is_zsh(
     calls: list[SimpleNamespace] = []
     monkeypatch.setattr(commands, "run", _fake_run(calls, brew_prefix=str(tmp_path)))
     monkeypatch.setattr(commands, "which", lambda name: zsh if name == "zsh" else None)
-    monkeypatch.setenv("SHELL", "/bin/zsh")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/bin/zsh")
     ctx, out = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -487,7 +489,7 @@ def test_setup_warns_and_skips_chsh_when_shells_registration_fails(
         commands, "run", _fake_run(calls, brew_prefix=str(tmp_path), rc=_Rc(shells=1))
     )
     monkeypatch.setattr(commands, "which", lambda _name: fish)
-    monkeypatch.setenv("SHELL", "/bin/zsh")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/bin/zsh")
     ctx, _ = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -512,7 +514,7 @@ def test_setup_linux_runs_ufw_and_skips_touch_id(
     calls: list[SimpleNamespace] = []
     monkeypatch.setattr(commands, "run", _fake_run(calls))
     monkeypatch.setattr(commands, "which", lambda _name: fish)
-    monkeypatch.setenv("SHELL", "/bin/bash")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/bin/bash")
     ctx, out = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -540,7 +542,7 @@ def test_setup_linux_warns_when_ufw_missing(
     calls: list[SimpleNamespace] = []
     monkeypatch.setattr(commands, "run", _fake_run(calls))
     monkeypatch.setattr(commands, "which", lambda name: None if name == "ufw" else fish)
-    monkeypatch.setenv("SHELL", "/bin/bash")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/bin/bash")
     ctx, _ = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -561,7 +563,7 @@ def test_setup_linux_warns_when_ufw_not_confirmed_active(
     calls: list[SimpleNamespace] = []
     monkeypatch.setattr(commands, "run", _fake_run(calls, ufw="inactive"))
     monkeypatch.setattr(commands, "which", lambda _name: "/home/linuxbrew/.linuxbrew/bin/fish")
-    monkeypatch.setenv("SHELL", "/bin/bash")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/bin/bash")
     ctx, _ = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -581,7 +583,7 @@ def test_setup_wsl_skips_firewall_entirely(
     calls: list[SimpleNamespace] = []
     monkeypatch.setattr(commands, "run", _fake_run(calls))
     monkeypatch.setattr(commands, "which", lambda _name: fish)
-    monkeypatch.setenv("SHELL", "/bin/bash")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/bin/bash")
     ctx, out = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -608,7 +610,7 @@ def test_setup_linux_allows_ssh_before_enabling_ufw(
     calls: list[SimpleNamespace] = []
     monkeypatch.setattr(commands, "run", _fake_run(calls, rc=_Rc(sshd=0)))
     monkeypatch.setattr(commands, "which", lambda _name: "/home/linuxbrew/.linuxbrew/bin/fish")
-    monkeypatch.setenv("SHELL", "/bin/bash")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/bin/bash")
     ctx, out = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -630,7 +632,7 @@ def test_setup_linux_leaves_firewall_off_when_ssh_allow_fails(
     calls: list[SimpleNamespace] = []
     monkeypatch.setattr(commands, "run", _fake_run(calls, rc=_Rc(sshd=0, ufw_allow=1)))
     monkeypatch.setattr(commands, "which", lambda _name: "/home/linuxbrew/.linuxbrew/bin/fish")
-    monkeypatch.setenv("SHELL", "/bin/bash")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/bin/bash")
     ctx, _ = _ctx()
 
     privileged.privileged_setup(ctx)
