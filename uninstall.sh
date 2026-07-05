@@ -346,10 +346,23 @@ tier4_report() {
   rec_left "application firewall + stealth mode — installer turned these ON; left on"
   rec_manual "disable the firewall if you want: sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off"
 
-  local shell_bin
-  for shell_bin in "$(command -v fish 2>/dev/null || true)" "$(command -v zsh 2>/dev/null || true)"; do
+  # `command -v zsh` alone isn't enough: unlike fish (never shipped by macOS, so no
+  # ambiguity), zsh has both a system build (/bin/zsh, explicitly skipped below) and a
+  # Homebrew one, and PATH order doesn't guarantee which one `command -v` finds — if it
+  # resolves /bin/zsh, a registered Homebrew zsh would otherwise never even be checked.
+  # Probe the known Homebrew prefixes directly too, deduping against what command -v
+  # already found.
+  local shell_bin seen=" "
+  for shell_bin in \
+    "$(command -v fish 2>/dev/null || true)" \
+    "$(command -v zsh 2>/dev/null || true)" \
+    /opt/homebrew/bin/zsh /usr/local/bin/zsh \
+    /home/linuxbrew/.linuxbrew/bin/zsh "$HOME/.linuxbrew/bin/zsh"; do
     [ -n "$shell_bin" ] || continue
-    [ "$shell_bin" = /bin/zsh ] && continue # macOS's own zsh; not something we registered
+    [ "$shell_bin" = /bin/zsh ] && continue            # macOS's own zsh; not something we registered
+    case "$seen" in *" $shell_bin "*) continue ;; esac # already checked
+    seen="$seen$shell_bin "
+    [ -x "$shell_bin" ] || continue
     if grep -qxF "$shell_bin" /etc/shells 2>/dev/null; then
       rec_left "$shell_bin remains registered in /etc/shells (harmless)"
       rec_manual "remove it if you want: sudo sed -i '' '\\|^$shell_bin\$|d' /etc/shells"

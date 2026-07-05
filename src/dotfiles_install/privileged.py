@@ -162,7 +162,13 @@ def _set_login_shell(ctx: InstallContext) -> None:
     # The real registered login shell, not $SHELL (which only reflects how the
     # *current* process was spawned — stale in a not-yet-restarted terminal, or simply
     # wrong if the installer runs from a differently-invoked shell/subshell/CI runner).
-    if verify_install.login_shell() == shell_bin:
+    # Compared by basename, not the exact `which()`-resolved path: unlike fish (never
+    # shipped by macOS), zsh has both a system build (/bin/zsh) and a Homebrew one, and
+    # PATH ordering in the installer's own process doesn't guarantee which `which("zsh")`
+    # finds — an exact-path mismatch here would wrongly chsh a correctly-configured
+    # Homebrew zsh back to the system one on every re-run.
+    current = verify_install.login_shell()
+    if current is not None and Path(current).name == shell_name:
         ctx.ui.ok(f"{shell_name} already the default shell")
         return
     ctx.ui.active(f"setting {shell_name} as the default shell (chsh)")

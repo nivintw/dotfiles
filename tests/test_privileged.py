@@ -466,7 +466,9 @@ def test_setup_chshes_to_zsh_when_persisted_choice_is_zsh(
     calls: list[SimpleNamespace] = []
     monkeypatch.setattr(commands, "run", _fake_run(calls, brew_prefix=str(tmp_path)))
     monkeypatch.setattr(commands, "which", lambda name: zsh if name == "zsh" else None)
-    monkeypatch.setattr(verify_install, "login_shell", lambda: "/bin/zsh")
+    # Currently fish (a different basename than the "zsh" target) — /bin/zsh would
+    # coincidentally basename-match "zsh" and wrongly look "already default".
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/opt/homebrew/bin/fish")
     ctx, out = _ctx()
 
     privileged.privileged_setup(ctx)
@@ -475,6 +477,31 @@ def test_setup_chshes_to_zsh_when_persisted_choice_is_zsh(
     assert ["sudo", "chsh", "-s", zsh, privileged._current_username()] in argvs
     assert "zsh set as the default shell" in out.getvalue()
     assert "fish" not in out.getvalue()
+
+
+def test_setup_does_not_downgrade_a_homebrew_zsh_to_the_system_one(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Login shell is already a Homebrew zsh, but PATH resolves `which("zsh")` differently.
+
+    `which("zsh")` resolves the system /bin/zsh (a different exact path, same basename).
+    Must be treated as already default — never chsh a correctly-configured Homebrew zsh
+    back to the system one just because of PATH ordering.
+    """
+    _point_paths(monkeypatch, tmp_path)
+    shell_select.write_shell(tmp_path, "zsh")
+    calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(commands, "run", _fake_run(calls, brew_prefix=str(tmp_path)))
+    monkeypatch.setattr(commands, "which", lambda name: "/bin/zsh" if name == "zsh" else None)
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/opt/homebrew/bin/zsh")
+    ctx, out = _ctx()
+
+    privileged.privileged_setup(ctx)
+
+    argvs = [c.argv for c in calls]
+    assert not any(a[:2] == ["sudo", "chsh"] for a in argvs)
+    assert "zsh already the default shell" in out.getvalue()
 
 
 def test_setup_warns_and_skips_chsh_when_shells_registration_fails(
