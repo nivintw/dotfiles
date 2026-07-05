@@ -555,6 +555,7 @@ def _healthy_repo_and_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
     for rel in (
         ".gitconfig",
         ".config/fish/config.fish",
+        ".zshenv",
         ".config/zsh/.zshrc",
         ".claude/CLAUDE.md",
     ):
@@ -576,14 +577,14 @@ def test_iter_records_all_ok_on_healthy_machine(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A fully set-up machine yields only OK records (the eleven baseline checks)."""
+    """A fully set-up machine yields only OK records (the twelve baseline checks)."""
     repo = _healthy_repo_and_home(tmp_path, monkeypatch)
     monkeypatch.setattr(commands, "which", lambda name: f"/usr/local/bin/{name}")
     _all_probes(monkeypatch, healthy=True)
     records = list(verify_install.iter_records(repo, core=False))
     bad = [msg for status, msg in records if status == "BAD"]
-    # brew, login, touch-id, firewall, 4 symlinks, settings, gitconfig, pre-push hook
-    expected_checks = 11
+    # brew, login, touch-id, firewall, 5 symlinks, settings, gitconfig, pre-push hook
+    expected_checks = 12
     assert bad == []
     assert len(records) == expected_checks
     assert ("OK", "no pre-push hook installed (opt-in; nothing else owns it)") in records
@@ -874,7 +875,7 @@ def test_iter_records_linux_shape(
     records = list(verify_install.iter_records(repo, core=False))
     bad = [msg for status, msg in records if status == "BAD"]
     assert bad == []
-    expected_checks = 10  # the macOS eleven, minus Touch ID
+    expected_checks = 11  # the macOS twelve, minus Touch ID
     assert len(records) == expected_checks
     assert any("ufw firewall active" in msg for _s, msg in records)
     assert not any("Touch ID" in msg for _s, msg in records)
@@ -906,7 +907,7 @@ def test_iter_records_wsl_omits_the_firewall_record(
     records = list(verify_install.iter_records(repo, core=False))
     bad = [msg for status, msg in records if status == "BAD"]
     assert bad == []
-    expected_checks = 9  # the macOS eleven, minus Touch ID and the firewall
+    expected_checks = 10  # the macOS twelve, minus Touch ID and the firewall
     assert len(records) == expected_checks
     assert not any("firewall" in msg for _s, msg in records)
 

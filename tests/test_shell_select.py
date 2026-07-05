@@ -13,10 +13,8 @@ from __future__ import annotations
 import io
 from typing import TYPE_CHECKING
 
+import pytest
 from rich.console import Console
-
-if TYPE_CHECKING:
-    import pytest
 
 from dotfiles_install import shell_select
 from dotfiles_install.context import InstallContext
@@ -52,6 +50,17 @@ def test_write_then_read_roundtrips_the_choice(tmp_path: Path) -> None:
     """The shell written is the shell read back."""
     write_shell(tmp_path, "zsh")
     assert read_shell(tmp_path) == "zsh"
+
+
+def test_write_rejects_an_invalid_shell(tmp_path: Path) -> None:
+    """write_shell fails loudly on a value outside VALID_SHELLS.
+
+    Rather than letting an invalid choice reach disk, where read_shell would
+    otherwise have to silently degrade it later.
+    """
+    with pytest.raises(ValueError, match="bash"):
+        write_shell(tmp_path, "bash")
+    assert not shell_file(tmp_path).exists()
 
 
 def test_read_rejects_a_corrupted_persisted_value(tmp_path: Path) -> None:
