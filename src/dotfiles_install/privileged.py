@@ -28,7 +28,7 @@ import pwd
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dotfiles_install import commands, shell_select
+from dotfiles_install import commands, shell_select, verify_install
 from dotfiles_install.os_detect import OS, current_os
 
 if TYPE_CHECKING:
@@ -159,7 +159,10 @@ def _set_login_shell(ctx: InstallContext) -> None:
                 "leaving the default shell unchanged",
             )
             return
-    if os.environ.get("SHELL") == shell_bin:
+    # The real registered login shell, not $SHELL (which only reflects how the
+    # *current* process was spawned — stale in a not-yet-restarted terminal, or simply
+    # wrong if the installer runs from a differently-invoked shell/subshell/CI runner).
+    if verify_install.login_shell() == shell_bin:
         ctx.ui.ok(f"{shell_name} already the default shell")
         return
     ctx.ui.active(f"setting {shell_name} as the default shell (chsh)")
