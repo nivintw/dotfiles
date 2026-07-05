@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Serve the dotfiles docs/ site locally (python http.server).
+launch-docs() {
+    local port=8000
+    if [[ -n "$1" ]]; then
+        if [[ ! "$1" =~ ^[0-9]+$ ]] || (( $1 < 1 )) || (( $1 > 65535 )); then
+            echo "usage: launch-docs [port]   (port must be 1-65535; default 8000)" >&2
+            return 2
+        fi
+        port=$1
+    fi
+
+    # Resolve docs/ without hardcoding ~/dotfiles: honor $DOTFILES, then a docs/ in the
+    # current repo (so it works from any worktree you're cd'd into), then the
+    # conventional checkout.
+    local toplevel docs cand
+    toplevel=$(git rev-parse --show-toplevel 2>/dev/null)
+    for cand in "$DOTFILES/docs" "$toplevel/docs" "$HOME/dotfiles/docs"; do
+        if [[ -d "$cand" ]]; then
+            docs=$cand
+            break
+        fi
+    done
+    if [[ -z "$docs" ]]; then
+        echo "launch-docs: docs site not found (set \$DOTFILES or run from the dotfiles repo)" >&2
+        return 1
+    fi
+
+    # Preflight: refuse a port already in use, so we don't open the browser at a server
+    # that isn't ours (or crash python on bind). nc ships on macOS but isn't guaranteed
+    # on a minimal Linux/WSL box — when it's absent we can't check, so skip the guard
+    # and let python surface its own bind error rather than failing open on a bogus
+    # "port in use".
+    if command -v nc >/dev/null 2>&1 && nc -z localhost "$port" 2>/dev/null; then
+        echo "launch-docs: port $port is already in use" >&2
+        return 1
+    fi
+
+    local url="http://localhost:$port"
+    echo "Serving $docs at $url  (Ctrl-C to stop)"
+    # Open the browser only once the server actually accepts connections, so the first
+    # load never races the listener. With nc, poll the port directly — the same
+    # readiness check the preflight uses — which opens the instant the listener is up,
+    # hard-bounded to ~10s. Without nc, we can't poll, so wait a beat for the bind and
+    # open best-effort. Backgrounded (a forked subshell inherits this shell's functions)
+    # so the server below keeps the foreground and Ctrl-C stops it cleanly. localhost is
+    # a secure context, so the docs' Clipboard-API copy buttons work. __os_open
+    # dispatches open/xdg-open/wslview by OS.
+    (
+        if command -v nc >/dev/null 2>&1; then
+            local attempt
+            for attempt in {1..100}; do
+                if nc -z localhost "$port" 2>/dev/null; then
+                    __os_open "$url" || echo "launch-docs: couldn't auto-open a browser — open $url yourself" >&2
+                    break
+                fi
+                sleep 0.1
+            done
+        else
+            sleep 1
+            __os_open "$url" || echo "launch-docs: couldn't auto-open a browser — open $url yourself" >&2
+        fi
+    ) &
+    python3 -m http.server "$port" --directory "$docs"
+}

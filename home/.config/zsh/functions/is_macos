@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Exit 0 when running on macOS (Darwin).
+is_macos() {
+    [[ "$(uname)" == Darwin ]]
+}

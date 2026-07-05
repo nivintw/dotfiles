@@ -11,7 +11,15 @@ from typing import TYPE_CHECKING
 import pytest
 from typer.testing import CliRunner
 
-from dotfiles_install import brew_bundle, cli, commands, ollama, privileged, verify_install
+from dotfiles_install import (
+    brew_bundle,
+    cli,
+    commands,
+    ollama,
+    privileged,
+    shell_select,
+    verify_install,
+)
 from dotfiles_install.cli import app, discover_bundles
 from dotfiles_install.os_detect import OS
 from dotfiles_install.phases import Phase
@@ -42,7 +50,7 @@ def _no_real_installs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(commands, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(commands, "run", _ok)
     monkeypatch.setenv("HOME", str(tmp_path))
-    # Phase 2 (privileged) now runs in the walk; repoint its /etc touchpoints at tmp files so the
+    # Phase 3 (privileged) now runs in the walk; repoint its /etc touchpoints at tmp files so the
     # CLI tests never read the host's real /etc/pam.d/sudo, sudo_local, or /etc/shells.
     pam_sudo = tmp_path / "sudo"
     pam_sudo.write_text("auth  include  sudo_local\n", encoding="utf-8")
@@ -51,7 +59,7 @@ def _no_real_installs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     etc_shells = tmp_path / "shells"
     etc_shells.write_text("/bin/zsh\n", encoding="utf-8")
     monkeypatch.setattr(privileged, "_ETC_SHELLS", etc_shells)
-    # Phase 18 (verify & summary) runs in the walk too; stub its emitter so the CLI tests don't
+    # Phase 19 (verify & summary) runs in the walk too; stub its emitter so the CLI tests don't
     # shell out to brew/dscl/socketfilterfw or read the host's /etc. The verify logic itself is
     # covered by tests/test_verify_install.py.
     monkeypatch.setattr(verify_install, "iter_records", lambda *_a, **_k: iter(()))
@@ -111,18 +119,20 @@ def test_run_on_linux_walks_the_os_agnostic_phases(monkeypatch: pytest.MonkeyPat
     result = runner.invoke(app, [])
     assert result.exit_code == 0
     assert "dotfiles bootstrap" in result.output
-    # Packages (0-1), the privileged block (2), stow (3), ollama (14), and verify (18) all run...
+    # Packages (0-1), shell selection (2), the privileged block (3), stow (4), ollama (15), and
+    # verify (19) all run...
     assert "[0] Bootstrap toolchain" in result.output
     assert "[1] Homebrew packages" in result.output
-    assert "[2] Privileged setup" in result.output
-    assert "[3] dotfiles symlinks (stow)" in result.output
-    assert "[14] Ollama models" in result.output
-    assert "[18] Verification & summary" in result.output
+    assert "[2] Login shell selection" in result.output
+    assert "[3] Privileged setup" in result.output
+    assert "[4] dotfiles symlinks (stow)" in result.output
+    assert "[15] Ollama models" in result.output
+    assert "[19] Verification & summary" in result.output
     # ...while the macOS-purpose phases (iTerm2, macos.sh, Dock, VS Code) are gated out.
-    assert "[8] iTerm2 preferences" not in result.output
-    assert "[15] macOS system defaults" not in result.output
-    assert "[16] Dock layout" not in result.output
-    assert "[17] VS Code user settings" not in result.output
+    assert "[9] iTerm2 preferences" not in result.output
+    assert "[16] macOS system defaults" not in result.output
+    assert "[17] Dock layout" not in result.output
+    assert "[18] VS Code user settings" not in result.output
 
 
 def test_run_with_no_applicable_phases_exits_one(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -159,17 +169,45 @@ def test_run_on_macos_walks_all_phases(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "not yet ported" not in result.output
     # Every phase header is printed, from phase 0 through the final verification phase.
     assert "[0] Bootstrap toolchain (Homebrew + uv)" in result.output
-    assert "[18] Verification & summary" in result.output
+    assert "[19] Verification & summary" in result.output
 
 
 @pytest.mark.usefixtures("_no_real_installs")
 def test_no_dock_flag_skips_the_dock_phase(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``--no-dock`` still walks phase 16 (header prints) but its body skips dock.sh."""
+    """``--no-dock`` still walks phase 17 (header prints) but its body skips dock.sh."""
     monkeypatch.setattr(cli, "current_os", lambda: OS.MACOS)
     result = runner.invoke(app, ["--no-dock"])
     assert result.exit_code == 0
-    assert "[16] Dock layout (dock.sh)" in result.output
+    assert "[17] Dock layout (dock.sh)" in result.output
     assert "Dock layout skipped (--no-dock)" in result.output
+
+
+@pytest.mark.usefixtures("_no_real_installs")
+def test_shell_flag_selects_zsh_and_persists_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``--shell zsh`` walks phase 2 and persists the choice to ~/.config/dotfiles/shell."""
+    monkeypatch.setattr(cli, "current_os", lambda: OS.MACOS)
+    result = runner.invoke(app, ["--shell", "zsh"])
+    assert result.exit_code == 0
+    assert "[2] Login shell selection" in result.output
+    assert "login shell: zsh" in result.output
+    assert shell_select.read_shell(tmp_path) == "zsh"
+
+
+@pytest.mark.usefixtures("_no_real_installs")
+def test_no_shell_flag_defaults_to_fish(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With no ``--shell`` flag, the run keeps fish as the default and says so."""
+    monkeypatch.setattr(cli, "current_os", lambda: OS.MACOS)
+    result = runner.invoke(app, [])
+    assert result.exit_code == 0
+    assert "login shell: fish (default)" in result.output
+
+
+def test_unknown_shell_is_a_usage_error() -> None:
+    """An unrecognized ``--shell`` value exits 2."""
+    result = runner.invoke(app, ["--shell", "bash"])
+    assert result.exit_code == USAGE_ERROR_EXIT
 
 
 def test_verify_flag_exits_zero_when_healthy(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -177,6 +215,27 @@ def test_verify_flag_exits_zero_when_healthy(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(verify_install, "run_check", lambda _ctx: 0)
     result = runner.invoke(app, ["--verify"])
     assert result.exit_code == 0
+
+
+def test_unknown_shell_with_verify_is_still_a_usage_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unrecognized ``--shell`` combined with ``--verify`` still exits 2.
+
+    Not silently ignored just because verify mode never selects a shell.
+    """
+    monkeypatch.setattr(verify_install, "run_check", lambda _ctx: 0)
+    result = runner.invoke(app, ["--verify", "--shell", "bash"])
+    assert result.exit_code == USAGE_ERROR_EXIT
+
+
+def test_unknown_shell_with_verify_stream_is_still_a_usage_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same guard for ``--verify-stream``."""
+    monkeypatch.setattr(verify_install, "emit_stream", lambda *_a, **_k: None)
+    result = runner.invoke(app, ["--verify-stream", "--shell", "bash"])
+    assert result.exit_code == USAGE_ERROR_EXIT
 
 
 def test_verify_flag_exits_one_when_problems(monkeypatch: pytest.MonkeyPatch) -> None:

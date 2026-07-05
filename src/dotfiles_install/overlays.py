@@ -73,6 +73,13 @@ _LOCAL_FISH = """\
 #   alias work-vpn 'sudo openconnect ...'
 """
 
+_LOCAL_ZSH = """\
+# Machine-local zsh config (untracked). Sourced last by conf.d/zzz-local.zsh.
+# Example:
+#   export SOME_API_TOKEN=...
+#   alias work-vpn='sudo openconnect ...'
+"""
+
 _BREWFILE_LOCAL = """\
 # Machine-private Homebrew additions (untracked — never committed). Same Ruby DSL
 # as the repo Brewfile; loaded automatically by install.sh. For work-only or
@@ -132,6 +139,7 @@ def seed_overlays(ctx: InstallContext) -> None:
     gitconfig_local = home / ".gitconfig_local"
     _seed_if_absent(ctx, gitconfig_local, _GITCONFIG_LOCAL)
     _seed_if_absent(ctx, config / "local.fish", _LOCAL_FISH)
+    _seed_if_absent(ctx, config / "local.zsh", _LOCAL_ZSH)
     _seed_if_absent(ctx, config / "Brewfile.local", _BREWFILE_LOCAL)
     _seed_if_absent(ctx, config / "CLAUDE.local.md", _CLAUDE_LOCAL_MD)
     _seed_if_absent(ctx, config / "claude_mcp.local.json", _EMPTY_JSON)

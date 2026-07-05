@@ -18,6 +18,7 @@ All subprocess goes through the ``commands`` seam, so the tests monkeypatch a si
 from __future__ import annotations
 
 import io
+import pathlib
 import subprocess
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -26,7 +27,7 @@ from typing import TYPE_CHECKING
 import pytest
 from rich.console import Console
 
-from dotfiles_install import commands, privileged
+from dotfiles_install import commands, privileged, shell_select
 from dotfiles_install.context import InstallContext
 from dotfiles_install.os_detect import OS
 from dotfiles_install.ui import UI
@@ -119,6 +120,10 @@ def _point_paths(
     etc_shells = tmp_path / "shells"
     etc_shells.write_text(shells, encoding="utf-8")
     monkeypatch.setattr(privileged, "_ETC_SHELLS", etc_shells)
+    # Repoint $HOME so _set_login_shell's shell_select.read_shell() lookup lands in a fresh,
+    # empty tmp dir (no persisted ~/.config/dotfiles/shell) rather than the real machine's
+    # home — every existing test here assumes the fish default with no persisted choice.
+    monkeypatch.setattr(pathlib.Path, "home", lambda: tmp_path)
 
 
 def _tee_calls(calls: list[SimpleNamespace], target: str) -> list[SimpleNamespace]:
@@ -341,7 +346,7 @@ def test_setup_always_drops_the_ticket_even_if_a_step_raises(
         msg = "kaboom"
         raise RuntimeError(msg)
 
-    monkeypatch.setattr(privileged, "_set_fish_login_shell", _boom)
+    monkeypatch.setattr(privileged, "_set_login_shell", _boom)
     ctx, _ = _ctx()
 
     with pytest.raises(RuntimeError, match="kaboom"):
@@ -446,6 +451,28 @@ def test_setup_warns_when_chsh_fails(
 
     assert any("couldn't set fish as the default shell" in w for w in ctx.ui.warnings)
     assert "fish set as the default shell" not in out.getvalue()  # no false success
+
+
+def test_setup_chshes_to_zsh_when_persisted_choice_is_zsh(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A persisted ``zsh`` choice (from phase 2) makes the block chsh to zsh, not fish."""
+    _point_paths(monkeypatch, tmp_path)
+    shell_select.write_shell(tmp_path, "zsh")  # tmp_path is $HOME (see _point_paths)
+    zsh = "/opt/homebrew/bin/zsh"
+    calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(commands, "run", _fake_run(calls, brew_prefix=str(tmp_path)))
+    monkeypatch.setattr(commands, "which", lambda name: zsh if name == "zsh" else None)
+    monkeypatch.setenv("SHELL", "/bin/zsh")
+    ctx, out = _ctx()
+
+    privileged.privileged_setup(ctx)
+
+    argvs = [c.argv for c in calls]
+    assert ["sudo", "chsh", "-s", zsh, privileged._current_username()] in argvs
+    assert "zsh set as the default shell" in out.getvalue()
+    assert "fish" not in out.getvalue()
 
 
 def test_setup_warns_and_skips_chsh_when_shells_registration_fails(

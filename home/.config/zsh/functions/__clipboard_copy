@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Copy stdin to the system clipboard (macOS/Linux/WSL). Cross-platform replacement for a
+# bare `pbcopy`. macOS has pbcopy; WSL reaches the Windows clipboard via clip.exe; Linux
+# uses the Wayland (wl-copy) or X11 (xclip/xsel) tool that's installed.
+__clipboard_copy() {
+    if is_macos; then
+        pbcopy
+    elif is_wsl && command -v clip.exe >/dev/null 2>&1; then
+        clip.exe
+    elif command -v wl-copy >/dev/null 2>&1; then
+        wl-copy
+    elif command -v xclip >/dev/null 2>&1; then
+        xclip -selection clipboard
+    elif command -v xsel >/dev/null 2>&1; then
+        xsel --clipboard --input
+    else
+        # No clipboard tool. Drain a *piped* stdin so the upstream `printf … |` producer
+        # doesn't see a broken pipe — but never read an interactive tty, which would
+        # block the shell waiting for Ctrl-D. Either way, report failure.
+        [[ -t 0 ]] || cat >/dev/null
+        return 1
+    fi
+}

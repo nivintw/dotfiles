@@ -2,7 +2,8 @@
 
 > Tyler Nivin's personal, idempotent bootstrap for macOS, Linux, and WSL2 — one command
 > (`install.sh`) converges a fresh machine to a declared state via Homebrew, GNU Stow, and
-> fish. Built to be forked: the machinery is generic, the package list/Dock/keys are his.
+> fish (zsh selectable via `--shell zsh`). Built to be forked: the machinery is generic, the
+> package list/Dock/keys are his.
 
 This file inlines the full content of every page linked from `llms.txt`, for tools that want
 the whole corpus in one fetch.
@@ -37,28 +38,29 @@ once.
 | # | Step | What happens |
 | --- | --- | --- |
 | 0 | Toolchain | Install Homebrew & uv if missing |
-| 1 | `brew bundle` | All baseline CLI tools, fish, GUI casks, the MesloLGS NF font — then an fzf multi-select for opt-in bundles (`personal`, `homelab`, `1password`) |
-| 2 | Privileged block | fish as login shell everywhere, plus one sudo prompt for the OS-specific bit: Touch ID for sudo & the app firewall (macOS), `ufw` (native Linux), or nothing (WSL2 — the Windows host owns the firewall) |
-| 3 | Stow | Symlink `home/` into `$HOME` |
-| 4 | Overlays | Seed untracked machine-local overlay files (SSH, git, fish, `Brewfile.local`, `CLAUDE.local.md`, `claude_mcp.local.json`, `macos.local.sh`) with commented examples; disable commit signing if 1Password is absent |
-| 5 | fisher | fish plugins from `fish_plugins` (tide, fzf.fish) |
-| 6 | TPM | tmux plugin manager + plugins from `tmux.conf` |
-| 7 | atuin | Backfill existing shell history into atuin's DB |
-| 8 | iTerm2 *(macOS only)* | Point iTerm at the tracked `iterm2/` prefs folder |
-| 9 | uv tools | Install the Python CLIs in `uv_tools.txt` |
-| 10 | git clone hook | A stowed `post-checkout` template hook **notifies** on every fresh clone that defines pre-commit hooks — running nothing from the clone, so the default is safe. Opt into auto-install with `git config --file ~/.gitconfig_local dotfiles.autoInstallHooks true` |
-| 11 | Claude Code | Native installer (self-updating) → `~/.local/bin/claude` |
-| 12 | MCP servers | Replay `claude_mcp.json` (deep-merged with an optional `~/.config/dotfiles/claude_mcp.local.json` overlay) into `~/.claude.json` — secrets via `op inject`, or a `GITHUB_PERSONAL_ACCESS_TOKEN` from the environment without 1Password |
-| 13 | Claude settings | Generate `~/.claude/settings.json` by deep-merging the tracked `claude_settings.json` baseline with the untracked `~/.config/dotfiles/claude_settings.local.json` overlay (arrays union; the overlay wins per scalar) |
-| 14 | Ollama | Start the server & pull the role models: `qwen3:4b-instruct-2507-q4_K_M` (~2.5 GB, fast tier + GitLens) and `qwen3-vl:4b-instruct` (~3.3 GB, vision) everywhere; on Apple Silicon with >32 GB unified memory also the big pair — `qwen3.5:35b-a3b-coding-nvfp4` (~21 GB, bulk coding, MLX) and `gemma4:26b` (~17 GB, generalist) — all driven through the `ollm` CLI; skipped by dropping the `ollama-app` cask (so also skipped under `--core`) |
-| 15 | macOS defaults *(macOS only)* | `macos.sh` system tweaks |
-| 16 | Dock *(macOS only)* | Declarative Dock layout via `dock.sh` |
-| 17 | VS Code settings *(macOS only)* | Generate `settings.json` by deep-merging the tracked `vscode_settings.json` baseline with an untracked overlay, auto-seeding the Homebrew `rg` path the todo-tree extension needs |
-| 18 | Verify | Re-check the install end state and print the summary (the same checks `dotfiles-doctor` runs) |
+| 1 | `brew bundle` | All baseline CLI tools, fish and zsh, GUI casks, the MesloLGS NF font — then an fzf multi-select for opt-in bundles (`personal`, `homelab`, `1password`) |
+| 2 | Shell selection | Resolve the login shell — fish by default, or zsh if `--shell zsh` — and persist the choice to `~/.config/dotfiles/shell` so a plain re-run repeats it |
+| 3 | Privileged block | The resolved shell as login shell everywhere, plus one sudo prompt for the OS-specific bit: Touch ID for sudo & the app firewall (macOS), `ufw` (native Linux), or nothing (WSL2 — the Windows host owns the firewall) |
+| 4 | Stow | Symlink `home/` into `$HOME` — both shells' config trees, regardless of which is selected |
+| 5 | Overlays | Seed untracked machine-local overlay files (SSH, git, fish, zsh, `Brewfile.local`, `CLAUDE.local.md`, `claude_mcp.local.json`, `macos.local.sh`) with commented examples; disable commit signing if 1Password is absent |
+| 6 | fisher | fish plugins from `fish_plugins` (tide, fzf.fish) — zsh's plugins (zinit-managed) self-install on first zsh startup instead |
+| 7 | TPM | tmux plugin manager + plugins from `tmux.conf` |
+| 8 | atuin | Backfill existing shell history into atuin's DB |
+| 9 | iTerm2 *(macOS only)* | Point iTerm at the tracked `iterm2/` prefs folder |
+| 10 | uv tools | Install the Python CLIs in `uv_tools.txt` |
+| 11 | git clone hook | A stowed `post-checkout` template hook **notifies** on every fresh clone that defines pre-commit hooks — running nothing from the clone, so the default is safe. Opt into auto-install with `git config --file ~/.gitconfig_local dotfiles.autoInstallHooks true` |
+| 12 | Claude Code | Native installer (self-updating) → `~/.local/bin/claude` |
+| 13 | MCP servers | Replay `claude_mcp.json` (deep-merged with an optional `~/.config/dotfiles/claude_mcp.local.json` overlay) into `~/.claude.json` — secrets via `op inject`, or a `GITHUB_PERSONAL_ACCESS_TOKEN` from the environment without 1Password |
+| 14 | Claude settings | Generate `~/.claude/settings.json` by deep-merging the tracked `claude_settings.json` baseline with the untracked `~/.config/dotfiles/claude_settings.local.json` overlay (arrays union; the overlay wins per scalar) |
+| 15 | Ollama | Start the server & pull the role models: `qwen3:4b-instruct-2507-q4_K_M` (~2.5 GB, fast tier + GitLens) and `qwen3-vl:4b-instruct` (~3.3 GB, vision) everywhere; on Apple Silicon with >32 GB unified memory also the big pair — `qwen3.5:35b-a3b-coding-nvfp4` (~21 GB, bulk coding, MLX) and `gemma4:26b` (~17 GB, generalist) — all driven through the `ollm` CLI; skipped by dropping the `ollama-app` cask (so also skipped under `--core`) |
+| 16 | macOS defaults *(macOS only)* | `macos.sh` system tweaks |
+| 17 | Dock *(macOS only)* | Declarative Dock layout via `dock.sh` |
+| 18 | VS Code settings *(macOS only)* | Generate `settings.json` by deep-merging the tracked `vscode_settings.json` baseline with an untracked overlay, auto-seeding the Homebrew `rg` path the todo-tree extension needs |
+| 19 | Verify | Re-check the install end state and print the summary (the same checks `dotfiles-doctor` runs) |
 
 The iTerm2 step takes effect on iTerm's next launch — fully quit it first if it's already
-open. Several of these steps are personal taste — the package list (1), MCP servers (12),
-the Ollama models (14), the macOS defaults (15), and the Dock (16) encode Tyler's
+open. Several of these steps are personal taste — the package list (1), MCP servers (13),
+the Ollama models (15), the macOS defaults (16), and the Dock (17) encode Tyler's
 preferences and accounts. They're the first things to change on a fork.
 
 ### Make it yours
@@ -99,13 +101,16 @@ Per-machine specifics live in untracked overlay files the bootstrap seeds; each 
 fills in only what it needs (see Architecture's "Machine-local overlays" for the full
 mechanism).
 
+- **Login shell: fish or zsh** — fish is the default; `--shell zsh` selects zsh instead
+  (`--shell fish` switches back). Persists to `~/.config/dotfiles/shell`; both shells' config
+  trees are always stowed regardless of which is selected.
 - **Opt-in software bundles** — an fzf multi-select for `personal`/`homelab`; persists to
   `~/.config/dotfiles/bundles`. `--bundle NAME` / `--no-bundles` / `--keep-bundles` control
   it non-interactively.
 - **Machine-private software** — work-only or sensitive casks go in untracked
   `~/.config/dotfiles/Brewfile.local`.
-- **SSH hosts, git identity, fish tweaks** — `~/.ssh/config.local`, `~/.gitconfig_local`,
-  `~/.config/dotfiles/local.fish`.
+- **SSH hosts, git identity, shell tweaks** — `~/.ssh/config.local`, `~/.gitconfig_local`,
+  `~/.config/dotfiles/local.fish` (fish) or `local.zsh` (zsh).
 
 ### Updating
 
@@ -164,7 +169,7 @@ symlinks) so Stow can take them over.
 | `macos.sh` · `dock.sh` | macOS defaults & declarative Dock |
 | `iterm2/` | iTerm2 prefs (pointed at directly, not stowed) |
 | `scripts/` | Helper scripts referenced by hooks |
-| `tests/` | bats (fish behavior) + pytest (config validity) |
+| `tests/` | bats (fish + zsh function behavior) + pytest (config validity) |
 | `docs/` | This documentation site |
 
 ### What isn't stowed — and why
@@ -196,6 +201,7 @@ leaks into the public repo.
 | SSH | `home/.ssh/config` | `~/.ssh/config.local` | `Include`d by the tracked config |
 | git | `home/.gitconfig` | `~/.gitconfig_local` | `[include]`d **last** (overlay wins every key, incl. identity); a pre-existing `~/.gitconfig` is backed up + folded in |
 | fish | `home/.config/fish/**` | `~/.config/dotfiles/local.fish` | sourced by `conf.d/zzz-local.fish` |
+| zsh | `home/.config/zsh/**`, `home/.zshenv` | `~/.config/dotfiles/local.zsh` | sourced by `conf.d/zzz-local.zsh`; always stowed alongside fish — only the login shell is selected |
 | Homebrew | `Brewfile` + `Brewfile.d/*.brewfile` | `~/.config/dotfiles/Brewfile.local` | loaded by `install.sh` |
 | Claude memory | `home/.claude/CLAUDE.md` | `~/.config/dotfiles/CLAUDE.local.md` | `@`-imported by the tracked `CLAUDE.md` |
 | Claude settings | `claude_settings.json` | `~/.config/dotfiles/claude_settings.local.json` | deep-merged by the installer (arrays union) into a real `~/.claude/settings.json` |
@@ -226,9 +232,9 @@ unchanged.
 
 - **Adopt, don't clobber** — `brew bundle` adopts a cask whose app is already in
   `/Applications` in place.
-- **Guarded mutations** — every step checks before it acts: `/etc/shells` gets the fish
-  line only if absent, MCP servers are removed-then-added, Ollama model pulls are skipped
-  when already present.
+- **Guarded mutations** — every step checks before it acts: `/etc/shells` gets the resolved
+  shell's line (fish by default, or zsh when selected) only if absent, MCP servers are
+  removed-then-added, Ollama model pulls are skipped when already present.
 - **Re-run is the test** — running `install.sh` a second time should exit 0 with no step
   redoing work (the declarative `macos.sh`/`dock.sh` steps are the deliberate exception —
   they converge rather than no-op).
@@ -241,11 +247,17 @@ The headline tools, by role.
 
 ### Shell
 
-fish as the login shell, with a curated set of modern replacements wired into
-`config.fish`: tide (prompt), fzf.fish, atuin, zoxide, eza, bat, fd, ripgrep, sd, jq, jless,
-delta, difftastic. atuin owns Ctrl+R (SQLite history search); up-arrow stays normal fish
-history. eza aliases `ls`/`ll`/`la`/`lt`. zoxide is initialized in `config.fish` (no longer
-a fisher plugin).
+fish is the login shell by default; zsh is a fully-supported, selectable opt-in
+(`install.sh --shell zsh`, persisted for the next run). Both config trees are always
+stowed regardless of which is selected, each wired to the same curated set of modern
+replacements: tide (fish's prompt) or starship (zsh's), fzf.fish (fish) / zinit-managed
+zsh-autosuggestions + zsh-syntax-highlighting (zsh — closing the fish-parity gap, since
+fish has these built in), atuin, zoxide, eza, bat, fd, ripgrep, sd, jq, jless, delta,
+difftastic. atuin owns Ctrl+R (SQLite history search) in both shells; up-arrow stays
+normal shell history. eza aliases `ls`/`ll`/`la`/`lt`. zoxide is initialized in
+`config.fish` (fish) or `.zshrc` (zsh) — no longer a fisher plugin. Both prompts fall
+back to a plain one inside VS Code's terminal, which otherwise breaks AI terminal tool
+output parsing.
 
 ### Terminal & multiplexer
 
@@ -298,7 +310,7 @@ budget there.
 ```
   many  ┌─ Layer 1 · Static analysis (every commit + CI) ─┐  shellcheck, fish -n,
         │         lint · secret scan · syntax           │  typos, gitleaks, taplo
-        ├─ Layer 2 · Unit + config tests (CI) ───────────┤  bats: fish behavior
+        ├─ Layer 2 · Unit + config tests (CI) ───────────┤  bats: fish + zsh behavior
         │         logic + declarative-config checks      │  pytest: config validity
         ├─ Layer 3 · Integration (CI smoke + local VM)  ┤  install.sh on ephemeral CI runners,
   few   └─        idempotency · real bootstrap ──────────┘  Tart VM (2× run) locally
@@ -331,8 +343,9 @@ Two runners, each idiomatic for its half — they don't overlap.
 
 | Suite | File | Asserts |
 | --- | --- | --- |
-| bats (fish behavior) | `git_prune_local.bats` | The full branch-state matrix — merged, squash-merged, gone-remote, current-branch |
-| | `fish_functions.bats` | Usage / guard paths of the wrapper helpers |
+| bats (fish + zsh behavior) | `git_prune_local.bats` | The full branch-state matrix — merged, squash-merged, gone-remote, current-branch |
+| | `fish_functions.bats` | Usage / guard paths of the fish wrapper helpers |
+| | `zsh_functions.bats` | The same guard-rail coverage for the ported zsh functions, plus OS-dispatch (macOS/Linux/WSL) via a `uname` shim |
 | | `check_ssh_config.bats` | The SSH-host guard both ways — generic passes, a planted host/IP/user fails |
 | pytest (config & coverage) | `test_data_files.py` | Every `*.toml` parses; JSON/JSONC/plist load |
 | | `test_secret_hygiene.py` | No literal token in `claude_mcp.json`; GitHub auth stays an `op://` reference |
@@ -342,7 +355,7 @@ Two runners, each idiomatic for its half — they don't overlap.
 | | `pytest --cov` | Line coverage of the installer core stays above a floor (`pyproject.toml` `[tool.coverage]`) |
 
 ```bash
-bats tests/          # fish behavior
+bats tests/          # fish + zsh behavior
 uv run pytest --cov  # config validity, consistency + installer-core line-coverage gate
 ```
 
@@ -441,7 +454,9 @@ ways (passes generic, fails on a planted host).
 Beyond the third-party tools on The Stack, the repo adds a small set of custom fish
 functions in `home/.config/fish/functions/`. The interesting ones are fzf-driven — fuzzy
 git checkout, live full-text search, a process picker — demoed as recorded terminal casts
-on the live site (this text rendition omits the embedded casts themselves).
+on the live site (this text rendition omits the embedded casts themselves). Most of these
+— everything except the fuzzy-git pickers, `fsearch`, `pset`, and the multi-repo helpers —
+have a zsh port in `home/.config/zsh/functions/` with equivalent behavior.
 
 ### Fuzzy git
 

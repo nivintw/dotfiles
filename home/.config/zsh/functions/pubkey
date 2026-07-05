@@ -1,0 +1,134 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Print an SSH public key and copy it to the clipboard.
+pubkey() {
+    # Explicit path wins:  pubkey ~/.ssh/id_rsa.pub
+    if [[ -n "$1" ]]; then
+        if [[ ! -f "$1" ]]; then
+            echo "No such key: $1" >&2
+            return 1
+        fi
+        _pubkey_emit "$(<"$1")" "$1"
+        return
+    fi
+
+    # With no path argument, discover the key automatically so the same command works
+    # on every machine (personal w/ 1Password, work, or neither).
+    #
+    # Prefer a running agent: 1Password, the macOS keychain, and a plain ssh-agent all
+    # answer `ssh-add -L` identically. A public-key line starts with ssh- / ecdsa- /
+    # sk-, which also filters out the "agent has no identities" message.
+    local keytype_re='^(ssh-|ecdsa-|sk-)'
+
+    # Tier 1: whatever agent $SSH_AUTH_SOCK already points at (work ssh-agent, etc.).
+    local -a keys
+    keys=(${(f)"$(ssh-add -L 2>/dev/null | grep -E "$keytype_re")"})
+
+    # Tier 2: the 1Password agent, if the default agent held nothing. The macOS socket
+    # path is constant across Macs (2BUA8C4S2C is 1Password's Apple Team ID); the
+    # second is the Linux/symlink location.
+    if (( ${#keys[@]} == 0 )); then
+        local sock
+        for sock in "$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock" "$HOME/.1password/agent.sock"; do
+            [[ -S "$sock" ]] || continue
+            keys=(${(f)"$(SSH_AUTH_SOCK=$sock ssh-add -L 2>/dev/null | grep -E "$keytype_re")"})
+            (( ${#keys[@]} > 0 )) && break
+        done
+    fi
+
+    if (( ${#keys[@]} > 0 )); then
+        local key=${keys[1]}
+        if (( ${#keys[@]} > 1 )); then
+            # The raw "ssh-ed25519 AAAA…" blobs are visually identical, so present a
+            # human label per key — its comment (e.g. the 1Password item name), or the
+            # type + last 8 chars of the blob when it carries no comment — with the
+            # SHA256 fingerprint appended as a tiebreaker. An index prefix keeps every
+            # row unique.
+            local -a labels
+            local i
+            for i in {1..${#keys[@]}}; do
+                local -a parts
+                parts=(${=keys[$i]})
+                local label="${parts[3,-1]}"
+                [[ -n "$label" ]] || label="${parts[1]} …${parts[2]: -8}"
+                # local+assign combined: a bare `local fp` re-declared on every loop
+                # iteration (already local after the first) would print a stray
+                # "fp=value" line to stdout — a real zsh autoload/local gotcha.
+                local fp=$(printf '%s\n' "${keys[$i]}" | ssh-keygen -lf - 2>/dev/null | awk '{print $2}')
+                [[ -n "$fp" ]] && label="$label  $fp"
+                labels+=("$(printf '%d. %s' "$i" "$label")")
+            done
+            # Map the choice back by its position in $labels rather than parsing the
+            # printed text: immune to comments containing ". " and to fzf quirks like
+            # FZF_DEFAULT_OPTS=--print-query (which prepends a line — so take the last
+            # line as the selection). --no-multi forbids picking several rows at once.
+            local picked
+            picked=$(printf '%s\n' "${labels[@]}" | fzf --no-multi --prompt="pubkey> ")
+            local last_line="${${(f)picked}[-1]}"
+            local idx=${labels[(Ie)$last_line]}
+            (( idx )) || return 1
+            key=${keys[$idx]}
+        fi
+        _pubkey_emit "$key"
+        return
+    fi
+
+    # Tier 3: no agent identities — fall back to *.pub files on disk. -type f keeps
+    # real files (and symlinks to them) while dropping directories and dangling
+    # symlinks; NUL-splitting survives odd filenames.
+    local -a pubs
+    pubs=(${(0)"$(find -L "$HOME/.ssh" -maxdepth 1 -type f -name '*.pub' -print0 2>/dev/null)"})
+    if (( ${#pubs[@]} == 0 )); then
+        echo "No SSH keys found (no agent identities, no ~/.ssh/*.pub)." >&2
+        echo "Usage: pubkey [path-to-public-key]" >&2
+        return 1
+    fi
+    local file=${pubs[1]}
+    if (( ${#pubs[@]} > 1 )); then
+        local picked
+        picked=$(printf '%s\n' "${pubs[@]}" | fzf --no-multi --prompt="pubkey> ")
+        file="${${(f)picked}[-1]}"
+    fi
+    [[ -n "$file" ]] || return 1
+    _pubkey_emit "$(<"$file")" "$file"
+}
+
+# Internal helper: print a public key, copy it to the clipboard, and report. Defined
+# alongside pubkey (its only caller) rather than autoloaded separately.
+_pubkey_emit() {
+    # The [[:space:]]# glob quantifier (zero-or-more) needs extended_glob; localoptions
+    # scopes it to this call only.
+    setopt localoptions extended_glob
+    local key=$1
+    key=${key##[[:space:]]#}
+    key=${key%%[[:space:]]#}
+    local label=$2
+    if [[ -z "$key" ]]; then
+        echo "pubkey: no key to copy" >&2
+        return 1
+    fi
+    printf '%s\n' "$key"
+    # __clipboard_copy dispatches pbcopy / clip.exe / wl-copy / xclip by OS; on a box
+    # with no clipboard tool it returns non-zero, so report honestly instead of
+    # claiming a copy that didn't happen (the key is already printed above either way).
+    if printf '%s' "$key" | __clipboard_copy; then
+        if [[ -n "$label" ]]; then
+            echo "(copied $label to clipboard)" >&2
+        else
+            echo "(copied to clipboard)" >&2
+        fi
+    else
+        # __clipboard_copy fails for two reasons — no clipboard tool, OR a tool that
+        # ran and failed (e.g. wl-copy with no Wayland display, which prints its own
+        # error above). Don't assert a cause the user can see is wrong; just report the
+        # copy didn't happen.
+        echo "(printed above — couldn't copy it to the clipboard)" >&2
+    fi
+}
+
+# zsh only auto-invokes a freshly-autoloaded function on its first call when the file
+# defines a *single* function; since this file also defines _pubkey_emit, the documented
+# idiom (zshmisc(1), AUTOLOADING FUNCTIONS) is an explicit trailing self-call so the
+# first real invocation isn't silently swallowed.
+pubkey "$@"

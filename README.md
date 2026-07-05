@@ -38,12 +38,13 @@ git clone https://github.com/nivintw/dotfiles ~/dotfiles
 ~/dotfiles/install.sh
 ```
 
-That one command converges a fresh machine to my exact setup: CLI tools, fish,
-and — on macOS — GUI apps, the MesloLGS NF font, macOS defaults, and the Dock.
-On Linux and WSL2 it runs the same OS-agnostic core (Homebrew/Linuxbrew, fish,
-Stow, tmux, Claude Code, …); the macOS-only steps just skip themselves. It's
-safe to re-run — it _converges_ the machine to the declared state rather than
-clobbering what's there.
+That one command converges a fresh machine to my exact setup: CLI tools, fish
+(zsh is a selectable opt-in — `install.sh --shell zsh`), and — on macOS — GUI
+apps, the MesloLGS NF font, macOS defaults, and the Dock. On Linux and WSL2 it
+runs the same OS-agnostic core (Homebrew/Linuxbrew, fish, Stow, tmux, Claude
+Code, …); the macOS-only steps just skip themselves. It's safe to re-run — it
+_converges_ the machine to the declared state rather than clobbering what's
+there.
 
 > **Forking?** `install.sh` installs _my_ taste — package list, Dock, keys, macOS
 > defaults. Review and edit those before you run it.
@@ -92,6 +93,7 @@ given machine needs.
 | **SSH** | `home/.ssh/config` | `~/.ssh/config.local` | `Include`d by the tracked config |
 | **git** | `home/.gitconfig` | `~/.gitconfig_local` | `[include]`d **last** by the tracked config (overlay wins for every key, incl. identity) |
 | **fish** | `home/.config/fish/**` | `~/.config/dotfiles/local.fish` | sourced by `conf.d/zzz-local.fish` |
+| **zsh** | `home/.config/zsh/**`, `home/.zshenv` | `~/.config/dotfiles/local.zsh` | sourced by `conf.d/zzz-local.zsh`; always stowed alongside fish — only the login shell is selected (`--shell fish\|zsh`) |
 | **Homebrew** | `Brewfile` + `Brewfile.d/*` | `~/.config/dotfiles/Brewfile.local` | auto-loaded by `install.sh` |
 | **Claude memory** | `home/.claude/CLAUDE.md` | `~/.config/dotfiles/CLAUDE.local.md` | `@`-imported by the tracked `CLAUDE.md` |
 | **Claude settings** | `claude_settings.json` | `~/.config/dotfiles/claude_settings.local.json` | deep-merged by `install.sh` (arrays union); written to a real `~/.claude/settings.json` |

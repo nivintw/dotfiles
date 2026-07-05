@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Flush the DNS resolver cache (macOS / systemd-resolved).
+dnsflush() {
+    if is_macos; then
+        # Both steps are independent and both matter (the killall is what actually
+        # refreshes the resolver), so run them unconditionally — chaining with && would
+        # skip the killall whenever the flush returned non-zero.
+        local ok=0
+        sudo dscacheutil -flushcache || ok=1
+        sudo killall -HUP mDNSResponder || ok=1
+        if [[ $ok -eq 0 ]]; then
+            echo "DNS cache flushed."
+            return 0
+        fi
+        echo "dnsflush: one or more steps failed" >&2
+        return 1
+    elif is_wsl; then
+        # WSL must be checked BEFORE resolvectl: modern WSL2 ships systemd-resolved, so
+        # resolvectl is present — but flushing it is pointless, because name resolution
+        # on WSL is handled by the Windows host. Flushing the Linux cache wouldn't fix a
+        # stale lookup.
+        echo "dnsflush: on WSL, DNS is the Windows host's job — flush it from Windows (run 'ipconfig /flushdns')." >&2
+        return 1
+    elif command -v resolvectl >/dev/null 2>&1; then
+        # systemd-resolved is the common Linux resolver-cache owner.
+        if sudo resolvectl flush-caches; then
+            echo "DNS cache flushed (systemd-resolved)."
+            return 0
+        fi
+        echo "dnsflush: resolvectl flush-caches failed" >&2
+        return 1
+    else
+        # Plain Linux without systemd-resolved.
+        echo "dnsflush: no supported DNS cache to flush on this system" >&2
+        return 1
+    fi
+}

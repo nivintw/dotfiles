@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Exit 0 on a WSL (Windows Subsystem for Linux) kernel. Mirrors
+# src/dotfiles_install/os_detect.py::is_wsl — a Linux kernel whose
+# /proc/sys/kernel/osrelease advertises a Microsoft/WSL marker. The path is overridable
+# via $__dotfiles_osrelease so the bats suite can point it at a fixture and exercise the
+# marker match on any host — the same reason the Python twin's _WSL_OSRELEASE is
+# repointable. Takes an optional pre-resolved kernel name (is_linux already has one, to
+# avoid forking uname twice) — defaults to running uname itself for standalone callers.
+is_wsl() {
+    local kernel=${1:-$(uname)}
+    [[ "$kernel" == Linux ]] || return 1
+    local osrelease=${__dotfiles_osrelease:-/proc/sys/kernel/osrelease}
+    [[ -r "$osrelease" ]] || return 1
+    local release=${(L)"$(<"$osrelease")"}
+    [[ "$release" == *microsoft* || "$release" == *wsl* ]]
+}

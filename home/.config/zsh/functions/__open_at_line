@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Internal helper: open file:line in the user's editor. Ported alongside fif (its only
+# caller) — not one of the originally-named MVP functions, but fif is non-functional
+# without it.
+__open_at_line() {
+    local file=$1
+    local line=$2
+
+    # $EDITOR may carry flags (e.g. "code --wait"); split into a command + args list so
+    # the case dispatches on the program name, not the whole string.
+    local -a editor
+    editor=(${=EDITOR})
+    if [[ -z "${editor[1]}" ]]; then
+        if command -v code >/dev/null 2>&1; then
+            editor=(code)
+        elif command -v nvim >/dev/null 2>&1; then
+            editor=(nvim)
+        elif command -v vim >/dev/null 2>&1; then
+            editor=(vim)
+        else
+            # No editor found — fall back to the OS default handler (open / xdg-open /
+            # wslview). It can't honor the line number, but opening the file beats
+            # nothing.
+            editor=(__os_open)
+        fi
+    fi
+
+    case "$(basename "${editor[1]}")" in
+        code|code-insiders)
+            "${editor[@]}" --goto "$file:$line"
+            ;;
+        vim|nvim|vi)
+            "${editor[@]}" "+$line" -- "$file"
+            ;;
+        *)
+            # Generic editor, or the __os_open fallback when no editor was found.
+            # Surface a failure instead of silently doing nothing — the __os_open
+            # fallback returns non-zero when no OS handler exists.
+            if ! "${editor[@]}" "$file"; then
+                echo "__open_at_line: couldn't open $file (no editor, and no OS opener available)" >&2
+                return 1
+            fi
+            ;;
+    esac
+}

@@ -60,9 +60,10 @@
 
       <section class="wrap">
         <h2><span class="hash">#</span>Shell</h2>
-        <p class="section-lede"><a href="https://fishshell.com/" rel="noopener"><strong>fish</strong></a> as the login shell, with a curated set of modern replacements wired into <code>config.fish</code>.</p>
+        <p class="section-lede"><a href="https://fishshell.com/" rel="noopener"><strong>fish</strong></a> is the login shell by default; <a href="https://www.zsh.org/" rel="noopener"><strong>zsh</strong></a> is a fully-supported, selectable opt-in (<code>install.sh --shell zsh</code>, persisted for the next run). Both config trees are always stowed regardless of which one is selected, each wired to the same curated set of modern replacements.</p>
         <div class="pill-row">
           <a class="pill" href="https://fishshell.com/" rel="noopener">fish</a><a class="pill" href="https://github.com/IlanCosman/tide" rel="noopener">tide prompt</a><a class="pill" href="https://github.com/PatrickF1/fzf.fish" rel="noopener">fzf.fish</a>
+          <a class="pill" href="https://www.zsh.org/" rel="noopener">zsh</a><a class="pill" href="https://starship.rs/" rel="noopener">starship prompt</a><a class="pill" href="https://github.com/zdharma-continuum/zinit" rel="noopener">zinit</a>
           <a class="pill" href="https://atuin.sh/" rel="noopener">atuin</a><a class="pill" href="https://github.com/ajeetdsouza/zoxide" rel="noopener">zoxide</a><a class="pill" href="https://eza.rocks/" rel="noopener">eza</a>
           <a class="pill" href="https://github.com/sharkdp/bat" rel="noopener">bat</a><a class="pill" href="https://github.com/sharkdp/fd" rel="noopener">fd</a><a class="pill" href="https://github.com/BurntSushi/ripgrep" rel="noopener">ripgrep</a>
           <a class="pill" href="https://github.com/chmln/sd" rel="noopener">sd</a><a class="pill" href="https://jqlang.github.io/jq/" rel="noopener">jq</a><a class="pill" href="https://jless.io/" rel="noopener">jless</a>
@@ -70,9 +71,11 @@
         </div>
         <div class="note">
           <div class="note__title">Behavior notes</div>
-          <strong>atuin</strong> owns <kbd>Ctrl+R</kbd> (SQLite history search); up-arrow stays normal fish history.
+          <strong>atuin</strong> owns <kbd>Ctrl+R</kbd> (SQLite history search) in both shells; up-arrow stays normal shell history.
           <strong>eza</strong> aliases <code>ls</code>/<code>ll</code>/<code>la</code>/<code>lt</code> in interactive shells.
-          <strong>zoxide</strong> is initialized in <code>config.fish</code> (no longer a fisher plugin).
+          <strong>zoxide</strong> is initialized in <code>config.fish</code> (fish) or <code>.zshrc</code> (zsh) — no longer a fisher plugin.
+          fish's Tide prompt and zsh's Starship prompt both fall back to a plain prompt inside VS Code's terminal, which otherwise breaks AI terminal tool output parsing.
+          zsh gains inline autosuggestions and command syntax highlighting via <a class="pill" href="https://github.com/zdharma-continuum/zinit" rel="noopener">zinit</a>-managed plugins — fish has these built in.
         </div>
       </section>
 

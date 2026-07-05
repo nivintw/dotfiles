@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Open a URL or file in the OS default handler (macOS/Linux/WSL). Cross-platform
+# replacement for a bare `open`. macOS has open; WSL hands off to Windows via wslview
+# (wslu) or explorer.exe; Linux uses xdg-open. Each handles both URLs and file paths.
+# Returns non-zero when no handler is available, so callers can fall back (or simply not
+# open) instead of erroring.
+__os_open() {
+    if is_macos; then
+        open "$@"
+    elif is_wsl; then
+        # On WSL prefer the Windows handler (wslview from wslu, else explorer.exe).
+        # Don't fall through to xdg-open — that's the wrong tool on a Windows-backed
+        # desktop.
+        if command -v wslview >/dev/null 2>&1; then
+            wslview "$@"
+        elif command -v explorer.exe >/dev/null 2>&1; then
+            explorer.exe "$@"
+        else
+            return 1
+        fi
+    elif command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$@"
+    else
+        return 1
+    fi
+}

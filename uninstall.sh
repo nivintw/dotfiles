@@ -307,13 +307,17 @@ tier3_login_shell() {
   local cur
   cur="$(dscl . -read "/Users/$(id -un)" UserShell 2>/dev/null | awk '{print $2}')"
   [ -n "$cur" ] || cur="${SHELL:-}"
-  case "$cur" in *fish) ;; *) return 0 ;; esac # only ours if currently fish
+  case "$cur" in
+  /bin/zsh) return 0 ;; # the macOS system shell; not something we set
+  *fish | *zsh) ;;      # ours: fish, or a Homebrew-installed zsh (#35)
+  *) return 0 ;;
+  esac
   ui_step "Login shell"
-  if offer "Reset your login shell from fish back to /bin/zsh (macOS default)?"; then
+  if offer "Reset your login shell from $cur back to /bin/zsh (macOS default)?"; then
     # chsh prompts for your password; we do not pre-warm sudo for a single call.
     do_or_echo "reset login shell to /bin/zsh (chsh)" chsh -s /bin/zsh
   else
-    rec_declined "login shell left as fish ($cur)"
+    rec_declined "login shell left as $cur"
     rec_manual "reset your login shell: chsh -s /bin/zsh"
   fi
 }
@@ -342,12 +346,15 @@ tier4_report() {
   rec_left "application firewall + stealth mode — installer turned these ON; left on"
   rec_manual "disable the firewall if you want: sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off"
 
-  local fish_bin
-  fish_bin="$(command -v fish 2>/dev/null || true)"
-  if [ -n "$fish_bin" ] && grep -qxF "$fish_bin" /etc/shells 2>/dev/null; then
-    rec_left "$fish_bin remains registered in /etc/shells (harmless)"
-    rec_manual "remove it if you want: sudo sed -i '' '\\|^$fish_bin\$|d' /etc/shells"
-  fi
+  local shell_bin
+  for shell_bin in "$(command -v fish 2>/dev/null || true)" "$(command -v zsh 2>/dev/null || true)"; do
+    [ -n "$shell_bin" ] || continue
+    [ "$shell_bin" = /bin/zsh ] && continue # macOS's own zsh; not something we registered
+    if grep -qxF "$shell_bin" /etc/shells 2>/dev/null; then
+      rec_left "$shell_bin remains registered in /etc/shells (harmless)"
+      rec_manual "remove it if you want: sudo sed -i '' '\\|^$shell_bin\$|d' /etc/shells"
+    fi
+  done
 
   # Shared tooling we installed but do not own outright — never auto-removed.
   rec_left "Homebrew, uv, and the Claude CLI — shared, system-wide; not removed"

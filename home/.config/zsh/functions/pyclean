@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Recursively remove Python caches (__pycache__, .pytest_cache, .mypy_cache,
+# .ruff_cache, *.pyc).
+pyclean() {
+    local dry_run=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                cat <<'EOF'
+Usage: pyclean [-n|--dry-run] [-h|--help]
+
+Recursively remove Python caches (__pycache__, .pytest_cache,
+.mypy_cache, .ruff_cache, *.pyc) from the current directory down.
+
+Options:
+  -n, --dry-run   List what would be removed without deleting anything.
+  -h, --help      Show this help and exit.
+EOF
+                return 0
+                ;;
+            -n|--dry-run)
+                dry_run=1
+                shift
+                ;;
+            *)
+                echo "pyclean: unexpected argument '$1' (see pyclean --help)" >&2
+                return 2
+                ;;
+        esac
+    done
+
+    local -a dirs=(__pycache__ .pytest_cache .mypy_cache .ruff_cache)
+    local d
+
+    if [[ $dry_run -eq 1 ]]; then
+        echo "(dry run: nothing will be deleted)"
+        for d in "${dirs[@]}"; do
+            find . -type d -name "$d" -prune
+        done
+        find . -type f -name '*.pyc'
+        return 0
+    fi
+
+    for d in "${dirs[@]}"; do
+        find . -type d -name "$d" -prune -exec rm -rf {} +
+    done
+    find . -type f -name '*.pyc' -delete
+    echo "Python caches cleaned."
+}
