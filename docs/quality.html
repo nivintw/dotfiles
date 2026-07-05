@@ -70,7 +70,7 @@
           <div class="term__body">
 <div class="line out">  many  ┌─ Layer 1 · Static analysis (every commit + CI) ─┐  <a href="https://www.shellcheck.net/" rel="noopener">shellcheck</a>, <a href="https://fishshell.com/" rel="noopener">fish</a> -n,</div>
 <div class="line out">        │         lint · secret scan · syntax           │  <a href="https://github.com/crate-ci/typos" rel="noopener">typos</a>, <a href="https://github.com/gitleaks/gitleaks" rel="noopener">gitleaks</a>, <a href="https://taplo.tamasfe.dev/" rel="noopener">taplo</a></div>
-<div class="line out">        ├─ Layer 2 · Unit + config tests (CI) ───────────┤  <a href="https://github.com/bats-core/bats-core" rel="noopener">bats</a>: fish behavior</div>
+<div class="line out">        ├─ Layer 2 · Unit + config tests (CI) ───────────┤  <a href="https://github.com/bats-core/bats-core" rel="noopener">bats</a>: fish + zsh behavior</div>
 <div class="line out">        │         logic + declarative-config checks      │  <a href="https://docs.pytest.org/" rel="noopener">pytest</a>: config validity</div>
 <div class="line out">        ├─ Layer 3 · Integration (CI smoke + local VM)  ┤  install.sh on ephemeral CI runners,</div>
 <div class="line out">  few   └─        idempotency · real bootstrap ──────────┘  Tart VM (2× run) locally</div>
@@ -112,8 +112,9 @@ prek install             # install the git hook</code></pre>
           <table>
             <thead><tr><th>Suite</th><th>File</th><th>Asserts</th></tr></thead>
             <tbody>
-              <tr><td rowspan="3"><strong>bats</strong><br />(fish behavior)</td><td><code>git_prune_local.bats</code></td><td>The full branch-state matrix — merged, squash-merged, gone-remote, current-branch — where a bug deletes work</td></tr>
-              <tr><td><code>fish_functions.bats</code></td><td>Usage / guard paths of the wrapper helpers</td></tr>
+              <tr><td rowspan="4"><strong>bats</strong><br />(fish + zsh behavior)</td><td><code>git_prune_local.bats</code></td><td>The full branch-state matrix — merged, squash-merged, gone-remote, current-branch — where a bug deletes work</td></tr>
+              <tr><td><code>fish_functions.bats</code></td><td>Usage / guard paths of the fish wrapper helpers</td></tr>
+              <tr><td><code>zsh_functions.bats</code></td><td>The same guard-rail coverage for the ported zsh functions, plus OS-dispatch (macOS/Linux/WSL) via a <code>uname</code> shim</td></tr>
               <tr><td><code>check_ssh_config.bats</code></td><td>The SSH-host guard both ways — generic passes, a planted host/IP/user fails</td></tr>
               <tr><td rowspan="6"><strong>pytest</strong><br />(config &amp; coverage)</td><td><code>test_data_files.py</code></td><td>Every <code>*.toml</code> parses; JSON/JSONC/plist load</td></tr>
               <tr><td><code>test_secret_hygiene.py</code></td><td>No literal token in <code>claude_mcp.json</code>; GitHub auth stays an <code>op://</code> reference</td></tr>
@@ -124,7 +125,7 @@ prek install             # install the git hook</code></pre>
             </tbody>
           </table>
         </div>
-        <pre><code>bats tests/          # fish behavior
+        <pre><code>bats tests/          # fish + zsh behavior
 uv run pytest --cov  # config validity, consistency + installer-core line-coverage gate</code></pre>
       </section>
 

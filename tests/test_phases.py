@@ -14,15 +14,15 @@ from dotfiles_install.phases import REGISTRY, Phase, phases_for
 if TYPE_CHECKING:
     import pytest
 
-EXPECTED_PHASE_COUNT = 19  # install.sh's original 0-17, plus VS Code settings (17→18 shift)
+EXPECTED_PHASE_COUNT = 20  # install.sh's original 0-17, + VS Code settings, + shell selection (#35)
 
 # Phases that run on macOS, Linux, and WSL2 (phases.py's ``_ALL``): everything whose body is
-# OS-agnostic or branches internally on current_os() — including the privileged block (2), the
-# Ollama MLX gate (14), and the OS-aware verification (18), all ported in #113. Only the phases
-# whose entire purpose is macOS state stay macOS-gated: iTerm2 (8), macos.sh (15), the Dock (16),
-# and VS Code settings (17, added post-port). These two sets must partition the registry.
-_OS_AGNOSTIC_PHASES = frozenset({0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 18})
-_MACOS_ONLY_PHASES = frozenset({8, 15, 16, 17})
+# OS-agnostic or branches internally on current_os() — including login shell selection (2), the
+# privileged block (3), the Ollama MLX gate (15), and the OS-aware verification (19). Only the
+# phases whose entire purpose is macOS state stay macOS-gated: iTerm2 (9), macos.sh (16), the
+# Dock (17), and VS Code settings (18). These two sets must partition the registry.
+_OS_AGNOSTIC_PHASES = frozenset({0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 19})
+_MACOS_ONLY_PHASES = frozenset({9, 16, 17, 18})
 
 
 def test_registry_mirrors_install_sh_phase_count() -> None:
@@ -48,9 +48,9 @@ def test_phase_names_are_unique() -> None:
 
 
 def test_only_the_privileged_block_needs_root() -> None:
-    """Exactly phase 2 (the sudo/firewall/PAM block) is marked privileged."""
+    """Exactly phase 3 (the sudo/firewall/PAM block) is marked privileged."""
     privileged = [phase.number for phase in REGISTRY if phase.privileged]
-    assert privileged == [2]
+    assert privileged == [3]
 
 
 def test_every_phase_is_ported() -> None:
@@ -60,19 +60,28 @@ def test_every_phase_is_ported() -> None:
 
 
 def test_applies_gates_on_os() -> None:
-    """A macOS-only phase (phase 8, iTerm2 preferences) is gated off Linux."""
-    phase = REGISTRY[8]
+    """A macOS-only phase (phase 9, iTerm2 preferences) is gated off Linux."""
+    phase = REGISTRY[9]
     assert phase.applies(OS.MACOS) is True
     assert phase.applies(OS.LINUX) is False
 
 
 def test_vscode_settings_phase_is_macos_only_and_precedes_verify() -> None:
-    """Phase 17 (VS Code settings) is macOS-gated and runs immediately before verification."""
-    phase = REGISTRY[17]
+    """Phase 18 (VS Code settings) is macOS-gated and runs immediately before verification."""
+    phase = REGISTRY[18]
     assert phase.name == "VS Code user settings"
     assert phase.applies(OS.MACOS) is True
     assert phase.applies(OS.LINUX) is False
-    assert REGISTRY[18].name == "Verification & summary"
+    assert REGISTRY[19].name == "Verification & summary"
+
+
+def test_shell_selection_phase_precedes_privileged_setup() -> None:
+    """Phase 2 (login shell selection) is OS-agnostic and runs just before the privileged setup."""
+    phase = REGISTRY[2]
+    assert phase.name == "Login shell selection (fish default; zsh opt-in)"
+    assert phase.applies(OS.MACOS) is True
+    assert phase.applies(OS.LINUX) is True
+    assert REGISTRY[3].privileged is True
 
 
 def test_phases_for_macos_returns_everything() -> None:

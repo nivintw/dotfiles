@@ -84,24 +84,25 @@
             <thead><tr><th>#</th><th>Step</th><th>What happens</th></tr></thead>
             <tbody>
               <tr><td>0</td><td>Toolchain</td><td>Install Homebrew &amp; uv if missing</td></tr>
-              <tr><td>1</td><td><code>brew bundle</code></td><td>All baseline CLI tools, <a href="https://fishshell.com/" rel="noopener">fish</a>, GUI casks, the <a href="https://github.com/ryanoasis/nerd-fonts" rel="noopener">MesloLGS NF</a> font — then an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select for opt-in bundles (<code>personal</code>, <code>homelab</code>, <code>1password</code>)</td></tr>
-              <tr><td>2</td><td>Privileged block</td><td>fish as login shell everywhere, plus one sudo prompt for the OS-specific bit: Touch&nbsp;ID for sudo &amp; the app firewall + stealth mode (macOS), <code>ufw</code> (native Linux), or nothing (WSL2 — the Windows host owns the firewall)</td></tr>
-              <tr><td>3</td><td><a href="https://www.gnu.org/software/stow/" rel="noopener">Stow</a></td><td>Symlink <code>home/</code> into <code>$HOME</code></td></tr>
-              <tr><td>4</td><td>Overlays</td><td>Seed untracked machine-local overlay files (SSH, git, fish, <code>Brewfile.local</code>, <code>CLAUDE.local.md</code>, <code>claude_mcp.local.json</code>, <code>macos.local.sh</code>) with commented examples; disable commit signing if 1Password is absent</td></tr>
-              <tr><td>5</td><td><a href="https://github.com/jorgebucaran/fisher" rel="noopener">fisher</a></td><td>fish plugins from <code>fish_plugins</code> (<a href="https://github.com/IlanCosman/tide" rel="noopener">tide</a>, <a href="https://github.com/PatrickF1/fzf.fish" rel="noopener">fzf.fish</a>)</td></tr>
-              <tr><td>6</td><td><a href="https://github.com/tmux-plugins/tpm" rel="noopener">TPM</a></td><td><a href="https://github.com/tmux/tmux" rel="noopener">tmux</a> plugin manager + plugins from <code>tmux.conf</code></td></tr>
-              <tr><td>7</td><td><a href="https://atuin.sh/" rel="noopener">atuin</a></td><td>Backfill existing shell history into atuin's DB</td></tr>
-              <tr><td>8</td><td><a href="https://iterm2.com/" rel="noopener">iTerm2</a> <em>(macOS only)</em></td><td>Point iTerm at the tracked <code>iterm2/</code> prefs folder</td></tr>
-              <tr><td>9</td><td>uv tools</td><td>Install the Python CLIs in <code>uv_tools.txt</code></td></tr>
-              <tr><td>10</td><td>git clone hook</td><td>A stowed <code>post-checkout</code> template hook <strong>notifies</strong> on every fresh clone that defines pre-commit hooks — running nothing from the clone, so the default is safe. Opt into auto-install with <code>git config --file ~/.gitconfig_local dotfiles.autoInstallHooks true</code> and the hook runs <a href="https://github.com/j178/prek" rel="noopener">prek</a> install itself</td></tr>
-              <tr><td>11</td><td><a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a></td><td>Native installer (self-updating) → <code>~/.local/bin/claude</code></td></tr>
-              <tr><td>12</td><td>MCP servers</td><td>Replay <code>claude_mcp.json</code> (deep-merged with an optional <code>~/.config/dotfiles/claude_mcp.local.json</code> overlay) into <code>~/.claude.json</code> — secrets via <code>op inject</code>, or a <code>GITHUB_PERSONAL_ACCESS_TOKEN</code> from the environment without 1Password</td></tr>
-              <tr><td>13</td><td>Claude settings</td><td>Generate <code>~/.claude/settings.json</code> by deep-merging the tracked <code>claude_settings.json</code> baseline with the untracked <code>~/.config/dotfiles/claude_settings.local.json</code> overlay (arrays union; the overlay wins per scalar)</td></tr>
-              <tr><td>14</td><td><a href="https://ollama.com/" rel="noopener">Ollama</a></td><td>Start the server &amp; pull the role models from <code>scripts/ollama_models.sh</code>: <a href="https://ollama.com/library/qwen3" rel="noopener"><code>qwen3:4b-instruct-2507-q4_K_M</code></a> (~2.5&nbsp;GB, fast tier + <a href="https://www.gitkraken.com/gitlens" rel="noopener">GitLens</a>) and <a href="https://ollama.com/library/qwen3-vl" rel="noopener"><code>qwen3-vl:4b-instruct</code></a> (~3.3&nbsp;GB, vision) everywhere; on Apple&nbsp;Silicon with &gt;32&nbsp;GB unified memory (macOS&nbsp;13+) also the big pair: the MLX <code>qwen3.5:35b-a3b-coding-nvfp4</code> (~21&nbsp;GB, bulk coding) and <code>gemma4:26b</code> (~17&nbsp;GB, generalist) — all driven through the <a href="commands.html#local-ai-offload"><code>ollm</code></a> CLI; skip by dropping the <code>ollama-app</code> cask</td></tr>
-              <tr><td>15</td><td>macOS defaults <em>(macOS only)</em></td><td><code>macos.sh</code> system tweaks</td></tr>
-              <tr><td>16</td><td>Dock <em>(macOS only)</em></td><td>Declarative Dock layout via <code>dock.sh</code></td></tr>
-              <tr><td>17</td><td>VS Code settings <em>(macOS only)</em></td><td>Generate <code>settings.json</code> by deep-merging the tracked <code>vscode_settings.json</code> baseline with an untracked <code>~/.config/dotfiles/vscode_settings.local.json</code> overlay, auto-seeding the Homebrew <code>rg</code> path the todo-tree extension needs</td></tr>
-              <tr><td>18</td><td>Verify</td><td>Re-check the install end state and print the summary (the same checks <code>dotfiles-doctor</code> runs)</td></tr>
+              <tr><td>1</td><td><code>brew bundle</code></td><td>All baseline CLI tools, <a href="https://fishshell.com/" rel="noopener">fish</a> and <a href="https://www.zsh.org/" rel="noopener">zsh</a>, GUI casks, the <a href="https://github.com/ryanoasis/nerd-fonts" rel="noopener">MesloLGS NF</a> font — then an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select for opt-in bundles (<code>personal</code>, <code>homelab</code>, <code>1password</code>)</td></tr>
+              <tr><td>2</td><td>Shell selection</td><td>Resolve the login shell — fish by default, or zsh if you pass <code>--shell zsh</code> — and persist the choice to <code>~/.config/dotfiles/shell</code> so a plain re-run repeats it</td></tr>
+              <tr><td>3</td><td>Privileged block</td><td>The resolved shell as login shell everywhere, plus one sudo prompt for the OS-specific bit: Touch&nbsp;ID for sudo &amp; the app firewall + stealth mode (macOS), <code>ufw</code> (native Linux), or nothing (WSL2 — the Windows host owns the firewall)</td></tr>
+              <tr><td>4</td><td><a href="https://www.gnu.org/software/stow/" rel="noopener">Stow</a></td><td>Symlink <code>home/</code> into <code>$HOME</code> — both shells' config trees, regardless of which is selected</td></tr>
+              <tr><td>5</td><td>Overlays</td><td>Seed untracked machine-local overlay files (SSH, git, fish, zsh, <code>Brewfile.local</code>, <code>CLAUDE.local.md</code>, <code>claude_mcp.local.json</code>, <code>macos.local.sh</code>) with commented examples; disable commit signing if 1Password is absent</td></tr>
+              <tr><td>6</td><td><a href="https://github.com/jorgebucaran/fisher" rel="noopener">fisher</a></td><td>fish plugins from <code>fish_plugins</code> (<a href="https://github.com/IlanCosman/tide" rel="noopener">tide</a>, <a href="https://github.com/PatrickF1/fzf.fish" rel="noopener">fzf.fish</a>) — zsh's plugins (<a href="https://github.com/zdharma-continuum/zinit" rel="noopener">zinit</a>-managed) self-install on first zsh startup instead</td></tr>
+              <tr><td>7</td><td><a href="https://github.com/tmux-plugins/tpm" rel="noopener">TPM</a></td><td><a href="https://github.com/tmux/tmux" rel="noopener">tmux</a> plugin manager + plugins from <code>tmux.conf</code></td></tr>
+              <tr><td>8</td><td><a href="https://atuin.sh/" rel="noopener">atuin</a></td><td>Backfill existing shell history into atuin's DB</td></tr>
+              <tr><td>9</td><td><a href="https://iterm2.com/" rel="noopener">iTerm2</a> <em>(macOS only)</em></td><td>Point iTerm at the tracked <code>iterm2/</code> prefs folder</td></tr>
+              <tr><td>10</td><td>uv tools</td><td>Install the Python CLIs in <code>uv_tools.txt</code></td></tr>
+              <tr><td>11</td><td>git clone hook</td><td>A stowed <code>post-checkout</code> template hook <strong>notifies</strong> on every fresh clone that defines pre-commit hooks — running nothing from the clone, so the default is safe. Opt into auto-install with <code>git config --file ~/.gitconfig_local dotfiles.autoInstallHooks true</code> and the hook runs <a href="https://github.com/j178/prek" rel="noopener">prek</a> install itself</td></tr>
+              <tr><td>12</td><td><a href="https://github.com/anthropics/claude-code" rel="noopener">Claude Code</a></td><td>Native installer (self-updating) → <code>~/.local/bin/claude</code></td></tr>
+              <tr><td>13</td><td>MCP servers</td><td>Replay <code>claude_mcp.json</code> (deep-merged with an optional <code>~/.config/dotfiles/claude_mcp.local.json</code> overlay) into <code>~/.claude.json</code> — secrets via <code>op inject</code>, or a <code>GITHUB_PERSONAL_ACCESS_TOKEN</code> from the environment without 1Password</td></tr>
+              <tr><td>14</td><td>Claude settings</td><td>Generate <code>~/.claude/settings.json</code> by deep-merging the tracked <code>claude_settings.json</code> baseline with the untracked <code>~/.config/dotfiles/claude_settings.local.json</code> overlay (arrays union; the overlay wins per scalar)</td></tr>
+              <tr><td>15</td><td><a href="https://ollama.com/" rel="noopener">Ollama</a></td><td>Start the server &amp; pull the role models from <code>scripts/ollama_models.sh</code>: <a href="https://ollama.com/library/qwen3" rel="noopener"><code>qwen3:4b-instruct-2507-q4_K_M</code></a> (~2.5&nbsp;GB, fast tier + <a href="https://www.gitkraken.com/gitlens" rel="noopener">GitLens</a>) and <a href="https://ollama.com/library/qwen3-vl" rel="noopener"><code>qwen3-vl:4b-instruct</code></a> (~3.3&nbsp;GB, vision) everywhere; on Apple&nbsp;Silicon with &gt;32&nbsp;GB unified memory (macOS&nbsp;13+) also the big pair: the MLX <code>qwen3.5:35b-a3b-coding-nvfp4</code> (~21&nbsp;GB, bulk coding) and <code>gemma4:26b</code> (~17&nbsp;GB, generalist) — all driven through the <a href="commands.html#local-ai-offload"><code>ollm</code></a> CLI; skip by dropping the <code>ollama-app</code> cask</td></tr>
+              <tr><td>16</td><td>macOS defaults <em>(macOS only)</em></td><td><code>macos.sh</code> system tweaks</td></tr>
+              <tr><td>17</td><td>Dock <em>(macOS only)</em></td><td>Declarative Dock layout via <code>dock.sh</code></td></tr>
+              <tr><td>18</td><td>VS Code settings <em>(macOS only)</em></td><td>Generate <code>settings.json</code> by deep-merging the tracked <code>vscode_settings.json</code> baseline with an untracked <code>~/.config/dotfiles/vscode_settings.local.json</code> overlay, auto-seeding the Homebrew <code>rg</code> path the todo-tree extension needs</td></tr>
+              <tr><td>19</td><td>Verify</td><td>Re-check the install end state and print the summary (the same checks <code>dotfiles-doctor</code> runs)</td></tr>
             </tbody>
           </table>
         </div>
@@ -111,8 +112,8 @@
         </div>
         <div class="note">
           <div class="note__title">Several of these steps are <em>my</em> taste</div>
-          The package list (1), MCP servers (12), the Ollama models (14), the macOS
-          defaults (15), and the Dock (16) encode my preferences and my accounts — that
+          The package list (1), MCP servers (13), the Ollama models (15), the macOS
+          defaults (16), and the Dock (17) encode my preferences and my accounts — that
           1Password path is my vault, not yours. They're the first things to change when
           you fork. <a href="#make-it-yours">Make it yours</a> walks the exact files.
         </div>
@@ -169,6 +170,10 @@
         <p class="section-lede">How I run one repo across a laptop, a work box, and a homelab node without a fork or a <code>work</code>/<code>personal</code> branch each: per-machine specifics live in untracked overlay files the bootstrap seeds, and each machine fills in only what it needs. Adopt the same pattern in your fork — see <a href="architecture.html#overlays">Machine-local overlays</a> for the full mechanism.</p>
         <div class="feature">
           <span class="feature__mark">⊕</span>
+          <div><h3>Login shell: fish or zsh</h3><p>fish is the default login shell; pass <code>install.sh --shell zsh</code> to select zsh instead (or <code>--shell fish</code> to switch back). The choice persists to <code>~/.config/dotfiles/shell</code>, so a plain re-run repeats it. Both shells' config trees are always stowed regardless of which is selected — only the login shell (<code>chsh</code>) differs.</p></div>
+        </div>
+        <div class="feature">
+          <span class="feature__mark">⊕</span>
           <div><h3>Opt-in software bundles</h3><p>The bootstrap's bundle step shows an <a href="https://github.com/junegunn/fzf" rel="noopener">fzf</a> multi-select; pick <code>personal</code> and/or <code>homelab</code>. A re-run pre-seeds the picker with your current choice, ready to amend, and persists the result to <code>~/.config/dotfiles/bundles</code>. For a scripted, non-interactive run, pass <code>install.sh --bundle personal</code> (repeatable) or <code>--no-bundles</code> to skip the picker entirely, or <code>--keep-bundles</code> to skip it while keeping the saved pick. To enable one later without re-running the installer:</p></div>
         </div>
         <pre><code>echo personal &gt;&gt; ~/.config/dotfiles/bundles
@@ -179,7 +184,7 @@ brew bundle install --file=~/dotfiles/Brewfile.d/personal.brewfile</code></pre>
         </div>
         <div class="feature">
           <span class="feature__mark">⊕</span>
-          <div><h3>SSH hosts, git identity, fish tweaks</h3><p>Machine-specific SSH hosts go in <code>~/.ssh/config.local</code>, a work git identity in <code>~/.gitconfig_local</code> (e.g. an <code>includeIf "gitdir:~/work/"</code>), and shell tweaks in <code>~/.config/dotfiles/local.fish</code>. Each is seeded with a commented example.</p></div>
+          <div><h3>SSH hosts, git identity, shell tweaks</h3><p>Machine-specific SSH hosts go in <code>~/.ssh/config.local</code>, a work git identity in <code>~/.gitconfig_local</code> (e.g. an <code>includeIf "gitdir:~/work/"</code>), and shell tweaks in <code>~/.config/dotfiles/local.fish</code> (fish) or <code>local.zsh</code> (zsh) — whichever you use, or both. Each is seeded with a commented example.</p></div>
         </div>
       </section>
 

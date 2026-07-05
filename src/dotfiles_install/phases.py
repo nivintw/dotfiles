@@ -5,11 +5,12 @@
 
 Each :class:`Phase` declares its display name, the operating systems it applies to (for
 per-phase gating), and a ``privileged`` flag. That flag marks the **dedicated sudo-gated
-block** (phase 2) — the one that acquires and drops a sudo ticket — not merely "any phase that
+block** (phase 3) — the one that acquires and drops a sudo ticket — not merely "any phase that
 may invoke sudo": phase 1 also makes an optional ``sudo`` call (the pre-bundle Touch-ID enable)
-yet is not ``privileged``. :data:`REGISTRY` mirrors ``install.sh``'s original phases 0-17 in
-order, plus phase 17 (VS Code settings) added after the bash port completed — verification
-shifted to phase 18 to make room for it, so the registry runs 0-18.
+yet is not ``privileged``. :data:`REGISTRY` mirrors ``install.sh``'s original phases 0-17, plus
+phase 17 (VS Code settings) added after the bash port completed, plus phase 2 (login-shell
+selection, #35) inserted between the brew bundle and the privileged block — every phase from
+there on shifted up by one — so the registry now runs 0-19.
 Every phase now carries a ``run`` callable and **executes real work** — the port is complete
 (#67-#72) and this registry, driven by ``dotfiles-install``, is the installer; ``install.sh`` is
 a thin stub that hands off to it.
@@ -36,6 +37,7 @@ from dotfiles_install.post_stow import (
     report_clone_hook,
 )
 from dotfiles_install.privileged import privileged_setup
+from dotfiles_install.shell_select import select_shell
 from dotfiles_install.stow import stow_dotfiles
 from dotfiles_install.system_setup import apply_dock_layout, apply_macos_defaults
 from dotfiles_install.verify_install import verify_and_summarize
@@ -83,8 +85,9 @@ _ALL = frozenset({OS.MACOS, OS.LINUX, OS.WSL})
 _UNNUMBERED: tuple[Phase, ...] = (
     Phase("Bootstrap toolchain (Homebrew + uv)", _ALL, run=bootstrap_toolchain),
     Phase("Homebrew packages (brew bundle)", _ALL, run=install_packages),
+    Phase("Login shell selection (fish default; zsh opt-in)", _ALL, run=select_shell),
     Phase(
-        "Privileged setup (fish shell, firewall; Touch ID on macOS)",
+        "Privileged setup (login shell, firewall; Touch ID on macOS)",
         _ALL,
         privileged=True,
         run=privileged_setup,

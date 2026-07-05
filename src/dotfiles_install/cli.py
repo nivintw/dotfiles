@@ -5,11 +5,11 @@
 
 The installer's real entry point (``install.sh`` is a thin stub that hands off here via uv).
 Reproduces the historical flag surface (``--bundle`` / ``--no-bundles`` / ``--keep-bundles`` /
-``--core`` / ``--help``) plus ``--verify`` / ``--verify-stream``, with the same exit codes — 0 on
-success or help, 2 on a usage error, 1 on a runtime precondition (e.g. an unsupported platform) —
-then walks the phase registry, OS-gated to the current platform (macOS runs every phase; Linux/WSL2
-runs the OS-agnostic subset). Every phase (0-18) executes real work; the port from ``install.sh`` is
-complete.
+``--core`` / ``--help``) plus ``--shell`` (#35) and ``--verify`` / ``--verify-stream``, with the
+same exit codes — 0 on success or help, 2 on a usage error, 1 on a runtime precondition (e.g. an
+unsupported platform) — then walks the phase registry, OS-gated to the current platform (macOS
+runs every phase; Linux/WSL2 runs the OS-agnostic subset). Every phase (0-19) executes real work;
+the port from ``install.sh`` is complete.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Annotated
 
 import typer
 
-from dotfiles_install import commands, verify_install
+from dotfiles_install import commands, shell_select, verify_install
 from dotfiles_install.context import InstallContext
 from dotfiles_install.layout import discover_bundles
 from dotfiles_install.os_detect import current_os
@@ -58,6 +58,13 @@ def main(
         bool,
         typer.Option("--no-dock", help="Skip rebuilding the Dock layout (dock.sh)."),
     ] = False,
+    shell: Annotated[
+        str | None,
+        typer.Option(
+            "--shell",
+            help="Login shell to select: fish (default) or zsh; persists the choice.",
+        ),
+    ] = None,
     verify: Annotated[
         bool,
         typer.Option(
@@ -79,15 +86,21 @@ def main(
     """Converge this machine to the state declared in the repo (dotfiles bootstrap)."""
     # Verification-only modes short-circuit the install (used by `dotfiles-doctor` and the
     # vm-smoke harness, which replaced sourcing the retired scripts/verify_install.sh).
+    # --shell is meaningless here (verify never selects a shell, only re-reads whatever
+    # was already persisted) but is still validated so a bad value fails loudly (exit 2)
+    # instead of being silently ignored.
     if verify_stream:
+        _validate_shell(shell)
         verify_install.emit_stream(core=core, write=typer.echo)
         raise typer.Exit(code=0)
     if verify:
+        _validate_shell(shell)
         problems = verify_install.run_check(InstallContext(ui=UI(), core=core))
         raise typer.Exit(code=1 if problems else 0)
     # Dedup repeated --bundle values, preserving order (bash's add_requested_bundle).
     requested = tuple(dict.fromkeys(bundle or ()))
     _validate_bundles(requested, no_bundles=no_bundles, keep_bundles=keep_bundles)
+    _validate_shell(shell)
     ui = UI()
     ctx = InstallContext(
         ui=ui,
@@ -96,6 +109,7 @@ def main(
         keep_bundles=keep_bundles,
         requested_bundles=requested,
         no_dock=no_dock,
+        shell=shell,
     )
     _run(ctx)
 
@@ -115,6 +129,13 @@ def _validate_bundles(
         if name not in available:
             msg = f"unknown bundle: {name!r}"
             raise typer.BadParameter(msg)
+
+
+def _validate_shell(shell: str | None) -> None:
+    """Reject an unrecognized ``--shell`` value (exit code 2)."""
+    if shell is not None and shell not in shell_select.VALID_SHELLS:
+        msg = f"unknown shell: {shell!r} (choose fish or zsh)"
+        raise typer.BadParameter(msg)
 
 
 def _run(ctx: InstallContext) -> None:

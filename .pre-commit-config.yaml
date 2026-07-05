@@ -75,6 +75,12 @@ repos:
         # scripts/ollama_models.sh) so a partial commit that stages only the sourcing
         # file doesn't trip SC1091 on the un-staged source.
         args: ["-s", "bash", "-x"]
+        # identify tags .zsh files (unlike .fish, which it doesn't recognize as shell
+        # at all) as "shell", so they'd otherwise get forced through `-s bash` — zsh's
+        # glob qualifiers and array-append syntax aren't valid bash, and shellcheck has
+        # no zsh dialect to select instead. fish gets its own syntax check below
+        # (`fish -n`); zsh gets `zsh -n` in the same block.
+        exclude: '^home/\.config/zsh/|^home/\.zshenv$'
 
   - repo: https://github.com/maxwinterstein/shfmt-py
     rev: v4.0.0
@@ -84,8 +90,10 @@ repos:
         # -i 2 matches .editorconfig (indent_size = 2).
         args: ["-w", "-i", "2"]
         # bats files are identified as shell but use `@test` syntax shfmt can't parse;
-        # exclude them (shellcheck still lints them via its own hook).
-        exclude: '\.bats$'
+        # exclude them (shellcheck still lints them via its own hook). zsh files are
+        # excluded for the same reason as the shellcheck hook above — shfmt formats
+        # bash/posix shell, not zsh.
+        exclude: '\.bats$|^home/\.config/zsh/|^home/\.zshenv$'
 
   # ----------------------------- ⚙️ GitHub Actions ---------------------------------- #
   # actionlint lints the workflows (and shellchecks their `run:` blocks); zizmor security-
@@ -249,6 +257,17 @@ repos:
         entry: bash -c 'fish_indent --check "$@"' --
         language: system
         files: '\.fish$'
+
+      # zsh's dialect (glob qualifiers, array-append syntax) isn't valid bash, so it's
+      # excluded from the shellcheck/shfmt hooks above; this is its syntax check
+      # instead (`zsh -n`, mirroring fish's). No formatter — there's no zsh_indent
+      # equivalent to fish_indent. Path-based, not `\.zsh$`, since the autoloaded
+      # function files (home/.config/zsh/functions/*) carry no extension.
+      - id: zsh-syntax
+        name: "🐚 zsh · Check syntax (zsh -n)"
+        entry: bash -c 'for f in "$@"; do zsh -n "$f" || exit 1; done' --
+        language: system
+        files: '^home/\.config/zsh/|^home/\.zshenv$'
 
       # ty has no published hook yet; run it from the project env (uv).
       - id: ty

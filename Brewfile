@@ -36,12 +36,15 @@ tap "cirruslabs/cli"          # Source for tart (VM smoke-test harness)
 # ===========================================================================
 
 # --- Shell & navigation ----------------------------------------------------
-brew "atuin"            # SQLite shell history w/ search (rebinds Ctrl+R; see conf.d/zz-atuin.fish)
+brew "atuin"            # SQLite shell history w/ search (rebinds Ctrl+R; see conf.d/zz-atuin.{fish,zsh})
 brew "bash"             # Modern Bash 5.x (Apple ships 3.2); also a dep of direnv
 brew "direnv"           # Load/unload environment variables based on $PWD
 brew "fish"             # The shell. A brew upgrade can disturb an open session until restart.
 brew "fzf"              # Command-line fuzzy finder
+brew "starship"         # Cross-shell prompt (fish uses Tide/Fisher instead; zsh uses this)
 brew "zoxide"           # Smarter cd that learns your habits
+brew "zsh"              # Opt-in login shell, Homebrew-managed like fish (Linux's system zsh
+                        # can be much older than macOS's own current build)
 
 # --- Terminal & remote sessions --------------------------------------------
 brew "asciinema"        # Record and share terminal sessions

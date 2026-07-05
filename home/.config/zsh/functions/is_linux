@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Exit 0 on a non-WSL Linux kernel. WSL is reported separately (is_wsl) so callers can
+# pick Windows-interop tools there; this is true only on a "plain" Linux kernel,
+# mirroring os_detect.py's LINUX-vs-WSL split.
+is_linux() {
+    local kernel=$(uname)
+    [[ "$kernel" == Linux ]] && ! is_wsl "$kernel"
+}

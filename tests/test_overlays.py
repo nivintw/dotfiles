@@ -3,7 +3,7 @@
 
 """Tests for phase 4 (seed machine-local overlay files) and the commit-signing fallback.
 
-The behaviors that matter: seed_overlays creates all nine overlay files when absent, each
+The behaviors that matter: seed_overlays creates all ten overlay files when absent, each
 emitting active("created ...") and ending with a trailing newline; the two JSON overlays
 parse as exactly {}; files already on disk are never overwritten and emit no "created" message;
 ~/.ssh/config.local is unconditionally chmod 0600 (even when pre-existing at 0644); parent
@@ -55,10 +55,11 @@ def _make_op_executable(tmp_path: Path) -> Path:
 
 _SSH_CONFIG_MODE = 0o600  # required by ssh(1): group/world-readable includes are ignored
 
-_NINE_PATHS = [
+_TEN_PATHS = [
     ".ssh/config.local",
     ".gitconfig_local",
     ".config/dotfiles/local.fish",
+    ".config/dotfiles/local.zsh",
     ".config/dotfiles/Brewfile.local",
     ".config/dotfiles/CLAUDE.local.md",
     ".config/dotfiles/claude_mcp.local.json",
@@ -96,11 +97,11 @@ def _git_config_fake(
 # --- file-creation tests -----------------------------------------------------------------------
 
 
-def test_seed_overlays_creates_all_nine_files_on_clean_home(
+def test_seed_overlays_creates_all_ten_files_on_clean_home(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """A clean $HOME gets all nine overlay files, each with an active('created ...') message."""
+    """A clean $HOME gets all ten overlay files, each with an active('created ...') message."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(overlays, "_OP_SSH_SIGN", _make_op_executable(tmp_path))
     ctx, out = _ctx()
@@ -108,7 +109,7 @@ def test_seed_overlays_creates_all_nine_files_on_clean_home(
     overlays.seed_overlays(ctx)
 
     output = out.getvalue()
-    for rel in _NINE_PATHS:
+    for rel in _TEN_PATHS:
         full = tmp_path / rel
         assert full.is_file(), f"missing: {full}"
         assert f"created {full}" in output, f"no 'created' message for {rel}"
@@ -144,7 +145,7 @@ def test_seeded_files_all_end_with_trailing_newline(
 
     overlays.seed_overlays(ctx)
 
-    for rel in _NINE_PATHS:
+    for rel in _TEN_PATHS:
         content = (tmp_path / rel).read_text(encoding="utf-8")
         assert content.endswith("\n"), f"{rel} does not end with a newline"
 

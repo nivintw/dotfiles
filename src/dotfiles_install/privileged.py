@@ -1,10 +1,11 @@
 # SPDX-FileCopyrightText: © 2026 Tyler Nivin
 # SPDX-License-Identifier: MIT
 
-"""Phase 2: the single privileged (root-requiring) block.
+"""Phase 3: the single privileged (root-requiring) block.
 
 One ``sudo -v`` authenticates the whole contiguous block — the Touch-ID-for-sudo finalize
-(macOS), fish as the login shell (``/etc/shells`` + ``chsh``, portable), and the firewall
+(macOS), the resolved login shell (``/etc/shells`` + ``chsh``, portable — fish by default,
+or zsh when selected by phase 2's :mod:`dotfiles_install.shell_select`), and the firewall
 (macOS application firewall, or ufw on Linux; WSL skips it — the Windows host owns the
 firewall) — then ``sudo -k`` drops the ticket so nothing downstream (the fisher/Claude
 ``curl|bash`` installers) runs with a warm timestamp. The ticket is acquired *after*
@@ -27,7 +28,7 @@ import pwd
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dotfiles_install import commands
+from dotfiles_install import commands, shell_select
 from dotfiles_install.os_detect import OS, current_os
 
 if TYPE_CHECKING:
@@ -51,8 +52,8 @@ def privileged_setup(ctx: InstallContext) -> None:
     """Run the single root-requiring block off one sudo ticket; skip (warn) if auth fails."""
     if not commands.run_ok(["sudo", "-v"]):
         ctx.ui.warn(
-            "couldn't authenticate for sudo — skipping privileged setup (fish as the default "
-            "shell, the firewall, and on macOS Touch ID for sudo); re-run install.sh as an "
+            "couldn't authenticate for sudo — skipping privileged setup (the login shell, "
+            "the firewall, and on macOS Touch ID for sudo); re-run install.sh as an "
             "administrator to finish these",
         )
         return
@@ -60,7 +61,7 @@ def privileged_setup(ctx: InstallContext) -> None:
     try:
         if target == OS.MACOS:
             enable_touch_id_sudo(ctx)  # pam_tid/pam_reattach exist only on macOS
-        _set_fish_login_shell(ctx)  # chsh + /etc/shells — portable
+        _set_login_shell(ctx)  # chsh + /etc/shells — portable
         if target == OS.MACOS:
             _enable_firewall(ctx)
         elif target == OS.LINUX:
@@ -133,37 +134,44 @@ def _pam_reattach_path() -> str | None:
     return str(candidate) if candidate.is_file() else None
 
 
-def _set_fish_login_shell(ctx: InstallContext) -> None:
-    """Register fish in ``/etc/shells`` (if absent) and ``chsh`` to it (if it isn't already)."""
-    fish_bin = commands.which("fish")
-    if fish_bin is None:
-        ctx.ui.warn("fish not found on PATH — leaving the default shell unchanged")
+def _set_login_shell(ctx: InstallContext) -> None:
+    """Register the resolved shell in ``/etc/shells`` (if absent) and ``chsh`` to it.
+
+    Reads the choice phase 2 (:mod:`dotfiles_install.shell_select`) persisted — fish by
+    default, or zsh when selected — rather than threading it through ``ctx``, mirroring how
+    the opt-in bundle selection is written once and re-read independently later.
+    """
+    shell_name = shell_select.resolve_shell(None, Path.home())
+    shell_bin = commands.which(shell_name)
+    if shell_bin is None:
+        ctx.ui.warn(f"{shell_name} not found on PATH — leaving the default shell unchanged")
         return
-    if fish_bin not in commands.read_text_or_empty(_ETC_SHELLS).splitlines():
-        ctx.ui.active(f"registering {fish_bin} in /etc/shells")
+    if shell_bin not in commands.read_text_or_empty(_ETC_SHELLS).splitlines():
+        ctx.ui.active(f"registering {shell_bin} in /etc/shells")
         if not commands.run_ok(
             ["sudo", "tee", "-a", str(_ETC_SHELLS)],
-            input_text=fish_bin + "\n",
+            input_text=shell_bin + "\n",
             capture=True,  # swallow tee's stdout echo
         ):
             # No point running chsh against a shell that isn't registered — warn and stop here.
             ctx.ui.warn(
-                f"couldn't register {fish_bin} in /etc/shells; leaving the default shell unchanged",
+                f"couldn't register {shell_bin} in /etc/shells; "
+                "leaving the default shell unchanged",
             )
             return
-    if os.environ.get("SHELL") == fish_bin:
-        ctx.ui.ok("fish already the default shell")
+    if os.environ.get("SHELL") == shell_bin:
+        ctx.ui.ok(f"{shell_name} already the default shell")
         return
-    ctx.ui.active("setting fish as the default shell (chsh)")
+    ctx.ui.active(f"setting {shell_name} as the default shell (chsh)")
     # chsh via sudo: root sets the login shell without a second password prompt, keeping this
     # inside the single sudo session (a bare `chsh` would prompt on its own). Gate the success
     # message on the exit code — chsh fails on directory-service-managed (MDM/AD) accounts, and
     # claiming success there would be a lie.
-    if commands.run_ok(["sudo", "chsh", "-s", fish_bin, _current_username()]):
-        ctx.ui.ok("fish set as the default shell")
+    if commands.run_ok(["sudo", "chsh", "-s", shell_bin, _current_username()]):
+        ctx.ui.ok(f"{shell_name} set as the default shell")
     else:
         ctx.ui.warn(
-            "couldn't set fish as the default shell (chsh failed — a managed account?); "
+            f"couldn't set {shell_name} as the default shell (chsh failed — a managed account?); "
             "set it manually with `chsh -s` once you can",
         )
 

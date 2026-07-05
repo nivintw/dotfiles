@@ -33,7 +33,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dotfiles_install import commands
+from dotfiles_install import commands, shell_select
 from dotfiles_install.brewfile import brewfile_core
 from dotfiles_install.bundle_select import parse_bundles
 from dotfiles_install.layout import DOTFILES
@@ -151,8 +151,15 @@ _SUDO_LOCAL = Path("/etc/pam.d/sudo_local")
 _SOCKETFILTERFW = Path("/usr/libexec/ApplicationFirewall/socketfilterfw")
 _UFW_CONF = Path("/etc/ufw/ufw.conf")
 
-# Key dotfiles symlinks that must resolve into the repo, relative to $HOME.
-_KEY_LINKS = (".gitconfig", ".config/fish/config.fish", ".claude/CLAUDE.md")
+# Key dotfiles symlinks that must resolve into the repo, relative to $HOME. Both shells'
+# config trees are always stowed regardless of which is the login shell (see
+# shell_select.py), so both are checked unconditionally.
+_KEY_LINKS = (
+    ".gitconfig",
+    ".config/fish/config.fish",
+    ".config/zsh/.zshrc",
+    ".claude/CLAUDE.md",
+)
 
 
 def pam_tid_enabled() -> bool:
@@ -295,7 +302,8 @@ def _summarize(ctx: InstallContext) -> int:
         ctx.ui.detail(
             "re-run ~/dotfiles/install.sh to retry, or 'dotfiles-install --verify' to re-check.",
         )
-    ctx.ui.detail("Restart your shell (or run 'exec fish') to pick everything up.")
+    shell_name = shell_select.resolve_shell(None, Path.home())
+    ctx.ui.detail(f"Restart your shell (or run 'exec {shell_name}') to pick everything up.")
     return len(problems)
 
 
@@ -396,13 +404,14 @@ def _has_directive(path: Path) -> bool:
 
 
 def _login_shell_record() -> Record:
-    """OK when fish is installed and is the login shell."""
-    fish = commands.which("fish")
+    """OK when the resolved shell (fish by default, or zsh when selected) is the login shell."""
+    shell_name = shell_select.resolve_shell(None, Path.home())
+    shell_bin = commands.which(shell_name)
     shell = login_shell()
     return _record(
-        "fish is the login shell",
-        f"login shell is '{shell or 'unknown'}', not fish ({fish or 'not installed'})",
-        passed=fish is not None and shell == fish,
+        f"{shell_name} is the login shell",
+        f"login shell is '{shell or 'unknown'}', not {shell_name} ({shell_bin or 'not installed'})",
+        passed=shell_bin is not None and shell == shell_bin,
     )
 
 

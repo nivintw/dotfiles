@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from dotfiles_install import commands, verify_install
+from dotfiles_install import commands, shell_select, verify_install
 from dotfiles_install.context import InstallContext
 from dotfiles_install.os_detect import OS
 from dotfiles_install.ui import UI
@@ -481,6 +481,50 @@ def test_login_shell_none_on_unexpected_output(monkeypatch: pytest.MonkeyPatch) 
     assert verify_install.login_shell() is None
 
 
+# --- _login_shell_record: shell-aware, fish default and persisted zsh -------
+
+
+def test_login_shell_record_ok_with_no_persisted_choice_checks_fish(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """With nothing persisted, the record checks fish (the default) and passes when it matches."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(commands, "which", lambda name: f"/usr/local/bin/{name}")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/usr/local/bin/fish")
+    assert verify_install._login_shell_record() == ("OK", "fish is the login shell")
+
+
+def test_login_shell_record_follows_a_persisted_zsh_choice(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A persisted zsh choice makes the record check zsh, not fish.
+
+    The zsh path was previously unexercised: this pins that it checks the right binary
+    and passes when zsh actually is the login shell.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    shell_select.write_shell(tmp_path, "zsh")
+    monkeypatch.setattr(commands, "which", lambda name: f"/usr/local/bin/{name}")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/usr/local/bin/zsh")
+    assert verify_install._login_shell_record() == ("OK", "zsh is the login shell")
+
+
+def test_login_shell_record_bad_when_persisted_zsh_but_login_shell_is_still_fish(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """When zsh was selected but the actual login shell hasn't caught up yet → BAD, naming zsh."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    shell_select.write_shell(tmp_path, "zsh")
+    monkeypatch.setattr(commands, "which", lambda name: f"/usr/local/bin/{name}")
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/usr/local/bin/fish")
+    status, message = verify_install._login_shell_record()
+    assert status == "BAD"
+    assert "not zsh" in message
+
+
 # --- iter_records emitter ---------------------------------------------------
 
 
@@ -508,7 +552,12 @@ def _healthy_repo_and_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     (repo / "Brewfile").write_text('brew "git"\n', encoding="utf-8")
-    for rel in (".gitconfig", ".config/fish/config.fish", ".claude/CLAUDE.md"):
+    for rel in (
+        ".gitconfig",
+        ".config/fish/config.fish",
+        ".config/zsh/.zshrc",
+        ".claude/CLAUDE.md",
+    ):
         src = repo / rel
         src.parent.mkdir(parents=True, exist_ok=True)
         src.write_text("x\n", encoding="utf-8")
@@ -527,14 +576,14 @@ def test_iter_records_all_ok_on_healthy_machine(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A fully set-up machine yields only OK records (the ten baseline checks)."""
+    """A fully set-up machine yields only OK records (the eleven baseline checks)."""
     repo = _healthy_repo_and_home(tmp_path, monkeypatch)
     monkeypatch.setattr(commands, "which", lambda name: f"/usr/local/bin/{name}")
     _all_probes(monkeypatch, healthy=True)
     records = list(verify_install.iter_records(repo, core=False))
     bad = [msg for status, msg in records if status == "BAD"]
-    # brew, login, touch-id, firewall, 3 symlinks, settings, gitconfig, pre-push hook
-    expected_checks = 10
+    # brew, login, touch-id, firewall, 4 symlinks, settings, gitconfig, pre-push hook
+    expected_checks = 11
     assert bad == []
     assert len(records) == expected_checks
     assert ("OK", "no pre-push hook installed (opt-in; nothing else owns it)") in records
@@ -644,8 +693,12 @@ def test_iter_records_core_strips_casks(
     assert ("OK", "Homebrew core (CLI formulae) packages all installed") in records
 
 
-def test_verify_and_summarize_renders_partitioned_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_verify_and_summarize_renders_partitioned_summary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     """Phase 18 splits records into Verified / Needs-attention and closes with the bash hints."""
+    monkeypatch.setenv("HOME", str(tmp_path))  # no persisted shell choice here — fish default
     monkeypatch.setattr(
         verify_install,
         "iter_records",
@@ -659,13 +712,15 @@ def test_verify_and_summarize_renders_partitioned_summary(monkeypatch: pytest.Mo
     assert "something broke" in text
     # A problem was present → the retry hint shows; the restart reminder is unconditional.
     assert "to retry" in text
-    assert "Restart your shell" in text
+    assert "exec fish" in text
 
 
 def test_verify_and_summarize_no_retry_hint_when_all_clear(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """With nothing wrong, only the unconditional restart reminder closes the summary."""
+    monkeypatch.setenv("HOME", str(tmp_path))  # no persisted shell choice here — fish default
     monkeypatch.setattr(
         verify_install, "iter_records", lambda *_a, **_k: iter([("OK", "all good")])
     )
@@ -674,7 +729,25 @@ def test_verify_and_summarize_no_retry_hint_when_all_clear(
     verify_install.verify_and_summarize(InstallContext(ui=ui))
     text = out.getvalue()
     assert "to retry" not in text
-    assert "Restart your shell" in text
+    assert "exec fish" in text
+
+
+def test_verify_and_summarize_exec_hint_follows_the_persisted_zsh_choice(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A persisted zsh choice makes the restart hint say 'exec zsh', not 'exec fish'."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    shell_select.write_shell(tmp_path, "zsh")
+    monkeypatch.setattr(
+        verify_install, "iter_records", lambda *_a, **_k: iter([("OK", "all good")])
+    )
+    out = io.StringIO()
+    ui = UI(stdout=Console(file=out, width=200), stderr=Console(file=io.StringIO(), width=200))
+    verify_install.verify_and_summarize(InstallContext(ui=ui))
+    text = out.getvalue()
+    assert "exec zsh" in text
+    assert "exec fish" not in text
 
 
 def test_login_shell_queries_the_real_user_not_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -801,7 +874,7 @@ def test_iter_records_linux_shape(
     records = list(verify_install.iter_records(repo, core=False))
     bad = [msg for status, msg in records if status == "BAD"]
     assert bad == []
-    expected_checks = 9  # the macOS ten, minus Touch ID
+    expected_checks = 10  # the macOS eleven, minus Touch ID
     assert len(records) == expected_checks
     assert any("ufw firewall active" in msg for _s, msg in records)
     assert not any("Touch ID" in msg for _s, msg in records)
@@ -833,7 +906,7 @@ def test_iter_records_wsl_omits_the_firewall_record(
     records = list(verify_install.iter_records(repo, core=False))
     bad = [msg for status, msg in records if status == "BAD"]
     assert bad == []
-    expected_checks = 8  # the macOS ten, minus Touch ID and the firewall
+    expected_checks = 9  # the macOS eleven, minus Touch ID and the firewall
     assert len(records) == expected_checks
     assert not any("firewall" in msg for _s, msg in records)
 

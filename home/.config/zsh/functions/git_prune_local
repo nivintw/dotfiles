@@ -1,0 +1,183 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Delete local branches that have been merged into main.
+git_prune_local() {
+    local dry_run=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                cat <<'EOF'
+Usage: git_prune_local [-n|--dry-run] [-h|--help]
+
+Delete local branches that have been merged into the default branch.
+Run from inside a git repository (assumes the remote is named 'origin').
+
+A branch is deleted when its commits are verified present in the default
+branch -- via a normal/rebase merge, or a squash merge (detected by patch
+id). A branch whose remote is gone but whose commits are NOT in the default
+branch is kept, so an accidentally-deleted remote can't cost you your only
+local copy. Local-only branches merged into the default branch are deleted;
+branches still tracking a live remote are left alone.
+
+Options:
+  -n, --dry-run   Show what would be deleted without deleting anything.
+  -h, --help      Show this help and exit.
+EOF
+                return 0
+                ;;
+            -n|--dry-run)
+                dry_run=1
+                shift
+                ;;
+            *)
+                echo "git_prune_local: unexpected argument '$1' (see git_prune_local --help)" >&2
+                return 1
+                ;;
+        esac
+    done
+
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        echo "Error: Not a git repository." >&2
+        return 1
+    fi
+
+    (( dry_run )) && echo "(dry run: no branches will be deleted)"
+
+    # Fetch the latest changes from the remote. Abort on failure rather than prune
+    # against stale remote-tracking refs (a failed fetch could mis-classify a branch as
+    # [gone] and risk deleting the only copy).
+    echo "Fetching latest changes from remote..."
+    if ! git fetch --prune; then
+        echo "Error: git fetch failed; aborting to avoid pruning on stale remote state." >&2
+        return 1
+    fi
+
+    # NOTE: assumes the remote is named "origin".
+    # Determine the default branch on the remote (usually origin/main).
+    local default_branch
+    default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|^refs/remotes/||')
+    [[ -n "$default_branch" ]] || default_branch=origin/main # Fallback if HEAD is not set
+    local default_local=${default_branch#origin/}
+
+    # Don't touch the branch we're currently on (empty if HEAD is detached).
+    local current_branch
+    current_branch=$(git symbolic-ref --short -q HEAD)
+
+    # Branches whose remote-tracking branch is gone (PR was merged and deleted).
+    # for-each-ref avoids parsing the porcelain `git branch -vv` output, so there are no
+    # `*`/`+` decorations to strip and branch names with slashes are safe. [^[:space:]]
+    # (not \S — a GNU/PCRE escape BSD sed, i.e. macOS's default sed, doesn't support and
+    # silently fails to match at all, dropping every [gone] branch) is the portable form.
+    local -a gone_branches
+    gone_branches=(${(f)"$(git for-each-ref --format '%(refname:short) %(upstream:track)' refs/heads \
+        | sed -nE 's/^([^[:space:]]+) \[gone\]$/\1/p')"})
+
+    # Branches that are direct ancestors of the default branch (traditional merge). The
+    # default branch itself is excluded by exact-string compare in the loop below (not a
+    # glob match, which would treat the name as a pattern).
+    local -a merged_branches
+    merged_branches=(${(f)"$(git branch --merged "$default_branch" | grep -v '^[*+]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"})
+
+    local deleted_count=0 skipped_count=0 kept_count=0 had_failure=0
+    local branch
+
+    for branch in "${gone_branches[@]}"; do
+        [[ "$branch" == "$current_branch" ]] && continue
+
+        # Per-commit patch-id check: are all of the branch's commits already in the
+        # default branch? Empty result => normal or rebase merge (handled silently).
+        # (local+assign combined in one statement, not split: re-declaring a bare
+        # `local` on a variable already local in this scope — which happens on every
+        # loop iteration after the first — makes zsh print "name=value" to stdout.)
+        local unmerged=$(git log --cherry-pick --right-only --oneline "$default_branch...$branch" 2>/dev/null)
+
+        local reason=
+        if [[ -z "$unmerged" ]]; then
+            reason=merged
+        else
+            # Not patch-equivalent per commit. Either a squash merge (collapsed to a
+            # single commit on the default branch with a new patch-id) or a remote
+            # deleted without merging. Collapse the branch to one synthetic commit of
+            # its total diff against the merge-base, then ask whether the default
+            # branch already contains that patch (`git cherry` prints "-" if so).
+            # Same loop-scoped local+assign gotcha as above: split declare/assign on a
+            # repeated bare `local` would print stray "name=value" lines after the
+            # first iteration.
+            local mb=$(git merge-base "$default_branch" "$branch" 2>/dev/null)
+            local synth=
+            if [[ -n "$mb" ]]; then
+                synth=$(git commit-tree "$branch^{tree}" -p "$mb" -m squash-check 2>/dev/null)
+            fi
+
+            if [[ -n "$synth" ]] && [[ "$(git cherry "$default_branch" "$synth" 2>/dev/null)" == -* ]]; then
+                reason=squash-merged
+            else
+                # Genuinely not in the default branch. Could be a remote that was
+                # deleted without merging, so keep it rather than risk discarding the
+                # only remaining copy. Verify and delete by hand if intended.
+                echo "Skipping branch (commits not in $default_local): $branch"
+                echo "  Unmerged commits:"
+                printf '    %s\n' "${(f)unmerged}"
+                (( skipped_count++ ))
+                continue
+            fi
+        fi
+
+        # reason is "merged" or "squash-merged": commits are verified present in the
+        # default branch, so force-delete is safe even when -d would refuse.
+        if (( dry_run )); then
+            echo "[dry-run] Would delete $reason branch: $branch"
+            (( deleted_count++ ))
+        else
+            echo "Deleting $reason branch: $branch"
+            if git branch -D "$branch"; then
+                (( deleted_count++ ))
+            else
+                echo "    WARNING: Failed to delete branch: $branch"
+                had_failure=1
+            fi
+        fi
+    done
+
+    # Also delete branches that are local-only (no upstream remote). Branches still
+    # tracking a live remote are left alone. gone-remote branches were already handled
+    # above.
+    for branch in "${merged_branches[@]}"; do
+        [[ "$branch" == "$default_local" ]] && continue # never delete the default branch
+        # (Ie) = exact-match index into gone_branches, 0 if absent — zsh's array
+        # "contains" idiom.
+        if (( ! ${gone_branches[(Ie)$branch]} )); then
+            # local+assign combined — same loop-scoped gotcha as the first loop above.
+            local upstream=$(git config --get "branch.$branch.remote" 2>/dev/null)
+            if [[ -z "$upstream" ]]; then
+                # No upstream, but merged into the default branch. Safe to delete.
+                if (( dry_run )); then
+                    echo "[dry-run] Would delete merged local-only branch: $branch"
+                    (( deleted_count++ ))
+                else
+                    echo "Deleting merged local-only branch: $branch"
+                    if git branch -d "$branch"; then
+                        (( deleted_count++ ))
+                    else
+                        echo "    WARNING: Failed to delete branch: $branch"
+                        had_failure=1
+                    fi
+                fi
+            else
+                # Has an upstream remote that still exists, but is merged. Leave it alone.
+                echo "Skipping branch (has live upstream): $branch"
+                (( kept_count++ ))
+            fi
+        fi
+    done
+
+    if (( deleted_count == 0 && skipped_count == 0 && kept_count == 0 )); then
+        echo "No local branches to prune."
+    else
+        echo "Pruning complete: Deleted $deleted_count branch(es), Skipped $skipped_count branch(es) (need review), Kept $kept_count branch(es) with live upstreams."
+    fi
+
+    # Non-zero exit only if a delete we attempted actually failed.
+    (( had_failure == 0 ))
+}

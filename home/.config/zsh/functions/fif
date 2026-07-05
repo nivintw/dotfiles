@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+
+# Interactive ripgrep through file contents; enter opens the match in $EDITOR.
+fif() {
+    # The non-greedy (.+?) below needs PCRE-flavored =~ (zsh's default POSIX ERE engine
+    # rejects it outright); localoptions scopes it to this call only.
+    setopt localoptions rematchpcre
+    if ! command -v rg >/dev/null 2>&1; then
+        echo "fif needs ripgrep (rg)." >&2
+        return 1
+    fi
+
+    local rg_cmd='rg --column --line-number --no-heading --color=always --smart-case'
+    local initial="$*"
+
+    # Initial result set: run rg for the seed query, or nothing (`true`) when called
+    # with no args so the list starts empty and fills in as you type.
+    local default_cmd=true
+    if [[ -n "$initial" ]]; then
+        default_cmd="$rg_cmd -- ${(qq)initial}"
+    fi
+
+    # --disabled turns off fzf's own fuzzy filtering so every keystroke re-runs ripgrep
+    # instead (live full-text search). Preview highlights the match line.
+    local result
+    result=$(
+        FZF_DEFAULT_COMMAND=$default_cmd \
+        fzf --ansi --disabled --query "$initial" \
+            --bind "change:reload:$rg_cmd -- {q} || true" \
+            --delimiter : \
+            --preview 'bat --color=always {1} --highlight-line {2} 2>/dev/null || sed -n {2}p {1}' \
+            --preview-window 'up,60%,border-bottom,+{2}/3'
+    ) || return
+    [[ -n "$result" ]] || return
+
+    # rg --column emits FILE:LINE:COL:TEXT. Extract FILE + LINE with a regex (non-greedy
+    # path) so a filename containing ':' isn't truncated by a split.
+    if [[ "$result" =~ ^(.+?):([0-9]+): ]]; then
+        __open_at_line "${match[1]}" "${match[2]}"
+    else
+        return 1
+    fi
+}
