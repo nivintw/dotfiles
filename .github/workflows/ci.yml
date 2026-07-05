@@ -10,9 +10,10 @@
 # Most hooks self-bootstrap their pinned env (shellcheck, shfmt, actionlint, zizmor,
 # typos, gitleaks, ruff, rumdl, validate-pyproject, uv-lock, the pre-commit-hooks
 # builtins), so the only tools to install are the `language: system` ones CI actually
-# needs: fish (the fish hooks), bats (the behavior tests), ripgrep (the fsearch
-# behavior test, which gates on `rg`), and osv-scanner (the dependency-CVE hook — a
-# release binary, like hawkeye/taplo). uv runs the `ty`/`uv audit` hooks + pytest. The
+# needs: fish (the fish hooks), zsh (the zsh hook — Ubuntu runners don't ship it),
+# bats (the behavior tests), ripgrep (the fsearch behavior test, which gates on `rg`),
+# and osv-scanner (the dependency-CVE hook — a release binary, like hawkeye/taplo).
+# uv runs the `ty`/`uv audit` hooks + pytest. The
 # pytest suite includes Playwright docs-site tests that drive a real browser, so a
 # (cached) Chromium is installed just before that step.
 #
@@ -75,7 +76,7 @@ jobs:
 
       - name: Install system-hook tools
         if: inputs.skip-quality-gate != true
-        run: sudo apt-get update && sudo apt-get install -y fish bats ripgrep
+        run: sudo apt-get update && sudo apt-get install -y fish zsh bats ripgrep
 
       - name: Cache prek hook environments
         if: inputs.skip-quality-gate != true
