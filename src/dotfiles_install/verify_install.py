@@ -157,6 +157,7 @@ _UFW_CONF = Path("/etc/ufw/ufw.conf")
 _KEY_LINKS = (
     ".gitconfig",
     ".config/fish/config.fish",
+    ".zshenv",  # sets ZDOTDIR — without it, .config/zsh/.zshrc below is unreachable
     ".config/zsh/.zshrc",
     ".claude/CLAUDE.md",
 )

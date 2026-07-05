@@ -63,7 +63,16 @@ def read_shell(home: Path) -> str | None:
 
 
 def write_shell(home: Path, shell: str) -> None:
-    """Persist ``shell`` as the chosen login shell."""
+    """Persist ``shell`` as the chosen login shell.
+
+    Raises:
+        ValueError: if ``shell`` isn't in :data:`VALID_SHELLS` — fail loudly at the
+            write boundary rather than let an invalid value reach disk, where
+            :func:`read_shell` would otherwise have to silently degrade it later.
+    """
+    if shell not in VALID_SHELLS:
+        msg = f"invalid shell {shell!r} (must be one of {sorted(VALID_SHELLS)})"
+        raise ValueError(msg)
     path = shell_file(home)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"{_HEADER}{shell}\n", encoding="utf-8")
