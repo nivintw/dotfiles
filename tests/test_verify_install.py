@@ -525,6 +525,21 @@ def test_login_shell_record_bad_when_persisted_zsh_but_login_shell_is_still_fish
     assert "not zsh" in message
 
 
+def test_login_shell_record_ok_for_homebrew_zsh_despite_which_resolving_system_zsh(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A Homebrew zsh login shell passes even when `which("zsh")` resolves /bin/zsh.
+
+    Same basename, different exact path — PATH ordering must not produce a false BAD.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    shell_select.write_shell(tmp_path, "zsh")
+    monkeypatch.setattr(commands, "which", lambda name: "/bin/zsh" if name == "zsh" else None)
+    monkeypatch.setattr(verify_install, "login_shell", lambda: "/opt/homebrew/bin/zsh")
+    assert verify_install._login_shell_record() == ("OK", "zsh is the login shell")
+
+
 # --- iter_records emitter ---------------------------------------------------
 
 

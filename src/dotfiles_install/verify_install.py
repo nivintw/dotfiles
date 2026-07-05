@@ -405,14 +405,21 @@ def _has_directive(path: Path) -> bool:
 
 
 def _login_shell_record() -> Record:
-    """OK when the resolved shell (fish by default, or zsh when selected) is the login shell."""
+    """OK when the resolved shell (fish by default, or zsh when selected) is the login shell.
+
+    Compared by basename, not the exact ``which()``-resolved path: unlike fish (never
+    shipped by macOS), zsh has both a system build (``/bin/zsh``) and a Homebrew one, and
+    PATH ordering doesn't guarantee which ``which("zsh")`` finds — an exact-path
+    comparison would produce a false BAD record for a correctly-configured Homebrew zsh.
+    """
     shell_name = shell_select.resolve_shell(None, Path.home())
     shell_bin = commands.which(shell_name)
     shell = login_shell()
+    passed = shell_bin is not None and shell is not None and Path(shell).name == shell_name
     return _record(
         f"{shell_name} is the login shell",
         f"login shell is '{shell or 'unknown'}', not {shell_name} ({shell_bin or 'not installed'})",
-        passed=shell_bin is not None and shell == shell_bin,
+        passed=passed,
     )
 
 
