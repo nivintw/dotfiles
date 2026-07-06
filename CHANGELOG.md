@@ -7,6 +7,15 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.23.1](https://github.com/nivintw/dotfiles/compare/v1.23.0...v1.23.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* address 2 more Copilot findings (three-tier wording, vendor comment) ([8e1c087](https://github.com/nivintw/dotfiles/commit/8e1c087620e177f041e2b9b304a24d326bd2779f))
+* drop redundant fish PATH block, correct CLAUDE.md overclaim ([01df00c](https://github.com/nivintw/dotfiles/commit/01df00c4265987bea9886dae95e7619d7cea8a75))
+* **fish:** use $HOME instead of a hardcoded path for Rancher PATH ([b795365](https://github.com/nivintw/dotfiles/commit/b795365a765f57e04070afb48bfb0c7c9265190e))
+
 ## [1.23.0](https://github.com/nivintw/dotfiles/compare/v1.22.0...v1.23.0) (2026-07-06)
 
 
