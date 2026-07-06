@@ -211,6 +211,18 @@ def test_grep_skips_binary_files(loop: ModuleType, sandbox: Path) -> None:
     assert "bin.dat" not in result
 
 
+def test_grep_skips_binary_files_with_a_late_nul_byte(loop: ModuleType, sandbox: Path) -> None:
+    """A NUL byte past the first 8KB is still detected as binary, not just missed.
+
+    The docstring's claim of scanning the whole (already size-capped) buffer must
+    actually hold, not just the first chunk.
+    """
+    late_nul = b"x" * 9000 + b"\0" + b"needle"
+    (sandbox / "latenul.dat").write_bytes(late_nul)
+    result = loop.tool_grep(sandbox, {"pattern": "needle", "path": "latenul.dat"})
+    assert result == "(no matches)"
+
+
 def test_grep_skips_dot_git(loop: ModuleType, sandbox: Path) -> None:
     """.git internals are never scanned, even if they'd otherwise match."""
     (sandbox / ".git").mkdir()
@@ -230,6 +242,23 @@ def test_grep_does_not_follow_a_symlinked_file_out_of_the_sandbox(
     (sandbox / "link.txt").symlink_to(sandbox.parent / "outside" / "secret.txt")
     result = loop.tool_grep(sandbox, {"pattern": "TOP SECRET", "path": "."})
     assert "TOP SECRET" not in result
+
+
+def test_grep_does_not_walk_a_symlinked_directory_pointing_outside_the_sandbox(
+    loop: ModuleType, sandbox: Path
+) -> None:
+    """A symlinked directory pointing outside root is never descended into.
+
+    _classify_entry used to call entry.is_file() with the default
+    follow_symlinks=True, stat-ing the target outside root before any containment
+    check — found via Copilot review. The walk must still find matches elsewhere
+    in the tree without crashing or leaking anything about the outside directory.
+    """
+    (sandbox.parent / "outside" / "leaked.txt").write_text("TOP SECRET leaked content\n")
+    (sandbox / "escape_dir").symlink_to(sandbox.parent / "outside")
+    result = loop.tool_grep(sandbox, {"pattern": "world|leaked", "path": "."})
+    assert "sub/f.txt:2:world" in result
+    assert "leaked" not in result
 
 
 def test_grep_still_matches_a_symlink_pointing_back_inside_the_sandbox(

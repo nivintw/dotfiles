@@ -224,7 +224,7 @@ def _grep_one_file(f: Path, root: Path, rx: Any) -> list[str]:
             data = fh.read(MAX_READ_BYTES)
     except OSError:
         return []
-    if b"\0" in data[:8192]:
+    if b"\0" in data:
         return []
     text = data.decode("utf-8", errors="replace")
     rel = f.relative_to(root)
@@ -252,23 +252,32 @@ def _contained(path: Path, root: Path) -> bool:
 def _classify_entry(entry: os.DirEntry, root: Path) -> tuple[Path | None, Path | None]:
     """Classify one scandir entry as (dir_to_walk, file_to_yield) — exactly one, or both None.
 
-    A real directory (not a symlink) is walked regardless of name, except .git. A file is
-    yielded only if it's not a symlink, or is a symlink that still resolves inside root
-    (see _iter_files). Any OSError (permission denied, ELOOP on a self-referential
-    symlink) classifies the entry as neither — skip it rather than crash the whole walk.
+    A real directory (not a symlink) is walked regardless of name, except .git. A
+    symlink is never classified via a following stat — it's resolved and checked for
+    containment first (the same resolve-then-check discipline safe_path uses), and
+    only a symlink confirmed to resolve to a file *inside* root is yielded; nothing
+    about its target's type or contents is ever inspected while still unconfirmed.
+    Symlinked directories are never walked, even when they resolve inside root — the
+    walk stack only ever grows from real directories. Any OSError (permission denied,
+    ELOOP on a self-referential symlink) classifies the entry as neither — skip it
+    rather than crash the whole walk.
     """
     try:
+        if entry.is_symlink():
+            p = Path(entry.path)
+            if not _contained(p, root):
+                return None, None
+            return (None, p) if p.resolve().is_file() else (None, None)
         is_dir = entry.is_dir(follow_symlinks=False)
-        is_file = entry.is_file()
     except OSError:
         return None, None
     if is_dir:
         return (None if entry.name == ".git" else Path(entry.path)), None
-    if is_file:
-        p = Path(entry.path)
-        if not entry.is_symlink() or _contained(p, root):
-            return None, p
-    return None, None
+    try:
+        is_file = entry.is_file(follow_symlinks=False)
+    except OSError:
+        return None, None
+    return (None, Path(entry.path)) if is_file else (None, None)
 
 
 def _iter_files(target: Path, root: Path) -> Iterator[Path]:
