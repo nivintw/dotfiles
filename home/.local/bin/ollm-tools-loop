@@ -143,13 +143,21 @@ def _as_dict(value: object) -> dict:
     return value if isinstance(value, dict) else {}
 
 
-def safe_path(root: Path, user_path: str) -> Path:
+def safe_path(root: Path, user_path: object) -> Path:
     """Resolve user_path against root, defeating ../ traversal and symlink escapes.
 
     Absolute-looking input is treated as relative to root (never as an absolute
     filesystem path) since it's model-controlled, not caller-controlled — joining an
     absolute path onto root would otherwise discard root entirely.
+
+    Every tool's single choke point for path validation, so a non-string path (a
+    model shape violation, not just bad content) is rejected here once rather than
+    relying on each of read_file/ls/grep to have remembered its own isinstance check —
+    a real gap: ls and grep both lacked one until this was found in review.
     """
+    if not isinstance(user_path, str) or not user_path:
+        msg = f"path must be a non-empty string, got {user_path!r}"
+        raise ToolError(msg)
     candidate = (root / user_path.lstrip("/")).resolve()
     if candidate != root and root not in candidate.parents:
         msg = f"path escapes the sandboxed root: {user_path!r}"
@@ -159,13 +167,9 @@ def safe_path(root: Path, user_path: str) -> Path:
 
 def tool_read_file(root: Path, args: dict) -> str:
     """Return a file's UTF-8 text, truncated past MAX_READ_BYTES."""
-    path = args.get("path")
-    if not isinstance(path, str) or not path:
-        msg = "read_file requires a non-empty 'path' string"
-        raise ToolError(msg)
-    target = safe_path(root, path)
+    target = safe_path(root, args.get("path"))
     if not target.is_file():
-        msg = f"not a file: {path}"
+        msg = f"not a file: {target}"
         raise ToolError(msg)
     with target.open("rb") as fh:
         data = fh.read(MAX_READ_BYTES + 1)
@@ -318,14 +322,18 @@ def tool_grep(root: Path, args: dict) -> str:
 DISPATCH = {"read_file": tool_read_file, "grep": tool_grep, "ls": tool_ls}
 
 
-def run_tool(root: Path, name: str, args: object) -> str:
+def run_tool(root: Path, name: object, args: object) -> str:
     """Dispatch a model-requested tool call; sandbox/tool/filesystem errors become
     result text, not raises — the whole point of a tool loop is surviving bad input.
 
-    `args` is coerced to a dict regardless of caller discipline: this is the dispatch
-    boundary between model-controlled input and the tool implementations, so it
-    validates shape itself rather than trusting every call site to have done so.
+    Both `name` and `args` are validated/coerced regardless of caller discipline: this
+    is the dispatch boundary between model-controlled input and the tool
+    implementations, so it validates shape itself rather than trusting every call site
+    to have done so — `name` must be hashable for the DISPATCH lookup, so an
+    unhashable shape (a list/dict) is checked before it ever reaches that lookup.
     """  # noqa: D205 -- two-line summary reads better than a forced blank-line split here
+    if not isinstance(name, str):
+        return f"error: tool name must be a string, got {name!r}"
     fn = DISPATCH.get(name)
     if fn is None:
         return f"error: unknown tool {name!r}"

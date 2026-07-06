@@ -101,6 +101,21 @@ def test_safe_path_allows_the_root_itself(loop: ModuleType, sandbox: Path) -> No
     assert loop.safe_path(sandbox, ".") == sandbox.resolve()
 
 
+@pytest.mark.parametrize("bad_path", [[1, 2, 3], 42, None, {}, ""], ids=str)
+def test_safe_path_rejects_a_non_string_path_as_a_tool_error(
+    loop: ModuleType, sandbox: Path, bad_path: object
+) -> None:
+    """A non-string (or empty) path is a ToolError here, not an AttributeError from .lstrip().
+
+    This is the single choke point every tool (read_file/ls/grep) resolves paths
+    through — found via Copilot review that ls and grep both lacked their own
+    isinstance check that read_file already had, letting a non-string `path` argument
+    crash the whole loop instead of producing a graceful tool-error result.
+    """
+    with pytest.raises(loop.ToolError):
+        loop.safe_path(sandbox, bad_path)
+
+
 # --- individual tools ----------------------------------------------------------------------
 
 
@@ -148,6 +163,12 @@ def test_ls_on_a_file_is_a_tool_error(loop: ModuleType, sandbox: Path) -> None:
         loop.tool_ls(sandbox, {"path": "sub/f.txt"})
 
 
+def test_ls_rejects_a_non_string_path(loop: ModuleType, sandbox: Path) -> None:
+    """A non-string path argument is a ToolError, not an AttributeError crash."""
+    with pytest.raises(loop.ToolError):
+        loop.tool_ls(sandbox, {"path": [1, 2, 3]})
+
+
 def test_grep_finds_matches_with_file_and_line(loop: ModuleType, sandbox: Path) -> None:
     """A match is reported as relative-path:line-number:line-text."""
     result = loop.tool_grep(sandbox, {"pattern": "wor.d", "path": "."})
@@ -163,6 +184,12 @@ def test_grep_invalid_regex_is_a_tool_error(loop: ModuleType, sandbox: Path) -> 
     """An unparsable regex is a ToolError, not an unhandled re.error."""
     with pytest.raises(loop.ToolError):
         loop.tool_grep(sandbox, {"pattern": "(unclosed", "path": "."})
+
+
+def test_grep_rejects_a_non_string_path(loop: ModuleType, sandbox: Path) -> None:
+    """A non-string path argument is a ToolError, not an AttributeError crash."""
+    with pytest.raises(loop.ToolError):
+        loop.tool_grep(sandbox, {"pattern": "x", "path": [1, 2, 3]})
 
 
 def test_grep_skips_binary_files(loop: ModuleType, sandbox: Path) -> None:
@@ -261,6 +288,16 @@ def test_ls_caps_entries(loop: ModuleType, sandbox: Path, monkeypatch: pytest.Mo
 def test_run_tool_unknown_name_returns_an_error_string(loop: ModuleType, sandbox: Path) -> None:
     """An unrecognized tool name is reported back to the model, not raised."""
     result = loop.run_tool(sandbox, "delete_everything", {})
+    assert result.startswith("error:")
+
+
+def test_run_tool_non_string_name_does_not_raise(loop: ModuleType, sandbox: Path) -> None:
+    """An unhashable tool name is coerced to an error, not a raised TypeError.
+
+    A list/dict tool name would otherwise raise TypeError from DISPATCH.get() trying
+    to hash it — found via Copilot review.
+    """
+    result = loop.run_tool(sandbox, [1, 2], {})
     assert result.startswith("error:")
 
 
