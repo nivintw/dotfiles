@@ -76,6 +76,18 @@ One gate decides: offload when *(assemble context + verify output)* is cheaper t
 
 Which models back which roles is machine data, not prose: `scripts/ollama_models.sh` in the dotfiles repo defines the roster, `ollm --list` shows it live, and the session-start hook keeps it current. Per-machine notes (benchmarks, quirks) stay in the untracked machine-local file imported below.
 
+## Watching & waiting: which tool
+
+"Watch X and tell me when it changes" isn't one pattern — pick by shape, not by habit:
+
+- **Single condition, bounded horizon** (e.g. "tell me when this build finishes"): Bash with `run_in_background` plus an until-loop. Don't spin up heavier machinery for a one-shot check.
+- **Indefinite or bounded stream of occurrences** (e.g. "notify me each time a new log line matches"): the Monitor tool, driven off a bash source. The filter must cover every terminal state — failure, cancellation, timeout — not just the success case, or the watch silently hangs on the path you didn't test.
+- **True push source** (a WebSocket or SSE endpoint): Monitor's `ws` mode. Prefer it over any polling loop when a genuine push channel exists.
+- **Wall-clock/recurring, or a long-horizon low-frequency check** (e.g. "check again every 5 minutes for the next day"): CronCreate. Make one-shot watches self-deleting once they fire — don't leave a stale cron entry behind.
+- **Harness-tracked async work** — subagents, `/workflows`, background commands started via this session's own tooling: no watcher at all. The harness already notifies on completion and re-invokes the session; polling or Monitor-wrapping it is redundant.
+
+**Deferred: GitHub state (PRs, CI runs, releases) via a webhook → WebSocket/SSE bridge.** GitHub exposes no push channel a local session can subscribe to directly, so every such watch today is a poll under the hood (CronCreate, well-bounded). Building a relay — self-hosted or a smee.io-style third-party — to convert GitHub webhooks into a push feed is real infrastructure to stand up and operate, for a single-user watch case where a bounded poll is already cheap and reliable. Not worth it: keep polling via CronCreate until the volume or latency needs genuinely change.
+
 ## Machine-local instructions
 
 Per-machine guidance (work vs personal) lives in an untracked file outside the dotfiles repo and is imported below. `install.sh` seeds it empty, so the import never dangles; fill it in on a given machine for work-only context that shouldn't be public.
