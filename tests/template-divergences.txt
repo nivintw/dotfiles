@@ -17,7 +17,6 @@ CHANGELOG.md                           # release-please-generated; grows every r
 pyproject.toml                         # real installer package (deps, console script, dev groups) vs the template stub
 README.md                              # real project README vs the template stub
 REUSE.toml                             # repo-specific annotations (home/ + .claude trees, iterm2 plist, casts, vendored player)
-scripts/refresh-binary-checksums.sh    # fixes pinned_value_at_base()'s tamper gate silently no-op'ing on a genuine git-show read failure (shallow-clone blob fetch flake), not just a legitimate absent-path; filed upstream: nivintw/copier-everything#202
 tests/conftest.py                      # real shared helpers for the config-validation suite vs the template stub
 tests/smoke.bats                       # deleted: placeholder superseded by the real bats suite
 tests/test_smoke.py                    # deleted: placeholder superseded by the real pytest suite
