@@ -19,8 +19,11 @@ if TYPE_CHECKING:
 # Brewfiles are Ruby; `if`/`end` bracket the `OS.mac?` blocks that gate macOS-only
 # formulae/casks/extensions off Linuxbrew (Homebrew evaluates them at bundle time).
 BREW_DIRECTIVES = ("tap", "brew", "cask", "mas", "vscode", "if", "end")
-# A tool name, optionally with a uv/pip extras suffix like `reuse[charset-normalizer]`.
-TOOL_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[[A-Za-z0-9._,-]+\])?$")
+# A tool name, optionally with a uv/pip extras suffix like `reuse[charset-normalizer]`,
+# or a PEP 508 direct URL reference like `serena-agent@git+https://.../serena@v1.5.3`
+# (uv tool install's own accepted PACKAGE syntax; no spaces around `@`, since
+# install_uv_tools' naive `line.split()` would otherwise tear it into separate argv tokens).
+TOOL_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[[A-Za-z0-9._,-]+\])?(@\S+)?$")
 
 
 def _meaningful_lines(path: Path) -> Iterator[tuple[int, str]]:
@@ -81,10 +84,10 @@ def test_uv_tools_first_token_is_a_tool_name() -> None:
 
 
 def test_uv_tools_with_flags_are_paired() -> None:
-    """Every `--with` flag in uv_tools.txt is followed by a package argument."""
-    # Each `--with` must be followed by a package argument, not end-of-line.
+    """Every `--with`/`--with-executables-from` flag in uv_tools.txt takes a package argument."""
+    # Each flag must be followed by a package argument, not end-of-line.
     for n, line in _meaningful_lines(REPO / "uv_tools.txt"):
         toks = line.split()
         for i, t in enumerate(toks):
-            if t == "--with":
-                assert i + 1 < len(toks), f"uv_tools.txt:{n}: dangling --with"
+            if t in ("--with", "--with-executables-from"):
+                assert i + 1 < len(toks), f"uv_tools.txt:{n}: dangling {t}"

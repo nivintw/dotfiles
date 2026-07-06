@@ -9,8 +9,8 @@
 # Regenerate the human-readable view of what's installed with:
 #   uv tool list --show-python --show-with --show-extras
 
-ansible --with passlib --with jc --with jmespath --with netaddr --with ansible-lint
-ansible-dev-tools
+ansible --with passlib --with jc --with jmespath --with netaddr --with ansible-lint --with-executables-from ansible-core --with-executables-from ansible-lint
+ansible-dev-tools --with-executables-from molecule
 checkov
 commitizen
 copier
@@ -19,4 +19,7 @@ playwright
 prek
 reuse[charset-normalizer]
 rumdl
+# Pinned to the commit SHA behind tag v1.5.3, not the tag itself — a tag can be force-moved
+# to a different commit by anyone with push access to oraios/serena; a SHA can't.
+serena-agent@git+https://github.com/oraios/serena@2449313c0d7427275c4c66aedff7d4881782f713
 yq
