@@ -7,6 +7,21 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.22.0](https://github.com/nivintw/dotfiles/compare/v1.21.1...v1.22.0) (2026-07-06)
+
+
+### Features
+
+* **shell:** Add zsh as a selectable, opt-in login shell ([9dac03a](https://github.com/nivintw/dotfiles/commit/9dac03ae972ee38d95cd5549b5b3a54a4a7f6213)), closes [#35](https://github.com/nivintw/dotfiles/issues/35)
+
+
+### Bug Fixes
+
+* **ci:** Install zsh on the lint-and-test runner ([3e22699](https://github.com/nivintw/dotfiles/commit/3e22699ad0fe115c546a2052aaf889c8bbcbdf7e))
+* **installer:** Check .zshenv is stowed; fail loudly on an invalid shell ([9ad9658](https://github.com/nivintw/dotfiles/commit/9ad9658c26e5a25ab2468c7b23f6f4d86e574679))
+* **installer:** Check the real login shell, not \$SHELL, before chsh ([65e66ef](https://github.com/nivintw/dotfiles/commit/65e66ef13a12b2ed50d31bdb0f7ee3f468125c22))
+* **installer:** Compare login shell by basename, not exact which() path ([bf77e91](https://github.com/nivintw/dotfiles/commit/bf77e9127f5cf32f7c9c2d979ca4eae950226dfd))
+
 ## [1.21.1](https://github.com/nivintw/dotfiles/compare/v1.21.0...v1.21.1) (2026-07-04)
 
 
