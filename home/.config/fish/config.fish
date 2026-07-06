@@ -19,7 +19,3 @@ if command -q direnv
     direnv hook fish | source
     set -g direnv_fish_mode eval_on_arrow
 end
-
-### MANAGED BY RANCHER DESKTOP START (DO NOT EDIT)
-set --export --prepend PATH "$HOME/.rd/bin"
-### MANAGED BY RANCHER DESKTOP END (DO NOT EDIT)
