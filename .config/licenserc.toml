@@ -14,9 +14,9 @@ SPDX-License-Identifier: {{ props["spdxLicenseIdentifier"] }}
 """
 # REUSE-IgnoreEnd
 
-# Negations cancel hawkeye's built-in default excludes (which skip **/*.md and
-# **/.gitignore) so those get headered too.
-# This project has frontmatter-first markdown (YAML on line 1 — Claude Code skills,
+# This repo has no negations below (a negation would cancel one of hawkeye's built-in
+# default excludes, e.g. `!**/*.md` to header markdown anyway) — none apply here. This
+# project has frontmatter-first markdown (YAML on line 1 — Claude Code skills,
 # Jekyll/Hugo), so markdown stays in hawkeye's default excludes (a line-1 SPDX comment
 # would break the frontmatter) and is licensed via REUSE.toml instead. Note hawkeye
 # can't re-exclude a file once an include (`!`) matches it, so there's no `!**/*.md`.
@@ -27,7 +27,6 @@ excludes = [
   "LICENSES/**",
   "uv.lock",
   "**/*.json",
-  "!**/.gitignore",
   "**/.python-version",
   "**/.vscode/*",
   # CODEOWNERS has no extension hawkeye maps; it carries its own `#` header (reuse-verified).
@@ -51,11 +50,11 @@ excludes = [
 # '#'-comment files hawkeye doesn't map by default: fish/bats/uv_tools.txt and the
 # Brewfile.d/*.brewfile bundles by extension, plus dotfiles and the baseline Brewfile
 # (Ruby DSL) matched by exact filename (no extension), and the git template post-checkout
-# hook (shell, '#' comments).
+# hook (shell, '#' comments). (.gitignore stays in hawkeye's default excludes too and is
+# licensed via REUSE.toml instead — see that file.)
 [mapping.SCRIPT_STYLE]
 extensions = ["txt", "fish", "bats", "brewfile"]
 filenames = [
-  ".gitignore",
   ".envrc",
   ".dockerignore",
   "Brewfile",

@@ -21,6 +21,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: link-check-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lychee:
     runs-on: ubuntu-latest
@@ -33,20 +37,12 @@ jobs:
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
         with:
           # --max-retries/--timeout keep a slow-but-valid host (a single transient TIMEOUT)
-          # from reddening the check. Self-referential links are otherwise validated (the repo
-          # exists on GitHub and GITHUB_TOKEN authenticates even a private repo's own URLs), with
-          # one exception: this repo's own /compare/ URLs. release-please's generated CHANGELOG
-          # links to compare/<prev>...<next>, but the <next> tag isn't cut until the Release PR
-          # merges, so it 404s on every Release PR until then (then self-heals) — exclude it.
-          # Also exclude gnu.org: it blackholes GitHub's runner IPs (the README's GNU Stow link
-          # TIMEOUTs even at --timeout 30 + 5 retries — a hard block, not slowness), a stable
-          # canonical URL safe to skip.
-          # And exclude api.reuse.software/info/: the README's REUSE badge links to its /info/
-          # page, which 404s until reuse.software has crawled this repo (the /badge/ SVG itself
-          # 200s and stays validated). Self-heals once registered.
-          # (lychee excludes mailto: by default.) Scope to Markdown (+ the markdown-shaped
+          # from reddening the check. Excludes (see .config/lychee.toml for the hosts and why)
+          # are passed via --config so a consuming repo can add its own without editing this
+          # generated workflow; keeping ALL excludes in one source avoids lychee's CLI-vs-config
+          # merge ambiguity. (lychee excludes mailto: by default.) Scope to Markdown (+ the markdown-shaped
           # llms.txt/llms-full.txt) so LICENSES/lockfiles aren't crawled.
-          args: "--no-progress --max-retries 5 --timeout 30 --exclude 'github\\.com/nivintw/dotfiles/compare/' --exclude 'gnu\\.org' --exclude 'api\\.reuse\\.software/info/' '**/*.md' 'docs/llms.txt' 'docs/llms-full.txt'"
+          args: "--no-progress --max-retries 5 --timeout 30 --config .config/lychee.toml '**/*.md' 'docs/llms.txt' 'docs/llms-full.txt'"
           fail: true
         env:
           # Authenticated requests raise GitHub's rate limit, so github.com links don't flake.

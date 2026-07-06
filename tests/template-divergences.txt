@@ -3,13 +3,14 @@
 
 .config/.release-please-manifest.json  # release-please-owned version-of-record; changes every release
 .config/licenserc.toml                 # repo-specific hawkeye excludes (.claude frontmatter, binary iterm2 plist, vendored asciinema player)
+.config/lychee.toml                    # local addition: gnu.org exclude (blackholes GitHub runner IPs) alongside the two excludes already ported upstream
 .config/rumdl.toml                     # excludes .claude frontmatter markdown + the release-please-generated CHANGELOG
 .config/typos.toml                     # excludes vendored asciinema player, recorded .cast files, and the generated CHANGELOG (hash-fragment false positives)
 .editorconfig                          # adds fish alongside python in the 4-space-indent rule
 .github/workflows/ci.yml               # adds the installer jobs (installer-smoke-macos) + system-tool bootstrap (fish, bats, ripgrep)
-.github/workflows/link-check.yml       # lychee excludes for runner-hostile endpoints (gnu.org blackholes GitHub runners; reuse badge API)
+.github/workflows/docs.yml             # deleted: TEMPORARY — caller workflow wiring deferred to issue #138 (Pages-source flip must batch with 2 other repos, nivintw/repo-management#85); re-add there
+.github/workflows/link-check.yml       # extra crawl targets for markdown-shaped docs/llms.txt + docs/llms-full.txt (excludes themselves now live in .config/lychee.toml, matching upstream)
 .github/workflows/main.yml             # release docs describe the pyproject + uv.lock version mirroring via extra-files
-.github/workflows/refresh-binary-checksums.yml  # TEMPORARY: Renovate action bumps ahead of the template; filed upstream: nivintw/copier-everything#112 — drop this entry when copier update re-syncs
 .gitignore                             # mirrors the global ignore so VS Code explorer.excludeGitIgnore matches git, plus repo rules
 .pre-commit-config.yaml                # emoji hook names + grouped sections; repo hooks (fish, ssh, installer); pre-push vm-smoke stage
 CHANGELOG.md                           # release-please-generated; grows every release
