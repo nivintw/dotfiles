@@ -46,6 +46,11 @@ teardown() {
   [ "$output" = "ansible" ]
 }
 
+@test "un_uv_tool_name: strips a PEP 508 direct-reference @url suffix" {
+  run un_uv_tool_name "serena-agent@git+https://github.com/oraios/serena@abc123"
+  [ "$output" = "serena-agent" ]
+}
+
 @test "un_uv_tool_name: blank line yields nothing" {
   run un_uv_tool_name ""
   [ "$status" -eq 0 ]

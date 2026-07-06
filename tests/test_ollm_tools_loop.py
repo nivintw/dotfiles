@@ -163,6 +163,18 @@ def test_ls_on_a_file_is_a_tool_error(loop: ModuleType, sandbox: Path) -> None:
         loop.tool_ls(sandbox, {"path": "sub/f.txt"})
 
 
+def test_ls_marks_a_symlink_without_following_it(loop: ModuleType, sandbox: Path) -> None:
+    """A symlink pointing outside root is reported as its own kind ('l'), never stat'd.
+
+    tool_ls previously used Path.is_dir(), which follows symlinks — classifying a
+    symlink by stat-ing its target would touch metadata outside --root, undermining
+    the sandbox's own "no symlink escapes" claim. Found via Copilot review.
+    """
+    (sandbox / "escape_link").symlink_to(sandbox.parent / "outside")
+    result = loop.tool_ls(sandbox, {"path": "."})
+    assert "l escape_link" in result
+
+
 def test_ls_rejects_a_non_string_path(loop: ModuleType, sandbox: Path) -> None:
     """A non-string path argument is a ToolError, not an AttributeError crash."""
     with pytest.raises(loop.ToolError):
