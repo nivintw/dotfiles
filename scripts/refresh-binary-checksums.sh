@@ -135,8 +135,10 @@ pinned_value_at_base() { # <VAR> <file> <baseref> -> value at base or empty
   # gate pinned_value()'s guard above protects for the plain-file case. `git cat-file -e`
   # exits 128 for both "path genuinely absent" and "object unreadable" with no distinguishing
   # exit code, only a different stderr message — so match that message, not the exit code.
+  # LC_ALL=C forces git's gettext-translated fatal message back to English so the match
+  # below doesn't silently miss (and fail loud on a false alarm) under a non-English locale.
   local cat_file_err
-  if ! cat_file_err="$(git cat-file -e "$3:$2" 2>&1)"; then
+  if ! cat_file_err="$(LC_ALL=C git cat-file -e "$3:$2" 2>&1)"; then
     case "$cat_file_err" in
     # Two distinct git messages for "genuinely absent at BASE_REF" — "does not exist in" (not
     # present anywhere obvious) and "exists on disk, but not in" (the common case: a file
