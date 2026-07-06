@@ -184,14 +184,26 @@ repos:
         pass_filenames: false
 
   # -------------------------------- 🐍 Python Tools --------------------------------- #
+  # ruff-check/ruff-format select files by `types: [python]` (identify's shebang/extension
+  # detection) before ever invoking ruff, independent of ruff's own [tool.ruff] config —
+  # home/.local/bin/ollm-tools-loop is real Python (a PEP 723 `uv run --script` CLI) but has
+  # no .py suffix and a `uv`, not `python`, shebang interpreter, so identify tags it
+  # executable/text, never python. types_or broadens the gate to any text file; the files
+  # regex narrows it back down to real .py/.pyi files plus this one extra path — verified by
+  # deliberately injecting a lint error into that file and confirming `prek run ruff-check
+  # --all-files` catches it (it silently didn't, before this fix).
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.20 # keep in step with the ruff dev-dependency in pyproject.toml
     hooks:
       - id: ruff-check
         name: "🐍 python · Lint with Ruff"
         args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, text]
+        files: '\.pyi?$|^home/\.local/bin/ollm-tools-loop$'
       - id: ruff-format
         name: "🐍 python · Format with Ruff"
+        types_or: [python, text]
+        files: '\.pyi?$|^home/\.local/bin/ollm-tools-loop$'
 
   - repo: https://github.com/abravalheri/validate-pyproject
     rev: v0.25
