@@ -7,6 +7,14 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.23.2](https://github.com/nivintw/dotfiles/compare/v1.23.1...v1.23.2) (2026-07-06)
+
+
+### Bug Fixes
+
+* distinguish absent-vs-unreadable paths in the tamper-gate base lookup ([3c34b78](https://github.com/nivintw/dotfiles/commit/3c34b78ada6eb7ab0f0e4bd984747a5ca1b6704f))
+* force C locale for the tamper-gate's git-error string match ([300e84c](https://github.com/nivintw/dotfiles/commit/300e84cfa6e2afd997756ff30d7aefcee49c7d0e))
+
 ## [1.23.1](https://github.com/nivintw/dotfiles/compare/v1.23.0...v1.23.1) (2026-07-06)
 
 
