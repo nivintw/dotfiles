@@ -129,11 +129,25 @@ pinned_value() { # <VAR> <file> -> value or empty
 }
 pinned_value_at_base() { # <VAR> <file> <baseref> -> value at base or empty
   # A path absent at BASE_REF (introduced since) is the one legitimate empty case here —
-  # check for it explicitly with git cat-file -e, rather than folding it into a blanket
-  # "swallow any git show failure," which would also mask a genuine read error (corrupted
-  # object, partial-clone missing blob) as an empty base_version — feeding the same tamper
-  # gate pinned_value()'s guard above protects for the plain-file case.
-  git cat-file -e "$3:$2" 2>/dev/null || return 0
+  # check for it explicitly, rather than folding ANY git-cat-file failure into a blanket
+  # "assume absent," which would also mask a genuine read error (corrupted object, a
+  # partial-clone's blob never fetched) as an empty base_version — feeding the same tamper
+  # gate pinned_value()'s guard above protects for the plain-file case. `git cat-file -e`
+  # exits 128 for both "path genuinely absent" and "object unreadable" with no distinguishing
+  # exit code, only a different stderr message — so match that message, not the exit code.
+  local cat_file_err
+  if ! cat_file_err="$(git cat-file -e "$3:$2" 2>&1)"; then
+    case "$cat_file_err" in
+    # Two distinct git messages for "genuinely absent at BASE_REF" — "does not exist in" (not
+    # present anywhere obvious) and "exists on disk, but not in" (the common case: a file
+    # introduced since BASE_REF, so it's in the working tree but wasn't at the older ref).
+    *"does not exist in"* | *"exists on disk, but not in"*) return 0 ;;
+    *)
+      echo "ERROR: pinned_value_at_base: could not resolve $3:$2 ($cat_file_err)" >&2
+      exit 1
+      ;;
+    esac
+  fi
   # git show and grep run as SEPARATE command substitutions (not one pipe) so each one's exit
   # code is captured on its own — piped together, a failing `git show` feeding an empty stdin
   # to grep would just look like grep's own legitimate "no match" (exit 1), silently masking
