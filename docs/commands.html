@@ -168,6 +168,10 @@
           <span class="feature__mark">◇</span>
           <div><h3><code>ollm</code></h3><p>One-shot generation against a local model picked by <strong>role</strong> — <code>--role fast|bulk|brainstorm|vision</code>, with the role→model mapping read from <code>scripts/ollama_models.sh</code> so it can never drift from what the installer pulled. Prompt from arguments, context piped via stdin (<code>git diff | ollm "summarize this diff"</code>), <code>--image</code> for the vision model, and only the model's text on stdout so it composes in pipes. It disables hidden thinking by default (reasoning models otherwise return an empty response after burning their token budget) and fails fast with a clear message when the server is down. <code>ollm --list</code> prints the roster with installed state — the same table a <code>SessionStart</code> hook injects into Claude Code so it knows what's available for offload.</p></div>
         </div>
+        <div class="feature">
+          <span class="feature__mark">◇</span>
+          <div><h3><code>ollm --tools</code></h3><p>Opt-in agentic mode: instead of pasting context into the prompt, the model gathers its own via three read-only tools — <code>read_file</code>, <code>grep</code>, <code>ls</code> — sandboxed to <code>--tools-root</code> (default: the current directory). Every tool path is resolved and checked against that root, defeating both <code>../</code> traversal and symlink escapes; there's no write, shell, or network access beyond talking to Ollama itself. <code>--tools-cap</code> bounds the round-trips (default 6) so a model that never stops calling tools fails loudly instead of looping forever. Dispatches to a small companion script, <code>ollm-tools-loop</code>, that errors clearly if the selected model lacks tool-calling capability.</p></div>
+        </div>
       </section>
 
       <section class="wrap">
