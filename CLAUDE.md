@@ -96,14 +96,19 @@ for those paths, skipping cleanly when Tart isn't installed.
   disabling it live alone (`claude plugin disable serena@claude-plugins-official`) didn't
   fix it, since the next run just re-read the stale cached `true` (the merge engine only
   *adds* drift; it never removes an overlay key on its own). Dropping the key entirely
-  eliminates that whole class of bug rather than merely working around it: with no
-  baseline value to diff against, `diff()`'s "key not in base" branch fires on *every* run,
-  so the overlay is refreshed from the live value every time and can never go stale. The
-  trade-off is that dotfiles takes no position on this plugin at all — if
-  `serena@claude-plugins-official` ever gets enabled by hand (e.g. via `/plugin install`),
-  that choice is simply mirrored into the overlay and preserved, not corrected back to
-  disabled. Disable it yourself with `claude plugin disable serena@claude-plugins-official`
-  if you don't want the marketplace plugin's MCP server running alongside the self-hosted
+  fixes that specific bug: with no baseline value to diff against, `diff()`'s "key not in
+  base" branch fires on every run *for as long as the key is present in the live settings
+  file*, keeping the overlay in sync with whatever's actually live instead of latching onto
+  a stale cached value. (`diff()` only iterates keys present in the live file, so a key that
+  disappears from it entirely — e.g. an uninstall that removes the entry rather than
+  setting it `false` — still wouldn't have a stale cached overlay entry cleared; that
+  residual limitation belongs to the whole baseline/overlay model, not to serena
+  specifically.) The trade-off is that dotfiles takes no position on this plugin at all —
+  if `serena@claude-plugins-official` ever gets enabled by hand (e.g. via `/plugin
+  install`), that choice is simply mirrored into the overlay and preserved, not corrected
+  back to disabled. Disable it yourself with `claude plugin disable
+  serena@claude-plugins-official` if you don't want the marketplace plugin's MCP server
+  running alongside the self-hosted
   one.
 - **The vetted plugin baseline has three tiers, not two.** `claude_settings.json`'s
   `enabledPlugins` distinguishes tracked-and-default-on (`true` — the common case, e.g.
