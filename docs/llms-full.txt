@@ -273,7 +273,7 @@ OS.
   (`/home/linuxbrew/.linuxbrew`) the same way; Homebrew's Linux build has no cask support,
   so `--core` (formulae only, casks stripped) is required there, not just preferred.
 - **uv** — Python toolchain and CLI tools (`uv tool install` from `uv_tools.txt`): ansible,
-  checkov, commitizen, copier, prek, reuse, rumdl, yq, jc.
+  ansible-dev-tools, checkov, commitizen, copier, prek, reuse, rumdl, yq, jc, serena.
 
 ### Editor
 
@@ -535,6 +535,13 @@ one, its primary caller.
   `--image` for the vision model, and only the model's text on stdout so it composes in
   pipes. Disables hidden thinking by default and fails fast with a clear message when the
   server is down. `ollm --list` prints the roster with installed state.
+- `ollm --tools` — opt-in agentic mode: the model gathers its own context via three
+  read-only tools (`read_file`, `grep`, `ls`) sandboxed to `--tools-root` (default: the
+  current directory) instead of the caller pasting everything into the prompt. Every tool
+  path is resolved and checked against that root, defeating both `../` traversal and
+  symlink escapes; no writes, no shell, no network beyond Ollama itself. `--tools-cap`
+  bounds the round-trips (default 6). Dispatches to a companion script,
+  `ollm-tools-loop`, and errors clearly if the model lacks tool-calling capability.
 
 ### Abbreviations & aliases
 
