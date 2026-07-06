@@ -111,9 +111,10 @@ for those paths, skipping cleanly when Tart isn't installed.
   running alongside the self-hosted
   one.
 - **The vetted plugin baseline has three tiers, not two.** `claude_settings.json`'s
-  `enabledPlugins` distinguishes tracked-and-default-on (`true` — the common case, e.g.
+  `enabledPlugins` can represent tracked-and-default-on (`true` — the common case, e.g.
   `castify`, `worktree-guard`, `claude-hud`), tracked-but-opt-in (`false` — vetted and
-  known but not enabled by default; flip to `true` in your local overlay to enable), and
+  known but not enabled by default; flip to `true` in your local overlay to enable — the
+  baseline currently has no `false` entries, but the model supports one), and
   untracked/ad-hoc (installed via `/plugin` on one machine, never added here — fine for a
   one-off, but it won't reproduce on a fresh install). `serena@claude-plugins-official` is
   a deliberate instance of the third tier, not an oversight — see the gotcha above for why
