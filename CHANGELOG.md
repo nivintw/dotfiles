@@ -7,6 +7,27 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.23.0](https://github.com/nivintw/dotfiles/compare/v1.22.0...v1.23.0) (2026-07-06)
+
+
+### Features
+
+* **ollm:** add sandboxed --tools agentic mode ([75f35b9](https://github.com/nivintw/dotfiles/commit/75f35b900c7edbbfc0303a1b3359a9311e959b18)), closes [#121](https://github.com/nivintw/dotfiles/issues/121)
+
+
+### Bug Fixes
+
+* **ci:** also broaden the ty hook's own trigger, not just ruff's ([672f929](https://github.com/nivintw/dotfiles/commit/672f929e5e29f1f5af16e54e5da79dfa35a52cb3))
+* **ollm:** 3 more Copilot findings — uninstall parsing, URL crash, ls symlink stat ([073a983](https://github.com/nivintw/dotfiles/commit/073a983a9e29960330b471e7572f41bb93e792e6))
+* **ollm:** stop stat-ing symlink targets outside root before checking (Copilot review) ([2704849](https://github.com/nivintw/dotfiles/commit/27048491664c93852970ca4d276d77e796d2ec68))
+* **ollm:** validate tool-call path/name shape before dispatch (Copilot review) ([748cfcd](https://github.com/nivintw/dotfiles/commit/748cfcd4228b302a4a2edae1fa361f7540fd382e))
+* **uv-tools:** expose Ansible CLI shims and pin Serena to a real uv tool ([ce55c45](https://github.com/nivintw/dotfiles/commit/ce55c45abc501ec71301c1677731d1125269bbd2)), closes [#101](https://github.com/nivintw/dotfiles/issues/101) [#141](https://github.com/nivintw/dotfiles/issues/141)
+
+
+### Performance Improvements
+
+* **ollm:** stop materializing a whole directory before applying caps (Copilot review) ([de8fc10](https://github.com/nivintw/dotfiles/commit/de8fc10d2063e2b696a61aacb1eca9bfa61004eb))
+
 ## [1.22.0](https://github.com/nivintw/dotfiles/compare/v1.21.1...v1.22.0) (2026-07-06)
 
 
