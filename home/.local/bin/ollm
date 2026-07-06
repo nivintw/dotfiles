@@ -38,6 +38,16 @@ Options:
   -l, --list           show roles, resolved tags, and installed state
   -h, --help           show this help
 
+Tool-calling mode (opt-in, read-only, sandboxed):
+      --tools            let the model gather its own context via read_file/
+                         grep/ls instead of you pasting it into the prompt.
+                         No writes, no shell, no network beyond Ollama itself.
+                         Errors if the model lacks tool-calling capability.
+      --tools-root PATH  sandbox root tool paths are confined to (default:
+                         the current directory)
+      --tools-cap N      max tool-calling round-trips before giving up
+                         (default: 6)
+
 Roles (tags live in scripts/ollama_models.sh):
   fast        high-volume, low-stakes text: classify, triage, summarize
   bulk        heavier coding offload (MLX machines)
@@ -125,6 +135,7 @@ list_models() {
 
 main() {
   local role="" model="" think=false num_predict=4096 image="" timeout=300 list=false read_stdin=true
+  local tools=false tools_root="$PWD" tools_cap=""
   local -a prompt_args=()
 
   while [ $# -gt 0 ]; do
@@ -164,6 +175,21 @@ main() {
       read_stdin=false
       shift
       ;;
+    --tools)
+      tools=true
+      shift
+      ;;
+    --tools-root)
+      [ $# -ge 2 ] || usage_err "$1 needs a value"
+      tools_root="$2"
+      shift 2
+      ;;
+    --tools-cap)
+      [ $# -ge 2 ] || usage_err "$1 needs a value"
+      case "$2" in '' | *[!0-9]* | 0) usage_err "--tools-cap needs a positive integer" ;; esac
+      tools_cap="$2"
+      shift 2
+      ;;
     -l | --list)
       list=true
       shift
@@ -187,11 +213,18 @@ main() {
     esac
   done
 
-  command -v jq >/dev/null 2>&1 || die "jq is required (brew install jq — it's in the Brewfile)"
-
   if $list; then
+    command -v jq >/dev/null 2>&1 || die "jq is required (brew install jq — it's in the Brewfile)"
     list_models
     return 0
+  fi
+
+  if $tools; then
+    command -v uv >/dev/null 2>&1 || die "uv is required for --tools (see install.sh's bootstrap)"
+    [ -z "$image" ] || usage_err "--tools and --image cannot be combined"
+    [ -d "$tools_root" ] || usage_err "--tools-root is not a directory: $tools_root"
+  else
+    command -v jq >/dev/null 2>&1 || die "jq is required (brew install jq — it's in the Brewfile)"
   fi
 
   # Prompt = joined args, then piped stdin after a blank line. Reading a non-TTY
@@ -218,6 +251,18 @@ $stdin_data"
   [ -n "$model" ] || model="$(role_to_model "${role:-fast}")"
 
   server_up || die "Ollama server not responding at $OLLM_URL (start the Ollama app or run 'ollama serve')"
+
+  if $tools; then
+    # Sibling of this script regardless of stow layout — the same "resolve my own real
+    # path" idiom load_models() uses above, for the same reason (stow symlinks).
+    local self
+    self="$(readlink -f "$0")" || die "cannot resolve my own path"
+    local -a loop_cmd=("${self%/*}/ollm-tools-loop" --url "$OLLM_URL" --model "$model" --timeout "$timeout"
+      --num-predict "$num_predict" --root "$tools_root")
+    [ -z "$tools_cap" ] || loop_cmd+=(--cap "$tools_cap")
+    $think && loop_cmd+=(--think)
+    exec "${loop_cmd[@]}" -- "$prompt"
+  fi
 
   local payload
   payload="$(jq -cn --arg model "$model" --arg prompt "$prompt" --argjson np "$num_predict" \
