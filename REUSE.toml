@@ -6,6 +6,20 @@ version = 1
 # Files that can't carry an SPDX header (no comment syntax / generated), or that could but
 # a header would break their format. Everything else gets a real header from hawkeye (see
 # .config/licenserc.toml).
+
+# .gitignore stays in hawkeye's default excludes (not re-included via a negation) and is
+# licensed here instead of via an inline header.
+[[annotations]]
+path = ".gitignore"
+SPDX-FileCopyrightText = "© 2026 Tyler Nivin"
+SPDX-License-Identifier = "MIT"
+
+# The favicon is a graphic asset, not a text file hawkeye can header inline.
+[[annotations]]
+path = "docs/assets/favicon.svg"
+SPDX-FileCopyrightText = "© 2026 Tyler Nivin"
+SPDX-License-Identifier = "MIT"
+
 # Markdown is included here (not headered inline by hawkeye) because this project has
 # frontmatter-first markdown where a line-1 SPDX comment would break the YAML.
 # The .claude/ tree is annotated wholesale (SPDX headers break Claude Code's frontmatter

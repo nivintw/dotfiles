@@ -6,10 +6,10 @@
 # `language: system` hooks (fish, ty, taplo, the local scripts) need their tool
 # present: CI installs fish (Brewfile/apt) and taplo, and runs ty via `uv run`.
 #
-#   Run on demand:   prek run --all-files
-#   Install hooks:    prek install   (also auto-installed via the git template dir)
-#   Bump pins:        prek autoupdate   (keep `typos` pinned to the local typos-cli
-#                     version so local and CI flag identically)
+#   Run on demand:  uvx prek@0.4.8 run --all-files
+#   Install hooks:  uvx prek@0.4.8 install   (also auto-installed via the git template dir)
+#   Bump pins:      prek autoupdate   (keep `typos` pinned to the local typos-cli
+#                   version so local and CI flag identically)
 
 default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_stages: [pre-commit, manual]
@@ -136,6 +136,9 @@ repos:
     hooks:
       - id: uv-audit
         name: "🔒 deps · Audit dependencies for CVEs (uv audit)"
+        # `uv audit` is still a preview command (Renovate auto-bumps uv, and an experimental
+        # CLI surface is the most likely thing to rename/remove this flag) — watch uv release
+        # notes for `audit`'s stabilization and drop --preview-features once it graduates.
         entry: uv audit --preview-features audit-command
         language: system
         files: '^(pyproject\.toml|uv\.lock)$'

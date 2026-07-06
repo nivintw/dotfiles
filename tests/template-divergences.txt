@@ -3,19 +3,21 @@
 
 .config/.release-please-manifest.json  # release-please-owned version-of-record; changes every release
 .config/licenserc.toml                 # repo-specific hawkeye excludes (.claude frontmatter, binary iterm2 plist, vendored asciinema player)
+.config/lychee.toml                    # local addition: gnu.org exclude (blackholes GitHub runner IPs) alongside the two excludes already ported upstream
 .config/rumdl.toml                     # excludes .claude frontmatter markdown + the release-please-generated CHANGELOG
 .config/typos.toml                     # excludes vendored asciinema player, recorded .cast files, and the generated CHANGELOG (hash-fragment false positives)
 .editorconfig                          # adds fish alongside python in the 4-space-indent rule
 .github/workflows/ci.yml               # adds the installer jobs (installer-smoke-macos) + system-tool bootstrap (fish, bats, ripgrep)
-.github/workflows/link-check.yml       # lychee excludes for runner-hostile endpoints (gnu.org blackholes GitHub runners; reuse badge API)
+.github/workflows/docs.yml             # deleted: TEMPORARY — caller workflow wiring deferred to issue #138 (Pages-source flip must batch with 2 other repos, nivintw/repo-management#85); re-add there
+.github/workflows/link-check.yml       # extra crawl targets for markdown-shaped docs/llms.txt + docs/llms-full.txt (excludes themselves now live in .config/lychee.toml, matching upstream)
 .github/workflows/main.yml             # release docs describe the pyproject + uv.lock version mirroring via extra-files
-.github/workflows/refresh-binary-checksums.yml  # TEMPORARY: Renovate action bumps ahead of the template; filed upstream: nivintw/copier-everything#112 — drop this entry when copier update re-syncs
 .gitignore                             # mirrors the global ignore so VS Code explorer.excludeGitIgnore matches git, plus repo rules
 .pre-commit-config.yaml                # emoji hook names + grouped sections; repo hooks (fish, ssh, installer); pre-push vm-smoke stage
 CHANGELOG.md                           # release-please-generated; grows every release
 pyproject.toml                         # real installer package (deps, console script, dev groups) vs the template stub
 README.md                              # real project README vs the template stub
 REUSE.toml                             # repo-specific annotations (home/ + .claude trees, iterm2 plist, casts, vendored player)
+scripts/refresh-binary-checksums.sh    # fixes pinned_value_at_base()'s tamper gate silently no-op'ing on a genuine git-show read failure (shallow-clone blob fetch flake), not just a legitimate absent-path; filed upstream: nivintw/copier-everything#202
 tests/conftest.py                      # real shared helpers for the config-validation suite vs the template stub
 tests/smoke.bats                       # deleted: placeholder superseded by the real bats suite
 tests/test_smoke.py                    # deleted: placeholder superseded by the real pytest suite

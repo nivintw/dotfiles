@@ -4,13 +4,14 @@
 # Repo-level typos config — used by the typos pre-commit hook and in CI.
 # typos is treated as CHECK-ONLY (the hook drops --write-changes).
 
+[files]
 # Generated / vendored artifacts — not prose to spell-check. The asciinema-player
 # bundle is minified third-party code (false positives like "alis"/"seeked"); the
 # .cast files are recorded terminal output, not authored text; CHANGELOG.md is
-# release-please-generated and quotes commit short-hashes, which are a typo lottery
-# (a hash ending in a word-like fragment, e.g. `aef13ba`, blocked the v1.20.0
-# Release PR's CI). rumdl excludes the changelog for the same generated-file reason.
-[files]
+# release-please-generated and quotes commit short-hashes, which are a typo lottery (a
+# hash ending in a word-like fragment reading as a dictionary word — e.g. `aef13ba`
+# blocked the v1.20.0 Release PR's CI, and upstream cites "21caf01" reading as "calf").
+# rumdl excludes the changelog for the same generated-file reason.
 extend-exclude = [
   "docs/assets/asciinema-player.*",
   "docs/casts/*.cast",
