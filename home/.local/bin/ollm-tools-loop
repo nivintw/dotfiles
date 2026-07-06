@@ -180,16 +180,30 @@ def tool_read_file(root: Path, args: dict) -> str:
     return text
 
 
+def _ls_marker(entry: os.DirEntry) -> str:
+    """Classify one scandir entry for `ls` output without following any symlink.
+
+    Path.is_dir()/is_file() follow symlinks by default — stat-ing (even just for
+    type) a symlink's target outside --root would undermine the sandbox's own "no
+    symlink escapes" claim, so a symlink is reported as its own kind ('l') rather
+    than resolved to find out what it points at.
+    """
+    if entry.is_symlink():
+        return "l"
+    return "d" if entry.is_dir(follow_symlinks=False) else "f"
+
+
 def tool_ls(root: Path, args: dict) -> str:
-    """List a directory's immediate entries, one per line, marked file/directory."""
+    """List a directory's immediate entries, one per line, marked file/directory/symlink."""
     path = args.get("path") or "."
     target = safe_path(root, path)
     if not target.is_dir():
         msg = f"not a directory: {path}"
         raise ToolError(msg)
-    entries = sorted(target.iterdir(), key=lambda p: p.name)
+    with os.scandir(target) as it:
+        entries = sorted(it, key=lambda e: e.name)
     truncated = len(entries) > MAX_LS_ENTRIES
-    lines = [f"{'d' if e.is_dir() else 'f'} {e.name}" for e in entries[:MAX_LS_ENTRIES]]
+    lines = [f"{_ls_marker(e)} {e.name}" for e in entries[:MAX_LS_ENTRIES]]
     if truncated:
         lines.append(f"... [stopped after {MAX_LS_ENTRIES} entries]")
     return "\n".join(lines) if lines else "(empty directory)"
@@ -347,8 +361,7 @@ def post_json(url: str, timeout: int, payload: dict) -> dict:
     """POST JSON to url and return the decoded JSON response; url must be http(s)."""
     scheme = url.split("://", 1)[0]
     if scheme not in ALLOWED_URL_SCHEMES:
-        msg = f"refusing non-http(s) URL scheme: {url!r}"
-        raise ValueError(msg)
+        die(f"refusing non-http(s) URL scheme: {url!r}")
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         url, data=body, headers={"Content-Type": "application/json"}, method="POST"

@@ -52,13 +52,17 @@ ui_detail() { printf '   %s%s%s\n' "$C_DIM" "$1" "$C_RESET"; }
 # --- pure helpers (unit-tested in tests/uninstall.bats) ----------------------------
 
 # un_uv_tool_name LINE — the uv tool NAME from a uv_tools.txt line: the first
-# whitespace-delimited token with any [extras] stripped. Empty for blank/comment
-# lines. `reuse[charset-normalizer]` -> `reuse`; `ansible --with jc` -> `ansible`.
+# whitespace-delimited token with any [extras] and/or a PEP 508 direct-reference
+# `@url` suffix stripped — `uv tool uninstall` takes a bare tool name, not a full
+# requirement spec. Empty for blank/comment lines. `reuse[charset-normalizer]` ->
+# `reuse`; `ansible --with jc` -> `ansible`; `serena-agent@git+https://...` ->
+# `serena-agent`.
 un_uv_tool_name() {
   local line="$1" first
   case "$line" in '' | \#*) return 0 ;; esac
   first="${line%%[[:space:]]*}" # first token
-  printf '%s\n' "${first%%\[*}" # strip [extras]
+  first="${first%%\[*}"         # strip [extras]
+  printf '%s\n' "${first%%@*}"  # strip a direct-reference @url suffix
 }
 
 # un_pam_is_ours CONTENT — true iff every non-empty line is one of the two forms
