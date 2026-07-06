@@ -194,16 +194,27 @@ def _ls_marker(entry: os.DirEntry) -> str:
 
 
 def tool_ls(root: Path, args: dict) -> str:
-    """List a directory's immediate entries, one per line, marked file/directory/symlink."""
+    """List a directory's immediate entries, one per line, marked file/directory/symlink.
+
+    Stops reading scandir() past MAX_LS_ENTRIES rather than materializing and sorting
+    the entire directory first — a directory with far more entries than the cap
+    would otherwise pay that cost before a single line of output exists.
+    """
     path = args.get("path") or "."
     target = safe_path(root, path)
     if not target.is_dir():
         msg = f"not a directory: {path}"
         raise ToolError(msg)
+    entries = []
+    truncated = False
     with os.scandir(target) as it:
-        entries = sorted(it, key=lambda e: e.name)
-    truncated = len(entries) > MAX_LS_ENTRIES
-    lines = [f"{_ls_marker(e)} {e.name}" for e in entries[:MAX_LS_ENTRIES]]
+        for i, entry in enumerate(it):
+            if i >= MAX_LS_ENTRIES:
+                truncated = True
+                break
+            entries.append(entry)
+    entries.sort(key=lambda e: e.name)
+    lines = [f"{_ls_marker(e)} {e.name}" for e in entries]
     if truncated:
         lines.append(f"... [stopped after {MAX_LS_ENTRIES} entries]")
     return "\n".join(lines) if lines else "(empty directory)"
@@ -286,6 +297,11 @@ def _iter_files(target: Path, root: Path) -> Iterator[Path]:
     A generator, not a list: a caller applying a file-count cap (tool_grep's
     MAX_GREP_FILES) can stop consuming early and skip walking the rest of a huge tree,
     rather than this function materializing every path up front regardless of any cap.
+    Each directory is iterated directly off scandir(), not sorted into a list first —
+    grep's caps are global across the whole walk, not per-directory, so a single huge
+    directory shouldn't pay a full materialize-and-sort cost before contributing a
+    single file toward them. Match order is therefore filesystem-native, not
+    alphabetical; no caller depends on cross-file ordering.
 
     Symlinked directories are never descended into (real dirs only feed the walk stack),
     and a symlinked *file* is yielded only if it still resolves inside root — grep must
@@ -301,15 +317,14 @@ def _iter_files(target: Path, root: Path) -> Iterator[Path]:
         d = stack.pop()
         try:
             with os.scandir(d) as it:
-                entries = sorted(it, key=lambda e: e.name)
+                for entry in it:
+                    dir_to_walk, file_to_yield = _classify_entry(entry, root)
+                    if dir_to_walk is not None:
+                        stack.append(dir_to_walk)
+                    if file_to_yield is not None:
+                        yield file_to_yield
         except OSError:
             continue
-        for entry in entries:
-            dir_to_walk, file_to_yield = _classify_entry(entry, root)
-            if dir_to_walk is not None:
-                stack.append(dir_to_walk)
-            if file_to_yield is not None:
-                yield file_to_yield
 
 
 def tool_grep(root: Path, args: dict) -> str:
