@@ -10,3 +10,6 @@ complete -c ollm -s t -l timeout -x -d "Generation timeout in seconds (default 3
 complete -c ollm -l no-input -d "Never read stdin"
 complete -c ollm -s l -l list -d "Show roles, resolved tags, and installed state"
 complete -c ollm -s h -l help -d "Show help and exit"
+complete -c ollm -l tools -d "Sandboxed read-only tool-calling loop (read_file/grep/ls)"
+complete -c ollm -l tools-root -r -d "Sandbox root for --tools (default: cwd)"
+complete -c ollm -l tools-cap -x -d "Max --tools round-trips (default: 6)"

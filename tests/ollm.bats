@@ -111,6 +111,31 @@ run_ollm() {
     "$OLLM" "$@"
 }
 
+# --tools dispatches to a sibling `ollm-tools-loop`, resolved via this script's own
+# `readlink -f "$0"` — not a PATH lookup — so exercising the dispatch means running a
+# *copy* of ollm alongside a fake ollm-tools-loop in the same directory, rather than
+# stubbing anything on PATH. The fake helper logs its argv (one arg per line) to
+# $WORK/tools_argv.log and prints a fixed marker, so tests assert on both what ollm
+# forwarded and that ollm's stdout is exactly the helper's stdout (the exec is a true
+# process replacement, no wrapping).
+write_tools_stub() {
+  cat >"$1" <<EOF
+#!/bin/sh
+for a in "\$@"; do printf '%s\n' "\$a"; done > "$WORK/tools_argv.log"
+printf '%s\n' "stub-tool-response"
+EOF
+  chmod +x "$1"
+}
+
+run_ollm_tools() {
+  local bin="$WORK/toolsbin"
+  mkdir -p "$bin"
+  cp "$OLLM" "$bin/ollm"
+  write_tools_stub "$bin/ollm-tools-loop"
+  run env PATH="$CURL:$PATH" OLLM_MODELS_FILE="$MODELS_FILE" OLLM_URL="http://fake-ollama:11434" \
+    "$bin/ollm" "$@"
+}
+
 # --- basics: help, missing/invalid input -------------------------------------------
 
 @test "--help prints usage and exits 0" {
@@ -249,6 +274,54 @@ run_ollm() {
   [ "$status" -eq 0 ]
   grep -q "arg-instruction" "$WORK/generate_payloads.log"
   grep -q "piped-context" "$WORK/generate_payloads.log"
+}
+
+# --- --tools -------------------------------------------------------------------------
+
+@test "--tools and --image cannot be combined" {
+  run_ollm --tools --image "$WORK/pic.png" hi </dev/null
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--tools and --image cannot be combined"* ]]
+}
+
+@test "--tools-root must be an existing directory" {
+  run_ollm --tools --tools-root "$WORK/does-not-exist" hi </dev/null
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--tools-root is not a directory"* ]]
+}
+
+@test "--tools-cap rejects a non-positive value" {
+  run_ollm --tools --tools-cap 0 hi </dev/null
+  [ "$status" -eq 2 ]
+}
+
+@test "--tools dispatches to the sibling ollm-tools-loop with the resolved model, url, and prompt" {
+  run_ollm_tools --tools --tools-root "$WORK" hi </dev/null
+  [ "$status" -eq 0 ]
+  [ "$output" = "stub-tool-response" ]
+  grep -qxF "http://fake-ollama:11434" "$WORK/tools_argv.log" # --url value
+  grep -qxF "fast-fake:1" "$WORK/tools_argv.log"               # resolved default-role model
+  grep -qxF "$WORK" "$WORK/tools_argv.log"                     # --tools-root value
+  grep -qxF "hi" "$WORK/tools_argv.log"                        # prompt, after --
+}
+
+@test "--tools forwards --tools-cap" {
+  run_ollm_tools --tools --tools-root "$WORK" --tools-cap 9 hi </dev/null
+  [ "$status" -eq 0 ]
+  grep -qxF "9" "$WORK/tools_argv.log"
+}
+
+@test "--tools without --think does not forward --think" {
+  run_ollm_tools --tools --tools-root "$WORK" hi </dev/null
+  [ "$status" -eq 0 ]
+  run grep -qxF -- "--think" "$WORK/tools_argv.log"
+  [ "$status" -ne 0 ]
+}
+
+@test "--tools --think forwards --think" {
+  run_ollm_tools --tools --tools-root "$WORK" --think hi </dev/null
+  [ "$status" -eq 0 ]
+  grep -qxF -- "--think" "$WORK/tools_argv.log"
 }
 
 # --- --list ----------------------------------------------------------------------------

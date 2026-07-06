@@ -1,0 +1,500 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["regex"]
+# ///
+# SPDX-FileCopyrightText: © 2026 Tyler Nivin
+# SPDX-License-Identifier: MIT
+"""ollm-tools-loop — the `--tools` engine for ollm.
+
+An opt-in agentic loop letting a local model gather its own context via three
+read-only tools (read_file, grep, ls) instead of the caller pasting everything into
+the prompt. Invoked by ollm; not meant to be run directly by a human.
+
+Sandboxing is the whole point: every path a tool call names is resolved and confirmed
+to live inside --root before it's touched. No writes, no shell execution, no network
+access beyond talking to the Ollama server itself. The model's output (paths, regex
+patterns, tool-call JSON shape) is treated as fully adversarial input throughout.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import TYPE_CHECKING, NoReturn
+
+import regex
+
+if TYPE_CHECKING:
+    # regex ships no py.typed/stubs, so its own types (e.g. the compiled-pattern type
+    # returned by regex.compile()) aren't resolvable for annotation purposes; Any is
+    # the honest annotation here, not a cop-out for a type ty could otherwise infer.
+    from collections.abc import Iterator
+    from typing import Any
+
+MAX_READ_BYTES = 200_000
+MAX_GREP_MATCHES = 200
+MAX_GREP_FILES = 5000
+MAX_LS_ENTRIES = 2000
+MAX_TOOL_CALLS_PER_ROUND = 50
+GREP_LINE_TIMEOUT_SECONDS = 2
+DEFAULT_CAP = 6
+ALLOWED_URL_SCHEMES = ("http", "https")
+
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": (
+                "Read a UTF-8 text file's contents, relative to the sandboxed project root."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path relative to the project root.",
+                    }
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "grep",
+            "description": (
+                "Search files under a directory (default: project root) for a regex pattern."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Regular expression to search for.",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": (
+                            "Directory (or file) to search, relative to the project root "
+                            "(default: '.')."
+                        ),
+                    },
+                },
+                "required": ["pattern"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ls",
+            "description": "List a directory's entries, relative to the sandboxed project root.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path relative to the project root (default: '.').",
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
+]
+
+
+class SandboxError(Exception):
+    """A tool call's path resolved outside the sandboxed root."""
+
+
+class ToolError(Exception):
+    """A tool failed in an expected way (bad path, unreadable file, bad regex, ...).
+
+    Reported back to the model as a tool result, not fatal to the loop.
+    """
+
+
+class GrepTimeout(Exception):  # noqa: N818 -- reads as an event, not an error state, by design
+    """A single regex search exceeded its time budget — likely a catastrophic pattern."""
+
+
+def die(msg: str) -> NoReturn:
+    """Print a fatal error to stderr (matching ollm's own `ollm: ...` convention) and exit 1."""
+    sys.stderr.write(f"ollm-tools-loop: {msg}\n")
+    sys.exit(1)
+
+
+def _as_dict(value: object) -> dict:
+    """Coerce a JSON-decoded value to a dict, treating any other shape as empty.
+
+    Model/server output is adversarial input: a "message" or "arguments" field can
+    arrive as a list, a string, or anything else JSON allows, and blindly calling
+    .get() on it would crash the whole loop with an AttributeError.
+    """
+    return value if isinstance(value, dict) else {}
+
+
+def safe_path(root: Path, user_path: str) -> Path:
+    """Resolve user_path against root, defeating ../ traversal and symlink escapes.
+
+    Absolute-looking input is treated as relative to root (never as an absolute
+    filesystem path) since it's model-controlled, not caller-controlled — joining an
+    absolute path onto root would otherwise discard root entirely.
+    """
+    candidate = (root / user_path.lstrip("/")).resolve()
+    if candidate != root and root not in candidate.parents:
+        msg = f"path escapes the sandboxed root: {user_path!r}"
+        raise SandboxError(msg)
+    return candidate
+
+
+def tool_read_file(root: Path, args: dict) -> str:
+    """Return a file's UTF-8 text, truncated past MAX_READ_BYTES."""
+    path = args.get("path")
+    if not isinstance(path, str) or not path:
+        msg = "read_file requires a non-empty 'path' string"
+        raise ToolError(msg)
+    target = safe_path(root, path)
+    if not target.is_file():
+        msg = f"not a file: {path}"
+        raise ToolError(msg)
+    with target.open("rb") as fh:
+        data = fh.read(MAX_READ_BYTES + 1)
+    truncated = len(data) > MAX_READ_BYTES
+    text = data[:MAX_READ_BYTES].decode("utf-8", errors="replace")
+    if truncated:
+        text += f"\n... [truncated after {MAX_READ_BYTES} bytes]"
+    return text
+
+
+def tool_ls(root: Path, args: dict) -> str:
+    """List a directory's immediate entries, one per line, marked file/directory."""
+    path = args.get("path") or "."
+    target = safe_path(root, path)
+    if not target.is_dir():
+        msg = f"not a directory: {path}"
+        raise ToolError(msg)
+    entries = sorted(target.iterdir(), key=lambda p: p.name)
+    truncated = len(entries) > MAX_LS_ENTRIES
+    lines = [f"{'d' if e.is_dir() else 'f'} {e.name}" for e in entries[:MAX_LS_ENTRIES]]
+    if truncated:
+        lines.append(f"... [stopped after {MAX_LS_ENTRIES} entries]")
+    return "\n".join(lines) if lines else "(empty directory)"
+
+
+def _grep_one_file(f: Path, root: Path, rx: Any) -> list[str]:
+    """Return this file's matching lines as `relpath:lineno:line` strings.
+
+    Reads at most MAX_READ_BYTES (silently ignoring anything past that, like
+    read_file) so a single huge pre-existing file can't be read unbounded into
+    memory. A NUL byte anywhere in the bytes read means treat it as binary and skip.
+    Each line's search is time-boxed (GREP_LINE_TIMEOUT_SECONDS) via the `regex`
+    package's own interruptible matching — the model fully controls `pattern`, and
+    stdlib `re` has no way to bound a catastrophic-backtracking search once started.
+    """
+    try:
+        with f.open("rb") as fh:
+            data = fh.read(MAX_READ_BYTES)
+    except OSError:
+        return []
+    if b"\0" in data[:8192]:
+        return []
+    text = data.decode("utf-8", errors="replace")
+    rel = f.relative_to(root)
+    matches = []
+    for lineno, line in enumerate(text.splitlines(), 1):
+        try:
+            hit = rx.search(line, timeout=GREP_LINE_TIMEOUT_SECONDS)
+        except TimeoutError as e:
+            msg = (
+                f"pattern took longer than {GREP_LINE_TIMEOUT_SECONDS}s to match a single "
+                "line — likely a catastrophic regex"
+            )
+            raise GrepTimeout(msg) from e
+        if hit:
+            matches.append(f"{rel}:{lineno}:{line}")
+    return matches
+
+
+def _contained(path: Path, root: Path) -> bool:
+    """True if path's fully-resolved real location is root itself or under it."""
+    resolved = path.resolve()
+    return resolved == root or root in resolved.parents
+
+
+def _classify_entry(entry: os.DirEntry, root: Path) -> tuple[Path | None, Path | None]:
+    """Classify one scandir entry as (dir_to_walk, file_to_yield) — exactly one, or both None.
+
+    A real directory (not a symlink) is walked regardless of name, except .git. A file is
+    yielded only if it's not a symlink, or is a symlink that still resolves inside root
+    (see _iter_files). Any OSError (permission denied, ELOOP on a self-referential
+    symlink) classifies the entry as neither — skip it rather than crash the whole walk.
+    """
+    try:
+        is_dir = entry.is_dir(follow_symlinks=False)
+        is_file = entry.is_file()
+    except OSError:
+        return None, None
+    if is_dir:
+        return (None if entry.name == ".git" else Path(entry.path)), None
+    if is_file:
+        p = Path(entry.path)
+        if not entry.is_symlink() or _contained(p, root):
+            return None, p
+    return None, None
+
+
+def _iter_files(target: Path, root: Path) -> Iterator[Path]:
+    """Yield real files under target, pruning .git subtrees during the walk (not after).
+
+    A generator, not a list: a caller applying a file-count cap (tool_grep's
+    MAX_GREP_FILES) can stop consuming early and skip walking the rest of a huge tree,
+    rather than this function materializing every path up front regardless of any cap.
+
+    Symlinked directories are never descended into (real dirs only feed the walk stack),
+    and a symlinked *file* is yielded only if it still resolves inside root — grep must
+    not become a path for reading arbitrary files a symlink happens to point at, the same
+    escape safe_path() already defeats for read_file/ls's single-path argument.
+    """
+    if target.is_file():
+        if _contained(target, root):
+            yield target
+        return
+    stack = [target]
+    while stack:
+        d = stack.pop()
+        try:
+            with os.scandir(d) as it:
+                entries = sorted(it, key=lambda e: e.name)
+        except OSError:
+            continue
+        for entry in entries:
+            dir_to_walk, file_to_yield = _classify_entry(entry, root)
+            if dir_to_walk is not None:
+                stack.append(dir_to_walk)
+            if file_to_yield is not None:
+                yield file_to_yield
+
+
+def tool_grep(root: Path, args: dict) -> str:
+    """Search a file or directory tree for a regex, capped in files, matches, and time."""
+    pattern = args.get("pattern")
+    if not isinstance(pattern, str) or not pattern:
+        msg = "grep requires a non-empty 'pattern' string"
+        raise ToolError(msg)
+    path = args.get("path") or "."
+    target = safe_path(root, path)
+    try:
+        rx = regex.compile(pattern)
+    except regex.error as e:
+        msg = f"invalid regex: {e}"
+        raise ToolError(msg) from e
+
+    matches: list[str] = []
+    try:
+        for scanned, f in enumerate(_iter_files(target, root), 1):
+            if scanned > MAX_GREP_FILES:
+                matches.append(f"... [stopped after scanning {MAX_GREP_FILES} files]")
+                break
+            matches.extend(_grep_one_file(f, root, rx))
+            if len(matches) >= MAX_GREP_MATCHES:
+                del matches[MAX_GREP_MATCHES:]
+                matches.append(f"... [stopped after {MAX_GREP_MATCHES} matches]")
+                break
+    except GrepTimeout as e:
+        matches.append(f"... [stopped: {e}]")
+    return "\n".join(matches) if matches else "(no matches)"
+
+
+DISPATCH = {"read_file": tool_read_file, "grep": tool_grep, "ls": tool_ls}
+
+
+def run_tool(root: Path, name: str, args: object) -> str:
+    """Dispatch a model-requested tool call; sandbox/tool/filesystem errors become
+    result text, not raises — the whole point of a tool loop is surviving bad input.
+
+    `args` is coerced to a dict regardless of caller discipline: this is the dispatch
+    boundary between model-controlled input and the tool implementations, so it
+    validates shape itself rather than trusting every call site to have done so.
+    """  # noqa: D205 -- two-line summary reads better than a forced blank-line split here
+    fn = DISPATCH.get(name)
+    if fn is None:
+        return f"error: unknown tool {name!r}"
+    try:
+        return fn(root, _as_dict(args))
+    except (SandboxError, ToolError, OSError, ValueError) as e:
+        return f"error: {e}"
+
+
+def post_json(url: str, timeout: int, payload: dict) -> dict:
+    """POST JSON to url and return the decoded JSON response; url must be http(s)."""
+    scheme = url.split("://", 1)[0]
+    if scheme not in ALLOWED_URL_SCHEMES:
+        msg = f"refusing non-http(s) URL scheme: {url!r}"
+        raise ValueError(msg)
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read())
+    except urllib.error.URLError as e:
+        die(f"request to {url} failed: {e}")
+    except json.JSONDecodeError as e:
+        die(f"unparsable response from Ollama: {e}")
+
+
+def check_capabilities(base_url: str, timeout: int, model: str, *, need_think: bool) -> bool:
+    """Fail fast unless the model supports tool calling (and thinking, if requested).
+
+    Returns whether the model advertises the thinking capability, so the caller can
+    send an explicit think:false on every round for a thinking-capable model — mirroring
+    ollm's own non-tools path, which disables hidden thinking by default for exactly the
+    same reason (it otherwise eats the token budget and yields an empty response).
+    """
+    info = post_json(f"{base_url}/api/show", min(timeout, 10), {"model": model})
+    err = info.get("error")
+    if err:
+        die(f"Ollama: {err}")
+    caps = info.get("capabilities") or []
+    if "tools" not in caps:
+        die(f"model {model} does not support tool calling")
+    thinking_supported = "thinking" in caps
+    if need_think and not thinking_supported:
+        die(f"model {model} does not support thinking")
+    return thinking_supported
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse ollm-tools-loop's CLI arguments (all forwarded from ollm's --tools flags)."""
+    p = argparse.ArgumentParser(prog="ollm-tools-loop")
+    p.add_argument("--url", required=True)
+    p.add_argument("--model", required=True)
+    p.add_argument("--timeout", type=int, required=True)
+    p.add_argument("--num-predict", type=int, required=True)
+    p.add_argument("--think", action="store_true")
+    p.add_argument("--root", required=True)
+    p.add_argument("--cap", type=int, default=DEFAULT_CAP)
+    p.add_argument("prompt", nargs="+")
+    return p.parse_args(argv)
+
+
+def _dispatch_tool_calls(root: Path, tool_calls: list, messages: list[dict]) -> None:
+    """Run each tool call and append its result as a `role: tool` message.
+
+    Every extracted piece (a call, its "function", "arguments") is validated by shape
+    before use — a call carries no guarantee of being well-formed just because it
+    appeared in a `tool_calls` array, since that array itself comes from the model.
+    """
+    for call in tool_calls[:MAX_TOOL_CALLS_PER_ROUND]:
+        if not isinstance(call, dict):
+            messages.append(
+                {"role": "tool", "content": "error: malformed tool_call (not an object)"}
+            )
+            continue
+        fn = call.get("function")
+        if not isinstance(fn, dict):
+            messages.append(
+                {"role": "tool", "content": "error: malformed tool_call.function (not an object)"}
+            )
+            continue
+        name = fn.get("name", "")
+        raw_args = fn.get("arguments") or {}
+        if isinstance(raw_args, str):
+            try:
+                raw_args = json.loads(raw_args)
+            except json.JSONDecodeError:
+                raw_args = {}
+        messages.append({"role": "tool", "content": run_tool(root, name, raw_args)})
+    if len(tool_calls) > MAX_TOOL_CALLS_PER_ROUND:
+        extra = len(tool_calls) - MAX_TOOL_CALLS_PER_ROUND
+        messages.append(
+            {
+                "role": "tool",
+                "content": f"error: ignored {extra} additional tool call(s) past the per-round cap",
+            }
+        )
+
+
+def _run_chat_round(
+    args: argparse.Namespace, root: Path, messages: list[dict], *, thinking_supported: bool
+) -> str | None:
+    """Run one /api/chat round.
+
+    Returns the final answer text if the model stopped calling tools, or None after
+    appending the assistant turn and each tool result to `messages` in place (the loop
+    should continue).
+    """
+    payload = {
+        "model": args.model,
+        "messages": messages,
+        "tools": TOOLS,
+        "stream": False,
+        "options": {"num_predict": args.num_predict},
+    }
+    if thinking_supported:
+        payload["think"] = args.think
+    resp = post_json(f"{args.url}/api/chat", args.timeout, payload)
+    err = resp.get("error")
+    if err:
+        die(f"Ollama: {err}")
+
+    message = _as_dict(resp.get("message"))
+    tool_calls = message.get("tool_calls")
+    if not isinstance(tool_calls, list):
+        tool_calls = []
+    if not tool_calls:
+        text = message.get("content") or ""
+        if not text:
+            done_reason = resp.get("done_reason", "unknown")
+            if done_reason == "length":
+                die(
+                    "empty response, done_reason=length — the token budget ran out "
+                    f"before any text (raise --num-predict; thinking is already {args.think})"
+                )
+            die(f"empty response (done_reason={done_reason})")
+        return text
+
+    messages.append(message)
+    _dispatch_tool_calls(root, tool_calls, messages)
+    return None
+
+
+def main() -> None:
+    """Entry point: validate args, probe capabilities, then loop chat rounds until an answer."""
+    args = parse_args(sys.argv[1:])
+
+    root = Path(args.root)
+    if not root.is_dir():
+        die(f"--root is not a directory: {args.root}")
+    root = root.resolve(strict=True)
+
+    if args.cap < 1:
+        die("--cap must be a positive integer")
+
+    thinking_supported = check_capabilities(
+        args.url, args.timeout, args.model, need_think=args.think
+    )
+
+    messages: list[dict] = [{"role": "user", "content": " ".join(args.prompt)}]
+    for _round in range(args.cap):
+        text = _run_chat_round(args, root, messages, thinking_supported=thinking_supported)
+        if text is not None:
+            sys.stdout.write(text + "\n")
+            return
+
+    die(f"tool loop did not converge within {args.cap} rounds (raise --tools-cap if expected)")
+
+
+if __name__ == "__main__":
+    main()
