@@ -83,34 +83,36 @@ for those paths, skipping cleanly when Tart isn't installed.
   `claude-code` built-in context (not a custom vendored one — Serena ships this context
   specifically for this client), `--open-web-dashboard False` (dashboard still reachable
   manually, just no surprise tab), and `MCP_TIMEOUT=200000` in `env` (Claude Code's own
-  client-side MCP timeout, not Serena's `--tool-timeout`). `claude_settings.json`
-  explicitly sets `serena@claude-plugins-official: false` so a fresh install doesn't
-  register both. **This only disables it on a fresh install.** `generate_settings`
-  (`settings_merge.py`) re-reads the *live* `~/.claude/settings.json` every run and folds
-  any drift from the baseline back into the overlay — so the *first* run after this landed
-  on a machine where the plugin was already live-enabled (`true`) permanently **caches**
-  `true` into `~/.config/dotfiles/claude_settings.local.json`. From then on the overlay
-  itself keeps re-asserting `true` on every run regardless of the live file — verified by
-  driving `merge`/`diff` directly: running `claude plugin disable
-  serena@claude-plugins-official` (which only flips the *live* file) does **not** fix it,
-  because the next run reads live `false` (no new drift, since it now matches the
-  baseline) but still folds the overlay's stale cached `true` into the merge, and writes
-  `true` right back out — silently undoing the disable in the same run that reads it. The
-  overlay is the actual source of truth here, not the live file. **The real fix**: edit
-  `~/.config/dotfiles/claude_settings.local.json` and remove (or set `false`) the
-  `serena@claude-plugins-official` key under `enabledPlugins`, *and* disable the plugin
-  live via Claude Code (`claude plugin disable serena@claude-plugins-official`) — both, not
-  either — then re-run install. Skipping either one leaves it re-enabling itself: overlay
-  alone reverts on the next run's drift-fold (live is still `true`), live alone reverts
-  because the overlay's stale cached `true` never gets cleared by a later run (the merge
-  engine only *adds* drift, per its own documented limitation — it never removes an overlay
-  key on its own).
+  client-side MCP timeout, not Serena's `--tool-timeout`). `claude_settings.json` carries
+  **no `serena@claude-plugins-official` key at all** — not even an explicit `false` —
+  because self-hosted is the only sanctioned path and there's nothing left to track as
+  opt-in. An earlier version of this baseline *did* track it as explicit `false`,
+  specifically to auto-correct a machine where the marketplace plugin had been manually
+  enabled; that had its own bug: `generate_settings` (`settings_merge.py`) re-reads the
+  *live* `~/.claude/settings.json` every run and folds any drift from the baseline back
+  into the overlay, so a machine that ever had the plugin live-enabled (`true`) permanently
+  **cached** `true` into `~/.config/dotfiles/claude_settings.local.json` — from then on the
+  overlay itself kept re-asserting `true` on every run regardless of the live file, and
+  disabling it live alone (`claude plugin disable serena@claude-plugins-official`) didn't
+  fix it, since the next run just re-read the stale cached `true` (the merge engine only
+  *adds* drift; it never removes an overlay key on its own). Dropping the key entirely
+  eliminates that whole class of bug rather than merely working around it: with no
+  baseline value to diff against, `diff()`'s "key not in base" branch fires on *every* run,
+  so the overlay is refreshed from the live value every time and can never go stale. The
+  trade-off is that dotfiles takes no position on this plugin at all — if
+  `serena@claude-plugins-official` ever gets enabled by hand (e.g. via `/plugin install`),
+  that choice is simply mirrored into the overlay and preserved, not corrected back to
+  disabled. Disable it yourself with `claude plugin disable serena@claude-plugins-official`
+  if you don't want the marketplace plugin's MCP server running alongside the self-hosted
+  one.
 - **The vetted plugin baseline has three tiers, not two.** `claude_settings.json`'s
-  `enabledPlugins` distinguishes tracked-and-default-on (`true` — e.g. `castify`,
-  `worktree-guard`), tracked-but-opt-in (`false` — vetted and known, e.g. `serena`,
-  `claude-hud`; flip to `true` in your local overlay to enable), and untracked/ad-hoc
-  (installed via `/plugin` on one machine, never added here — fine for a one-off, but it
-  won't reproduce on a fresh install). `claude-hud`'s marketplace is `extraKnownMarketplaces`-registered
+  `enabledPlugins` distinguishes tracked-and-default-on (`true` — the common case, e.g.
+  `castify`, `worktree-guard`, `claude-hud`), tracked-but-opt-in (`false` — vetted and
+  known but not enabled by default; flip to `true` in your local overlay to enable), and
+  untracked/ad-hoc (installed via `/plugin` on one machine, never added here — fine for a
+  one-off, but it won't reproduce on a fresh install). `serena@claude-plugins-official` is
+  a deliberate instance of the third tier, not an oversight — see the gotcha above for why
+  it carries no baseline key at all. `claude-hud`'s marketplace is `extraKnownMarketplaces`-registered
   here too, but its `statusLine` command block is **not** hand-copied into this repo —
   that command string is plugin-version-resolving (it globs
   `plugins/cache/*/claude-hud/*/` for the newest installed copy) and would go stale the
