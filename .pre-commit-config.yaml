@@ -286,7 +286,13 @@ repos:
         name: "🐍 python · Type-check with ty"
         entry: uv run ty check .
         language: system
-        types: [python]
+        # Same extensionless-script gap as the ruff hooks above: types: [python] alone
+        # would skip this hook entirely for a commit that touches only
+        # ollm-tools-loop and no other identify-tagged-python file — pass_filenames:
+        # false means the hook always runs a full `ty check .` once triggered, so
+        # only the *trigger* needs broadening, not the entry command.
+        types_or: [python, text]
+        files: '\.pyi?$|^home/\.local/bin/ollm-tools-loop$'
         pass_filenames: false
       # taplo is awkward to bootstrap via prek; use the system binary (Brewfile).
       - id: taplo
