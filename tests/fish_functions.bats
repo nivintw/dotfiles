@@ -59,6 +59,43 @@ run_fish_os() {
   [[ "$output" == *"usage: forrepos"* ]]
 }
 
+# SAFETY: forrepos fans a command out to every repo under $PWD with no dry-run, so
+# invoking it from $HOME would multiply a destructive command across every repo you
+# own. The guard must refuse there. HOME is pointed at a throwaway dir and we cd into
+# it, so the check fires regardless of the host's real home.
+@test "forrepos refuses to fan out from \$HOME" {
+  home="$(mktemp -d)"
+  run env HOME="$home" fish -c "cd '$home'; source '$FUNCDIR/forrepos.fish'; forrepos echo hi"
+  rm -rf "$home"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"refusing to fan out"* ]]
+}
+
+# A symlink that resolves to $HOME must not bypass the guard — the check resolves
+# symlinks on both sides before comparing, so cd'ing in via a symlink is still refused.
+@test "forrepos refuses when a symlinked path resolves to \$HOME" {
+  home="$(mktemp -d)"
+  linkdir="$(mktemp -d)"
+  ln -s "$home" "$linkdir/home-link"
+  run env HOME="$home" fish -c "cd '$linkdir/home-link'; source '$FUNCDIR/forrepos.fish'; forrepos echo hi"
+  rm -rf "$home" "$linkdir"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"refusing to fan out"* ]]
+}
+
+# The guard is targeted: from a normal project subtree (neither $HOME nor /) forrepos
+# still fans out as before. A throwaway HOME keeps the host's real home out of it; a
+# single repo under the work dir gives the fan-out something to find and run in.
+@test "forrepos still fans out from a normal project subtree" {
+  home="$(mktemp -d)"
+  work="$(mktemp -d)"
+  git init -q "$work/repo"
+  run env HOME="$home" fish -c "cd '$work'; source '$FUNCDIR/forrepos.fish'; forrepos pwd"
+  rm -rf "$home" "$work"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"repo"* ]]
+}
+
 @test "fsearch with no args prints usage and returns 2" {
   fishrun fsearch
   [ "$status" -eq 2 ]
