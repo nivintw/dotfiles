@@ -24,8 +24,8 @@ environment.
   (macOS FS), shebang ⇄ exec-bit, LF endings, trailing whitespace, EOF newline.
 - **Security** — gitleaks secret scan, `detect-private-key`, a custom no-concrete-ssh-hosts
   guard.
-- **Config &amp; format** — YAML/JSON/TOML validity, taplo (TOML), rumdl (Markdown), ruff check
-  + format, ty type-check, validate-pyproject, uv-lock sync.
+- **Config &amp; format** — YAML/JSON/TOML validity, taplo (TOML), rumdl (Markdown),
+  ruff check + format, ty type-check, validate-pyproject, uv-lock sync.
 - **Languages** — shellcheck + `bash -n`, fish -n + `fish_indent`, typos (check-only).
 - **Licensing &amp; commits** — hawkeye SPDX headers, REUSE compliance, Conventional Commits via
   commitizen, release-please releases.

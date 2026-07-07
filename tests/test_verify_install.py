@@ -948,7 +948,7 @@ def test_iter_records_linux_distinguishes_missing_ufw(
 
 def test_baseline_excludes_sync_managed_vscode_extensions(
     tmp_path: Path,
-    monkeypatch: "pytest.MonkeyPatch",
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The baseline passes when only ``vscode`` extensions are 'missing' (Settings Sync owns them).
 
@@ -975,7 +975,7 @@ def test_baseline_excludes_sync_managed_vscode_extensions(
 
 def test_baseline_still_flags_a_genuinely_missing_package(
     tmp_path: Path,
-    monkeypatch: "pytest.MonkeyPatch",
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A genuinely missing non-vscode Homebrew package is still reported BAD."""
     repo = tmp_path / "repo"

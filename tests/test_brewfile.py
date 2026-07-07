@@ -83,7 +83,7 @@ def test_without_vscode_drops_only_vscode_lines() -> None:
     package must still be caught, so those lines are kept.
     """
     text = (
-        '# header\n'
+        "# header\n"
         'tap "a/b"\n'
         'brew "git"\n'
         'cask "firefox"\n'
@@ -93,7 +93,7 @@ def test_without_vscode_drops_only_vscode_lines() -> None:
         'whalebrew "w"\n'
     )
     assert brewfile_without_vscode(text) == (
-        '# header\n'
+        "# header\n"
         'tap "a/b"\n'
         'brew "git"\n'
         'cask "firefox"\n'

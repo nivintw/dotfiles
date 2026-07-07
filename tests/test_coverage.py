@@ -47,7 +47,6 @@ UNTESTED_SCRIPTS = {
     " src/dotfiles_install/ (unit-tested under tests/), and its end-to-end behavior is exercised"
     " by the opt-in VM smoke harness; the shim itself is host-mutating glue guarded by shellcheck",
     "macos.sh": "writes macOS defaults; covered by shellcheck + the opt-in VM smoke harness",
-    "dock.sh": "rebuilds the Dock via dockutil; covered by shellcheck + the VM smoke harness",
     "ollama_models.sh": "pure data — the four Ollama role model identifiers (plus a legacy"
     " list) shared by the installer (read by dotfiles_install.ollama), uninstall.sh, and the"
     " stowed ollm helper; no logic to unit-test (guarded by shellcheck)",

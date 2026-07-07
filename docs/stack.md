@@ -7,9 +7,10 @@ The headline tools, by role.
 fish is the login shell by default; zsh is a fully-supported, selectable opt-in
 (`install.sh --shell zsh`, persisted for the next run). Both config trees are always stowed
 regardless of which is selected, each wired to the same curated set of modern replacements:
-tide (fish's prompt) or starship (zsh's), fzf.fish (fish) / zinit-managed zsh-autosuggestions
-+ zsh-syntax-highlighting (zsh — closing the fish-parity gap, since fish has these built in),
-atuin, zoxide, eza, bat, fd, ripgrep, sd, jq, jless, delta, difftastic.
+tide (fish's prompt) or starship (zsh's), fzf.fish (fish) / zinit-managed
+zsh-autosuggestions and zsh-syntax-highlighting (zsh — closing the fish-parity gap, since
+fish has these built in), atuin, zoxide, eza, bat, fd, ripgrep, sd, jq, jless, delta,
+difftastic.
 
 atuin owns ++ctrl+r++ (SQLite history search) in both shells; up-arrow stays normal shell
 history. eza aliases `ls`/`ll`/`la`/`lt`. zoxide is initialized in `config.fish` (fish) or

@@ -10,6 +10,10 @@
 #
 # Run:  bats tests/fish_functions.bats
 
+# Each @test runs in its own bats subshell, so a $STUBDIR set in one and read by a file-scope
+# helper (run_fish_os / run_fish_isolated) reads to shellcheck as a subshell-modified global —
+# a structural false positive of the bats harness, not a real lost-write. Suppress it file-wide.
+# shellcheck disable=SC2030,SC2031
 FUNCDIR_REL="../home/.config/fish/functions"
 
 setup() {
@@ -295,7 +299,14 @@ launchdocs_shims() {
     printf '#!/bin/sh\nprintf "OPENED %%s\\n" "$*" >> "%s"\n' "$OPENLOG" > "$SHIM/$opener"
     chmod +x "$SHIM/$opener"
   done
-  printf '#!/bin/sh\necho $$ > "%s/server.pid"\nexec /bin/sleep 30\n' "$SHIM" > "$SHIM/python3"
+  # launch-docs now drives BOTH its port-in-use preflight and its readiness poll through
+  # `python3 -c <probe> <port>` (dependency-free socket check, issue #161), and the server via
+  # `python3 -m http.server`. This one stub branches on argv[1]: `-m` is the server (records its
+  # pid, then blocks on the REAL /bin/sleep so the stubbed `sleep` below can't end it); `-c` is
+  # the probe — a per-run counter reports the port FREE on the first call (the preflight, so
+  # launch-docs proceeds) and READY from the second on (the poll, so __os_open fires).
+  # shellcheck disable=SC2016  # $-expressions are the generated script's, not ours to expand
+  printf '#!/bin/sh\nif [ "$1" = "-m" ]; then echo $$ > "%s/server.pid"; exec /bin/sleep 30; fi\nc="%s/probe.n"\nn=$(cat "$c" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$c"\n[ "$n" -ge 2 ]\n' "$SHIM" "$SHIM" > "$SHIM/python3"
   printf '#!/bin/sh\nexit 0\n' > "$SHIM/sleep"
   chmod +x "$SHIM/python3" "$SHIM/sleep"
 }
@@ -305,8 +316,10 @@ launchdocs_shims() {
 run_launchdocs_stubbed() {
   cd "$BATS_TEST_DIRNAME/.." || return 1
   # Close fd 3 (bats' trace fd): a backgrounded process that inherits it makes bats
-  # hang at end-of-test waiting for the fd to close.
-  env PATH="$SHIM:$PATH" fish -c "set -p fish_function_path '$FUNCDIR'; source '$FUNCDIR/launch-docs.fish'; launch-docs" >/dev/null 2>&1 3>&- &
+  # hang at end-of-test waiting for the fd to close. --no-config so fish's own conf.d
+  # (localbin.fish prepends ~/.local/bin) can't reorder PATH ahead of $SHIM — otherwise a
+  # real python3 there would shadow the stub that drives the port probe (issue #161).
+  env PATH="$SHIM:$PATH" fish --no-config -c "set -p fish_function_path '$FUNCDIR'; source '$FUNCDIR/launch-docs.fish'; launch-docs" >/dev/null 2>&1 3>&- &
   LD_PID=$!
   for _ in $(seq 30); do
     if [ -f "$OPENLOG" ]; then break; fi
@@ -324,12 +337,9 @@ run_launchdocs_stubbed() {
 }
 
 @test "launch-docs opens the browser once the port accepts connections" {
+  # The default python3 stub (see launchdocs_shims) reports the port free at the preflight,
+  # then ready on the first readiness poll, so __os_open fires on attempt 1.
   launchdocs_shims
-  # First nc call is the preflight (must report the port FREE → non-zero so we proceed);
-  # every later call is the readiness poll (READY → zero), so `open` fires on attempt 1.
-  # shellcheck disable=SC2016  # $-expressions are the generated script's, not ours to expand
-  printf '#!/bin/sh\nc="%s/nc.n"\nn=$(cat "$c" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$c"\n[ "$n" -ge 2 ]\n' "$SHIM" > "$SHIM/nc"
-  chmod +x "$SHIM/nc"
   run_launchdocs_stubbed
   [ -f "$OPENLOG" ]
   [[ "$(cat "$OPENLOG")" == *"http://localhost:8000"* ]]
@@ -338,8 +348,12 @@ run_launchdocs_stubbed() {
 
 @test "launch-docs never opens the browser if the port never accepts connections" {
   launchdocs_shims
-  printf '#!/bin/sh\nexit 1\n' > "$SHIM/nc"   # preflight passes (port free); poll never ready
-  chmod +x "$SHIM/nc"
+  # Override the probe so the -c socket check ALWAYS reports free/not-ready (exit 1): the
+  # preflight passes (port free, launch-docs proceeds) but the readiness poll never fires
+  # __os_open. -m still runs the fake server so the harness can find and stop it.
+  # shellcheck disable=SC2016  # $-expressions are the generated script's, not ours to expand
+  printf '#!/bin/sh\nif [ "$1" = "-m" ]; then echo $$ > "%s/server.pid"; exec /bin/sleep 30; fi\nexit 1\n' "$SHIM" > "$SHIM/python3"
+  chmod +x "$SHIM/python3"
   run_launchdocs_stubbed
   [ ! -f "$OPENLOG" ]   # `open` was never invoked — no browser at a dead port
   rm -rf "$SHIM"

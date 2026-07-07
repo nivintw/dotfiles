@@ -11,6 +11,10 @@
 #
 # Run:  bats tests/zsh_functions.bats
 
+# Each @test runs in its own bats subshell, so a $STUBDIR set in one and read by a file-scope
+# helper (run_zsh_os / run_zsh_isolated) reads to shellcheck as a subshell-modified global — a
+# structural false positive of the bats harness, not a real lost-write. Suppress it file-wide.
+# shellcheck disable=SC2030,SC2031
 FUNCDIR_REL="../home/.config/zsh/functions"
 
 setup() {

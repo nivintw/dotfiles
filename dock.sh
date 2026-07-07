@@ -26,12 +26,12 @@ SKIPPED_EXIT=2
 # --check: report drift without touching the Dock. Any other argument is an error.
 check_only=0
 case "${1:-}" in
-  --check) check_only=1 ;;
-  "") ;;
-  *)
-    echo "usage: dock.sh [--check]" >&2
-    exit "$SKIPPED_EXIT"
-    ;;
+--check) check_only=1 ;;
+"") ;;
+*)
+  echo "usage: dock.sh [--check]" >&2
+  exit "$SKIPPED_EXIT"
+  ;;
 esac
 
 # The OS guard reads through a variable so the bats suite can drive the rebuild logic on a
@@ -95,9 +95,9 @@ _decode() {
 _appkey() {
   local p
   p="$(printf '%s' "$1" | _decode)"
-  p="${p%/}"      # strip a trailing slash (dockutil URLs carry one)
-  p="${p##*/}"    # basename
-  p="${p%.app}"   # drop the .app suffix
+  p="${p%/}"    # strip a trailing slash (dockutil URLs carry one)
+  p="${p##*/}"  # basename
+  p="${p%.app}" # drop the .app suffix
   printf '%s' "$p"
 }
 
@@ -150,8 +150,8 @@ log "Rebuilding the Dock (removes ALL current Dock items, then re-pins the list 
 # and strand a half-built or empty Dock: collect failures and press on, then ALWAYS restart
 # the Dock at the end. (Before this, a failed --add after --remove all left an empty,
 # un-restarted Dock — see issue #155.)
-dockutil --no-restart --remove all >/dev/null \
-  || log_warn "dockutil --remove all failed (continuing to rebuild anyway)"
+dockutil --no-restart --remove all >/dev/null ||
+  log_warn "dockutil --remove all failed (continuing to rebuild anyway)"
 
 add_failures=0
 for app in "${apps[@]}"; do

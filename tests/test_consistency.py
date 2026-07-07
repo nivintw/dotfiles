@@ -55,24 +55,35 @@ def test_required_tools_are_in_brewfile() -> None:
     assert not missing, f"tools used by scripts/hooks but not in Brewfile: {missing}"
 
 
+# Commands that read a script as an argument rather than executing it directly — a script
+# invoked as `python3 scripts/foo.py` is run by the interpreter and needn't carry the exec bit
+# (the template-shipped scripts/check_copier_src_path.py is invoked exactly this way); one
+# invoked or `exec`'d directly must be executable.
+_SCRIPT_INTERPRETERS = frozenset({"python", "python3", "bash", "sh", "uv"})
+
+
 def test_local_hook_scripts_exist_and_are_executable() -> None:
-    """Local hooks that shell out to scripts/ point at real, executable files."""
+    """Local hooks that shell out to scripts/ point at real files, executable unless interpreted."""
     cfg = yaml.safe_load((REPO / ".pre-commit-config.yaml").read_text())
-    referenced = [
-        # Strip shell punctuation: an entry like `bash -c '... exec scripts/vm-smoke.sh; ...'`
-        # tokenizes the path as `scripts/vm-smoke.sh;` — the trailing `;` isn't part of the path.
-        tok.strip("'\";")
-        for repo in cfg.get("repos", [])
-        if repo.get("repo") == "local"
-        for hook in repo.get("hooks", [])
-        for tok in hook.get("entry", "").split()
-        if tok.strip("'\";").startswith("scripts/")
-    ]
+    referenced: list[tuple[str, bool]] = []  # (script path, must be executable)
+    for repo in cfg.get("repos", []):
+        if repo.get("repo") != "local":
+            continue
+        for hook in repo.get("hooks", []):
+            # Strip shell punctuation: an entry like `bash -c '... exec scripts/vm-smoke.sh; ...'`
+            # tokenizes the path as `scripts/vm-smoke.sh;` — the trailing `;` isn't part of it.
+            toks = [tok.strip("'\";") for tok in hook.get("entry", "").split()]
+            for i, tok in enumerate(toks):
+                if not tok.startswith("scripts/"):
+                    continue
+                interpreter_invoked = i > 0 and toks[i - 1] in _SCRIPT_INTERPRETERS
+                referenced.append((tok, not interpreter_invoked))
     assert referenced, "expected at least one local hook to reference scripts/"
-    for rel in referenced:
+    for rel, must_exec in referenced:
         path = REPO / rel
         assert path.is_file(), f"hook references missing script: {rel}"
-        assert os.access(path, os.X_OK), f"hook script not executable: {rel}"
+        if must_exec:
+            assert os.access(path, os.X_OK), f"hook script not executable: {rel}"
 
 
 # An <a>/<\a> open or close tag. Literal `<a` shown in prose is HTML-escaped

@@ -33,6 +33,10 @@ teardown() {
 # Install a fake `dockutil` whose --list prints $1 (a here-string of lines) and whose
 # mutating subcommands (--add/--remove) succeed, logging each call. $2, when "addfail", makes
 # every --add exit non-zero (to simulate a transient dockutil error mid-rebuild).
+#
+# shellcheck disable=SC2016,SC2028  # this deliberately writes LITERAL shell text into a fake
+# script file: the single-quoted `$@`/`$1` and `\n` are the generated dockutil's own, not ours
+# to expand or printf here.
 make_dockutil() {
   local list_output="$1" add_mode="${2:-ok}"
   {
@@ -57,6 +61,13 @@ make_killall() {
     echo "echo \"\$@\" >>'$KILLALL_LOG'"
   } >"$BIN/killall"
   chmod +x "$BIN/killall"
+}
+
+# Assert a log file does NOT contain $2 (a bats-safe negation — a bare `! cmd` doesn't fail a
+# bats test, shellcheck SC2314, so `run` + a status check is used instead).
+refute_logged() { # $1 = log file, $2 = fixed pattern
+  run grep -qF -- "$2" "$1"
+  [ "$status" -ne 0 ]
 }
 
 # Run dock.sh with the fakes on PATH, Darwin forced, and the two fake apps as the desired set.
@@ -98,12 +109,14 @@ run_dock() {
 Mail	file://$WORK/Apps/Mail.app/" ok
   make_killall
   run_dock
+  # Assert on dock.sh's own $status/$output FIRST — refute_logged runs `grep`, which
+  # clobbers bats' $output/$status.
   [ "$status" -eq 0 ]
-  # No mutating call and no restart happened — only the read-only --list.
-  ! grep -q -- "--add" "$DOCK_LOG"
-  ! grep -q -- "--remove" "$DOCK_LOG"
-  [ ! -f "$KILLALL_LOG" ]
   [[ "$output" == *"already matches"* ]]
+  # No mutating call and no restart happened — only the read-only --list.
+  [ ! -f "$KILLALL_LOG" ]
+  refute_logged "$DOCK_LOG" "--add"
+  refute_logged "$DOCK_LOG" "--remove"
 }
 
 @test "comparison is robust to percent-encoding and cryptex path prefixes" {
@@ -114,9 +127,9 @@ Mail	file://$WORK/Apps/Ma%69l.app/" ok
   make_killall
   run_dock
   [ "$status" -eq 0 ]
-  ! grep -q -- "--add" "$DOCK_LOG"
-  [ ! -f "$KILLALL_LOG" ]
   [[ "$output" == *"already matches"* ]]
+  [ ! -f "$KILLALL_LOG" ]
+  refute_logged "$DOCK_LOG" "--add"
 }
 
 @test "--check reports drift without modifying the Dock" {
@@ -127,10 +140,10 @@ Discord	file:///Applications/Discord.app/" ok
   make_killall
   run_dock --check
   [ "$status" -eq 1 ]
-  ! grep -q -- "--add" "$DOCK_LOG"
-  ! grep -q -- "--remove" "$DOCK_LOG"
-  [ ! -f "$KILLALL_LOG" ]
   [[ "$output" == *"drift detected"* ]]
+  [ ! -f "$KILLALL_LOG" ]
+  refute_logged "$DOCK_LOG" "--add"
+  refute_logged "$DOCK_LOG" "--remove"
 }
 
 @test "--check on a matching Dock reports no drift and exits 0" {
