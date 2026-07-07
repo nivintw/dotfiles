@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from dotfiles_install import commands, shell_select
-from dotfiles_install.brewfile import brewfile_core
+from dotfiles_install.brewfile import brewfile_core, brewfile_without_vscode
 from dotfiles_install.bundle_select import parse_bundles
 from dotfiles_install.layout import DOTFILES
 from dotfiles_install.os_detect import OS, current_os
@@ -329,11 +329,13 @@ def _brew_records(dotfiles: Path, *, core: bool) -> Iterator[Record]:
             passed=core_ok,
         )
     else:
+        base_ok, base_bf = _brew_baseline_check(brewfile)
         yield _record(
             "Homebrew baseline packages all installed",
-            f"Homebrew baseline packages missing — run: "
-            f"brew bundle check --verbose --file={brewfile}",
-            passed=_brew_bundle_check(brewfile),
+            f"Homebrew baseline packages missing — re-check: "
+            f"brew bundle check --verbose --file={base_bf} (kept for inspection; VS Code "
+            f"extensions excluded, since Settings Sync installs them, not brew)",
+            passed=base_ok,
         )
     yield from _opt_in_bundle_records(dotfiles)
     yield from _brewfile_local_records()
@@ -344,24 +346,51 @@ def _brew_bundle_check(brewfile: Path) -> bool:
     return commands.run_ok(["brew", "bundle", "check", f"--file={brewfile}"], capture=True)
 
 
-def _brew_bundle_check_text(brewfile_text: str) -> tuple[bool, Path]:
-    """``brew bundle check`` the cask-stripped --core subset; return (passed, the temp Brewfile).
+def _write_temp_brewfile(brewfile_text: str, *, prefix: str) -> Path:
+    """Write ``brewfile_text`` to a temp Brewfile and return its path (caller owns cleanup).
 
-    ``brew bundle check`` needs a real path, so the subset is written to a temp file. On success
-    the temp file is removed; on FAILURE it is kept so the BAD message can point the user at a
-    runnable ``--file=`` re-check (matching the bash original). ``surrogateescape`` round-trips any
-    non-UTF-8 bytes from the source Brewfile, so the write can't raise UnicodeEncodeError.
+    ``brew bundle check`` needs a real path, so a filtered Brewfile subset is written to a temp
+    file. ``surrogateescape`` round-trips any non-UTF-8 bytes from the source Brewfile, so the
+    write can't raise UnicodeEncodeError.
     """
     with tempfile.NamedTemporaryFile(
         "w",
         suffix=".brewfile",
-        prefix="brewfile-core",
+        prefix=prefix,
         delete=False,
         encoding="utf-8",
         errors="surrogateescape",
     ) as handle:
         handle.write(brewfile_text)
-        tmp = Path(handle.name)
+        return Path(handle.name)
+
+
+def _brew_bundle_check_text(brewfile_text: str) -> tuple[bool, Path]:
+    """``brew bundle check`` the cask-stripped --core subset; return (passed, the temp Brewfile).
+
+    On success the temp file is removed; on FAILURE it is kept so the BAD message can point the
+    user at a runnable ``--file=`` re-check (matching the bash original).
+    """
+    tmp = _write_temp_brewfile(brewfile_text, prefix="brewfile-core")
+    passed = _brew_bundle_check(tmp)
+    if passed:
+        tmp.unlink(missing_ok=True)
+    return passed, tmp
+
+
+def _brew_baseline_check(brewfile: Path) -> tuple[bool, Path]:
+    """``brew bundle check`` the Brewfile with VS Code extensions excluded; return (passed, temp).
+
+    The ``vscode "…"`` lines are VS Code extensions that Settings Sync installs out-of-band, not
+    brew, so ``brew bundle check`` reports them missing even on a correctly-set-up machine (#158).
+    Strip only those lines — brews, casks, mas, and taps are all still checked — then check the
+    rest against a temp Brewfile. Mirroring the ``--core`` branch, the temp is removed on success
+    and KEPT on FAILURE so the BAD message can point at a re-check that reproduces exactly what
+    verify validated (running ``brew bundle check`` against the real ``Brewfile`` would instead
+    re-report the excluded VS Code extensions as missing — misleading noise).
+    """
+    baseline_text = brewfile_without_vscode(commands.read_text_or_empty(brewfile))
+    tmp = _write_temp_brewfile(baseline_text, prefix="brewfile-baseline")
     passed = _brew_bundle_check(tmp)
     if passed:
         tmp.unlink(missing_ok=True)

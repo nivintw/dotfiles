@@ -11,7 +11,7 @@ everything else — taps, brews, and comments — verbatim.
 
 from __future__ import annotations
 
-from dotfiles_install.brewfile import brewfile_core, brewfile_taps
+from dotfiles_install.brewfile import brewfile_core, brewfile_taps, brewfile_without_vscode
 
 
 def test_taps_extracts_first_quoted_name() -> None:
@@ -73,3 +73,33 @@ def test_core_is_a_no_op_without_gui_entries() -> None:
     """A Brewfile with only taps and brews is returned unchanged."""
     text = 'tap "a/b"\nbrew "git"\nbrew "jq"\n'
     assert brewfile_core(text) == text
+
+
+def test_without_vscode_drops_only_vscode_lines() -> None:
+    """``vscode`` lines are removed; brews, casks, mas, taps, and comments are kept verbatim.
+
+    Unlike ``brewfile_core``, casks/mas/whalebrew survive — only the Settings-Sync-managed
+    VS Code extensions are stripped (#158).
+    """
+    text = (
+        "# header\n"
+        'tap "a/b"\n'
+        'brew "git"\n'
+        'cask "firefox"\n'
+        'vscode "ms.python"\n'
+        'mas "Xcode", id: 497799835\n'
+    )
+    assert brewfile_without_vscode(text) == (
+        '# header\ntap "a/b"\nbrew "git"\ncask "firefox"\nmas "Xcode", id: 497799835\n'
+    )
+
+
+def test_without_vscode_drops_indented_vscode() -> None:
+    """An indented ``vscode`` line is still stripped."""
+    assert brewfile_without_vscode('brew "git"\n  vscode "ms.python"\n') == 'brew "git"\n'
+
+
+def test_without_vscode_is_a_no_op_without_vscode_entries() -> None:
+    """A Brewfile with no vscode lines is returned unchanged (casks included)."""
+    text = 'tap "a/b"\nbrew "git"\ncask "firefox"\n'
+    assert brewfile_without_vscode(text) == text
