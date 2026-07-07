@@ -7,6 +7,20 @@ function forrepos --description "Run a command at the root of EVERY git repo und
         return 2
     end
 
+    # SAFETY GUARD: refuse to fan out from $HOME or / — the whole point of this
+    # function is to multiply $argv across every repo it finds below $PWD, so a
+    # destructive command (`git reset --hard`, `git clean -fdx`) run from your home
+    # directory or the filesystem root would hit EVERY repo you own at once, with no
+    # dry-run and no confirmation. Resolve symlinks on both sides first (`path
+    # resolve`) so a symlink that points at $HOME or / can't slip past the check.
+    # Require an explicit, narrower root.
+    set -l here (path resolve -- "$PWD")
+    set -l home_dir (path resolve -- "$HOME")
+    if test "$here" = / -o "$here" = "$home_dir"
+        printf 'forrepos: refusing to fan out from %s — cd into a specific project subtree first\n' "$here" >&2
+        return 1
+    end
+
     # CAUTION: this runs $argv at the root of every git repo found under the
     # current directory, with no confirmation and no dry-run. A destructive
     # command (e.g. `git reset --hard`) is multiplied across all of them. Run it

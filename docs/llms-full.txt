@@ -503,7 +503,9 @@ Fan a command out across a tree — both handle paths with spaces/newlines safel
   in each immediate subdirectory; `forrepos <cmd>` runs it at the root of every git repo in
   the tree (recursively). `gs-all`/`gp-all` are just `forrepos` with a fixed command.
   **No dry-run, no confirmation** — `forrepos` runs your command in every repo it finds,
-  with no preview.
+  with no preview. As a guard it refuses to run from `$HOME` or `/` (symlinks resolved),
+  so a destructive command can't fan out across every repo you own — `cd` into a specific
+  project subtree first.
 
 ### Housekeeping
 
