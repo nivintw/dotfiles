@@ -289,12 +289,11 @@ run_fish_os() {
 
 # launch-docs opens the browser from a backgrounded readiness poll, gated on the
 # port actually accepting connections. Stubs drive that branch without a real server,
-# browser, or TTY: `nc` decides readiness, `open` records that it was invoked, `python3`
-# stands in for the foreground http.server — it "serves" until we kill it (recording its
-# pid first), exactly like the real server runs until Ctrl-C — and `sleep` is a no-op so
-# the poll loop never stalls. We launch fish in the background, wait for the poll to act,
-# then stop the "server" and the shell ourselves. Run from the repo root so the docs dir
-# resolves via `git rev-parse --show-toplevel`.
+# browser, or TTY: `open` records that it was invoked, `python3` stands in for BOTH roles
+# launch-docs runs it as (dispatched by argv), and `sleep` is a no-op so the poll loop never
+# stalls. We launch fish in the background, wait for the poll to act, then stop the "server"
+# and the shell ourselves. Run from the repo root so the docs dir resolves via
+# `git rev-parse --show-toplevel`.
 launchdocs_shims() {
   SHIM="$(mktemp -d)"
   OPENLOG="$SHIM/open.log"
@@ -305,7 +304,26 @@ launchdocs_shims() {
     printf '#!/bin/sh\nprintf "OPENED %%s\\n" "$*" >> "%s"\n' "$OPENLOG" > "$SHIM/$opener"
     chmod +x "$SHIM/$opener"
   done
-  printf '#!/bin/sh\necho $$ > "%s/server.pid"\nexec /bin/sleep 30\n' "$SHIM" > "$SHIM/python3"
+  # One python3 stub serves BOTH roles launch-docs invokes it for, dispatched by argv:
+  #   `python3 -m http.server ...` -> the foreground "server": record its pid (so the test can
+  #      stop it) and block until killed, exactly like the real server runs until Ctrl-C.
+  #   `python3 -c ...` (the __launch_docs_port_open TCP probe) -> readiness: report "open" only
+  #      once the call count reaches probe.ready_at (seeded per test), "free/not-ready" before.
+  #      Call 1 is the preflight (must read FREE so launch proceeds), so "open on the first poll"
+  #      is ready_at=2. The server branch execs before the counter, so it never bumps the count.
+  cat > "$SHIM/python3" <<EOF
+#!/bin/sh
+case "\$*" in
+  *http.server*)
+    echo \$\$ > "$SHIM/server.pid"
+    exec /bin/sleep 30
+    ;;
+esac
+c="$SHIM/probe.n"
+n=\$(cat "\$c" 2>/dev/null || echo 0); n=\$((n + 1)); echo "\$n" > "\$c"
+ready_at=\$(cat "$SHIM/probe.ready_at" 2>/dev/null || echo 999999)
+[ "\$n" -ge "\$ready_at" ]
+EOF
   printf '#!/bin/sh\nexit 0\n' > "$SHIM/sleep"
   chmod +x "$SHIM/python3" "$SHIM/sleep"
 }
@@ -316,7 +334,11 @@ run_launchdocs_stubbed() {
   cd "$BATS_TEST_DIRNAME/.." || return 1
   # Close fd 3 (bats' trace fd): a backgrounded process that inherits it makes bats
   # hang at end-of-test waiting for the fd to close.
-  env PATH="$SHIM:$PATH" fish -c "set -p fish_function_path '$FUNCDIR'; source '$FUNCDIR/launch-docs.fish'; launch-docs" >/dev/null 2>&1 3>&- &
+  # --no-config is load-bearing: without it fish prepends the user's universal $fish_user_paths
+  # (e.g. Homebrew's bin) ahead of $SHIM, so the REAL python3 shadows our stub and the probe
+  # hits the actual port 8000 instead of the stubbed readiness counter. (The old nc-based test
+  # escaped this only because nc lives in /usr/bin, which fish_user_paths doesn't front.)
+  env PATH="$SHIM:$PATH" fish --no-config -c "set -p fish_function_path '$FUNCDIR'; source '$FUNCDIR/launch-docs.fish'; launch-docs" >/dev/null 2>&1 3>&- &
   LD_PID=$!
   for _ in $(seq 30); do
     if [ -f "$OPENLOG" ]; then break; fi
@@ -335,11 +357,9 @@ run_launchdocs_stubbed() {
 
 @test "launch-docs opens the browser once the port accepts connections" {
   launchdocs_shims
-  # First nc call is the preflight (must report the port FREE → non-zero so we proceed);
-  # every later call is the readiness poll (READY → zero), so `open` fires on attempt 1.
-  # shellcheck disable=SC2016  # $-expressions are the generated script's, not ours to expand
-  printf '#!/bin/sh\nc="%s/nc.n"\nn=$(cat "$c" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$c"\n[ "$n" -ge 2 ]\n' "$SHIM" > "$SHIM/nc"
-  chmod +x "$SHIM/nc"
+  # Preflight is probe call 1 (reads FREE → we proceed); the first readiness poll is call 2,
+  # so ready_at=2 makes the python3 probe report READY on that poll and `open` fires.
+  echo 2 > "$SHIM/probe.ready_at"
   run_launchdocs_stubbed
   [ -f "$OPENLOG" ]
   [[ "$(cat "$OPENLOG")" == *"http://localhost:8000"* ]]
@@ -348,8 +368,7 @@ run_launchdocs_stubbed() {
 
 @test "launch-docs never opens the browser if the port never accepts connections" {
   launchdocs_shims
-  printf '#!/bin/sh\nexit 1\n' > "$SHIM/nc"   # preflight passes (port free); poll never ready
-  chmod +x "$SHIM/nc"
+  echo 999999 > "$SHIM/probe.ready_at"   # preflight reads FREE; the poll is never READY
   run_launchdocs_stubbed
   [ ! -f "$OPENLOG" ]   # `open` was never invoked — no browser at a dead port
   rm -rf "$SHIM"
@@ -387,19 +406,43 @@ run_launchdocs_stubbed() {
 }
 
 # The detection heart — the osrelease marker match — is exercised via the $__dotfiles_osrelease
-# seam (fixture file), so it's covered on any host instead of needing a real WSL kernel.
-@test "is_wsl detects a Microsoft/WSL kernel marker" {
+# seam (fixture file), so it's covered on any host instead of needing a real WSL kernel. Both
+# marker files are pointed at fixtures and $WSL_DISTRO_NAME is cleared so a real /proc/version
+# (Linux CI) or an inherited env var can't decide the result.
+@test "is_wsl detects a Microsoft/WSL kernel marker in osrelease" {
   osrel="$(mktemp)"; printf '5.15.167.4-microsoft-standard-WSL2\n' > "$osrel"
-  run_fish_os Linux "set -gx __dotfiles_osrelease '$osrel'; is_wsl"
+  ver="$(mktemp)"; printf 'Linux version 6.8.0-generic\n' > "$ver"
+  run_fish_os Linux "set -e WSL_DISTRO_NAME; set -gx __dotfiles_osrelease '$osrel'; set -gx __dotfiles_proc_version '$ver'; is_wsl"
   [ "$status" -eq 0 ]
-  rm -f "$osrel"
+  rm -f "$osrel" "$ver"
+}
+
+# /proc/version is Microsoft's canonical recommended marker; is_wsl checks it too, so a box
+# that only /proc/version identifies (osrelease bare) still resolves to WSL.
+@test "is_wsl detects a Microsoft/WSL marker in /proc/version" {
+  osrel="$(mktemp)"; printf '6.8.0-generic\n' > "$osrel"
+  ver="$(mktemp)"; printf 'Linux version 5.15.167.4-microsoft-standard-WSL2 (oe-user@oe-host)\n' > "$ver"
+  run_fish_os Linux "set -e WSL_DISTRO_NAME; set -gx __dotfiles_osrelease '$osrel'; set -gx __dotfiles_proc_version '$ver'; is_wsl"
+  [ "$status" -eq 0 ]
+  rm -f "$osrel" "$ver"
+}
+
+# $WSL_DISTRO_NAME (exported inside every WSL distro) is a conclusive fast-path on its own,
+# even when neither marker file names Microsoft.
+@test "is_wsl honors the \$WSL_DISTRO_NAME env fast-path" {
+  osrel="$(mktemp)"; printf '6.8.0-generic\n' > "$osrel"
+  ver="$(mktemp)"; printf 'Linux version 6.8.0-generic\n' > "$ver"
+  run_fish_os Linux "set -gx WSL_DISTRO_NAME Ubuntu; set -gx __dotfiles_osrelease '$osrel'; set -gx __dotfiles_proc_version '$ver'; is_wsl"
+  [ "$status" -eq 0 ]
+  rm -f "$osrel" "$ver"
 }
 
 @test "is_wsl rejects a bare-metal Linux kernel" {
   osrel="$(mktemp)"; printf '6.8.0-generic\n' > "$osrel"
-  run_fish_os Linux "set -gx __dotfiles_osrelease '$osrel'; is_wsl"
+  ver="$(mktemp)"; printf 'Linux version 6.8.0-generic\n' > "$ver"
+  run_fish_os Linux "set -e WSL_DISTRO_NAME; set -gx __dotfiles_osrelease '$osrel'; set -gx __dotfiles_proc_version '$ver'; is_wsl"
   [ "$status" -eq 1 ]
-  rm -f "$osrel"
+  rm -f "$osrel" "$ver"
 }
 
 # --- __clipboard_copy: pbcopy / clip.exe / wl-copy / xclip dispatch ------------------------
@@ -434,6 +477,58 @@ run_launchdocs_stubbed() {
   STUBDIR="$(mktemp -d)"
   run_fish_os Linux "printf x | __clipboard_copy"
   [ "$status" -ne 0 ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+# On WSL, win32yank (codepage-clean, no trailing CR) is preferred over clip.exe. is_wsl is
+# forced true via the osrelease fixture; both tools shim to distinct sinks so the test proves
+# WHICH one was picked, not just that something copied.
+@test "__clipboard_copy prefers win32yank over clip.exe on WSL" {
+  STUBDIR="$(mktemp -d)"
+  osrel="$STUBDIR/osrelease"; printf '5.15.0-microsoft-standard-WSL2\n' > "$osrel"
+  printf '#!/bin/sh\ncat > "%s/win32"\n' "$STUBDIR" > "$STUBDIR/win32yank.exe"
+  printf '#!/bin/sh\ncat > "%s/clip"\n' "$STUBDIR" > "$STUBDIR/clip.exe"
+  chmod +x "$STUBDIR/win32yank.exe" "$STUBDIR/clip.exe"
+  run_fish_os Linux "set -e WSL_DISTRO_NAME; set -gx __dotfiles_osrelease '$osrel'; printf hi-wsl | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/win32")" = "hi-wsl" ]
+  [ ! -f "$STUBDIR/clip" ]   # clip.exe must NOT have been used
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+@test "__clipboard_copy falls back to clip.exe on WSL without win32yank" {
+  STUBDIR="$(mktemp -d)"
+  osrel="$STUBDIR/osrelease"; printf '5.15.0-microsoft-standard-WSL2\n' > "$osrel"
+  printf '#!/bin/sh\ncat > "%s/clip"\n' "$STUBDIR" > "$STUBDIR/clip.exe"
+  chmod +x "$STUBDIR/clip.exe"
+  run_fish_os Linux "set -e WSL_DISTRO_NAME; set -gx __dotfiles_osrelease '$osrel'; printf hi-clip | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/clip")" = "hi-clip" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+# wl-copy is gated on a live $WAYLAND_DISPLAY: with none, the helper skips it and uses xclip
+# (distinct sinks prove which). With one set, wl-copy is used.
+@test "__clipboard_copy skips wl-copy when \$WAYLAND_DISPLAY is unset" {
+  STUBDIR="$(mktemp -d)"
+  printf '#!/bin/sh\ncat > "%s/wl"\n' "$STUBDIR" > "$STUBDIR/wl-copy"
+  printf '#!/bin/sh\ncat > "%s/x"\n' "$STUBDIR" > "$STUBDIR/xclip"
+  chmod +x "$STUBDIR/wl-copy" "$STUBDIR/xclip"
+  run_fish_os Linux "set -e WAYLAND_DISPLAY; printf no-wayland | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/x")" = "no-wayland" ]   # xclip used
+  [ ! -f "$STUBDIR/wl" ]                      # wl-copy skipped — no display
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+@test "__clipboard_copy uses wl-copy when \$WAYLAND_DISPLAY is set" {
+  STUBDIR="$(mktemp -d)"
+  printf '#!/bin/sh\ncat > "%s/wl"\n' "$STUBDIR" > "$STUBDIR/wl-copy"
+  printf '#!/bin/sh\ncat > "%s/x"\n' "$STUBDIR" > "$STUBDIR/xclip"
+  chmod +x "$STUBDIR/wl-copy" "$STUBDIR/xclip"
+  run_fish_os Linux "set -gx WAYLAND_DISPLAY wayland-0; printf on-wayland | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/wl")" = "on-wayland" ]   # wl-copy used
   rm -rf "$STUBDIR"; unset STUBDIR
 }
 
@@ -496,4 +591,28 @@ run_launchdocs_stubbed() {
   [[ "$output" == *"Windows host"* ]]
   [ ! -f "$STUBDIR/ran" ]   # resolvectl must not have run
   rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+# The older-systemd fallback (`systemd-resolve --flush-caches`, used when `resolvectl` is
+# absent) needs resolvectl to be genuinely MISSING. run_fish_os can't guarantee that: its PATH
+# includes /usr/bin, where the ubuntu CI runner ships a real resolvectl that would win the
+# `command -q resolvectl` check. So build a hermetic PATH containing ONLY our stubs plus a
+# symlinked fish + the coreutils dnsflush/is_wsl actually shell out to (uname, cat) — no
+# /usr/bin at all, so resolvectl simply does not exist on it.
+@test "dnsflush falls back to systemd-resolve when resolvectl is absent" {
+  STUBDIR="$(mktemp -d)"
+  osrel="$STUBDIR/osrelease"; printf '6.8.0-generic\n' > "$osrel"          # bare-metal, not WSL
+  ver="$STUBDIR/version"; printf 'Linux version 6.8.0-generic\n' > "$ver"
+  printf '#!/bin/sh\necho Linux\n' > "$STUBDIR/uname"
+  printf '#!/bin/sh\nexec "$@"\n' > "$STUBDIR/sudo"                        # run the wrapped command
+  printf '#!/bin/sh\necho ran > "%s/ran"\n' "$STUBDIR" > "$STUBDIR/systemd-resolve"
+  chmod +x "$STUBDIR/uname" "$STUBDIR/sudo" "$STUBDIR/systemd-resolve"
+  ln -s "$(command -v cat)" "$STUBDIR/cat"
+  ln -s "$(command -v fish)" "$STUBDIR/fish"
+  run env -i PATH="$STUBDIR" HOME="$HOME" TERM="${TERM:-xterm}" "$STUBDIR/fish" --no-config -c \
+    "set -p fish_function_path '$FUNCDIR'; set -gx __dotfiles_osrelease '$osrel'; set -gx __dotfiles_proc_version '$ver'; dnsflush"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"systemd-resolve"* ]]
+  [ -f "$STUBDIR/ran" ]     # systemd-resolve was actually invoked (non-vacuous)
+  rm -rf "$STUBDIR"
 }

@@ -174,17 +174,38 @@ run_zsh_os() {
   [ "$status" -ne 0 ]
 }
 
-@test "is_wsl detects a Microsoft/WSL kernel marker" {
-  local osrel="$NONREPO/osrelease-wsl"
+@test "is_wsl detects a Microsoft/WSL marker in osrelease" {
+  local osrel="$NONREPO/osrelease-wsl" ver="$NONREPO/version-plain"
   printf '5.15.0-microsoft-standard-WSL2\n' > "$osrel"
-  run_zsh_os Linux "__dotfiles_osrelease='$osrel' is_wsl"
+  printf 'Linux version 6.8.0-generic\n' > "$ver"
+  run_zsh_os Linux "WSL_DISTRO_NAME= __dotfiles_osrelease='$osrel' __dotfiles_proc_version='$ver' is_wsl"
+  [ "$status" -eq 0 ]
+}
+
+# /proc/version is Microsoft's canonical recommended marker; is_wsl checks it too, so a box
+# that only /proc/version identifies (osrelease bare) still resolves to WSL.
+@test "is_wsl detects a Microsoft/WSL marker in /proc/version" {
+  local osrel="$NONREPO/osrelease-plain" ver="$NONREPO/version-wsl"
+  printf '6.8.0-generic\n' > "$osrel"
+  printf 'Linux version 5.15.167.4-microsoft-standard-WSL2 (oe-user@oe-host)\n' > "$ver"
+  run_zsh_os Linux "WSL_DISTRO_NAME= __dotfiles_osrelease='$osrel' __dotfiles_proc_version='$ver' is_wsl"
+  [ "$status" -eq 0 ]
+}
+
+# $WSL_DISTRO_NAME (exported inside every WSL distro) is conclusive on its own.
+@test "is_wsl honors the \$WSL_DISTRO_NAME env fast-path" {
+  local osrel="$NONREPO/osrelease-plain" ver="$NONREPO/version-plain"
+  printf '6.8.0-generic\n' > "$osrel"
+  printf 'Linux version 6.8.0-generic\n' > "$ver"
+  run_zsh_os Linux "WSL_DISTRO_NAME=Ubuntu __dotfiles_osrelease='$osrel' __dotfiles_proc_version='$ver' is_wsl"
   [ "$status" -eq 0 ]
 }
 
 @test "is_wsl rejects a bare-metal Linux kernel" {
-  local osrel="$NONREPO/osrelease-plain"
-  printf '5.15.0-generic\n' > "$osrel"
-  run_zsh_os Linux "__dotfiles_osrelease='$osrel' is_wsl"
+  local osrel="$NONREPO/osrelease-plain" ver="$NONREPO/version-plain"
+  printf '6.8.0-generic\n' > "$osrel"
+  printf 'Linux version 6.8.0-generic\n' > "$ver"
+  run_zsh_os Linux "WSL_DISTRO_NAME= __dotfiles_osrelease='$osrel' __dotfiles_proc_version='$ver' is_wsl"
   [ "$status" -ne 0 ]
 }
 
@@ -214,6 +235,56 @@ run_zsh_os() {
   STUBDIR="$(mktemp -d)"
   run_zsh_os Linux "printf x | __clipboard_copy"
   [ "$status" -ne 0 ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+# On WSL, win32yank (codepage-clean, no trailing CR) is preferred over clip.exe. The osrelease
+# seam forces is_wsl true; distinct sinks prove WHICH tool was picked.
+@test "__clipboard_copy prefers win32yank over clip.exe on WSL" {
+  STUBDIR="$(mktemp -d)"
+  local osrel="$NONREPO/osrelease-wsl"; printf '5.15.0-microsoft-standard-WSL2\n' > "$osrel"
+  printf '#!/bin/sh\ncat > "%s/win32"\n' "$STUBDIR" > "$STUBDIR/win32yank.exe"
+  printf '#!/bin/sh\ncat > "%s/clip"\n' "$STUBDIR" > "$STUBDIR/clip.exe"
+  chmod +x "$STUBDIR/win32yank.exe" "$STUBDIR/clip.exe"
+  run_zsh_os Linux "unset WSL_DISTRO_NAME; __dotfiles_osrelease='$osrel'; printf hi-wsl | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/win32")" = "hi-wsl" ]
+  [ ! -f "$STUBDIR/clip" ]   # clip.exe must NOT have been used
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+@test "__clipboard_copy falls back to clip.exe on WSL without win32yank" {
+  STUBDIR="$(mktemp -d)"
+  local osrel="$NONREPO/osrelease-wsl"; printf '5.15.0-microsoft-standard-WSL2\n' > "$osrel"
+  printf '#!/bin/sh\ncat > "%s/clip"\n' "$STUBDIR" > "$STUBDIR/clip.exe"
+  chmod +x "$STUBDIR/clip.exe"
+  run_zsh_os Linux "unset WSL_DISTRO_NAME; __dotfiles_osrelease='$osrel'; printf hi-clip | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/clip")" = "hi-clip" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+# wl-copy is gated on a live $WAYLAND_DISPLAY: with none the helper skips it and uses xclip.
+@test "__clipboard_copy skips wl-copy when \$WAYLAND_DISPLAY is unset" {
+  STUBDIR="$(mktemp -d)"
+  printf '#!/bin/sh\ncat > "%s/wl"\n' "$STUBDIR" > "$STUBDIR/wl-copy"
+  printf '#!/bin/sh\ncat > "%s/x"\n' "$STUBDIR" > "$STUBDIR/xclip"
+  chmod +x "$STUBDIR/wl-copy" "$STUBDIR/xclip"
+  run_zsh_os Linux "unset WAYLAND_DISPLAY; printf no-wayland | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/x")" = "no-wayland" ]   # xclip used
+  [ ! -f "$STUBDIR/wl" ]                      # wl-copy skipped — no display
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+@test "__clipboard_copy uses wl-copy when \$WAYLAND_DISPLAY is set" {
+  STUBDIR="$(mktemp -d)"
+  printf '#!/bin/sh\ncat > "%s/wl"\n' "$STUBDIR" > "$STUBDIR/wl-copy"
+  printf '#!/bin/sh\ncat > "%s/x"\n' "$STUBDIR" > "$STUBDIR/xclip"
+  chmod +x "$STUBDIR/wl-copy" "$STUBDIR/xclip"
+  run_zsh_os Linux "WAYLAND_DISPLAY=wayland-0; printf on-wayland | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/wl")" = "on-wayland" ]   # wl-copy used
   rm -rf "$STUBDIR"; unset STUBDIR
 }
 
@@ -264,4 +335,28 @@ run_zsh_os() {
   run_zsh_os Linux "__dotfiles_osrelease='$osrel' dnsflush"
   [ "$status" -eq 1 ]
   [[ "$output" == *"Windows host"* ]]
+}
+
+# The older-systemd fallback (`systemd-resolve --flush-caches`, used when `resolvectl` is
+# absent) needs resolvectl genuinely MISSING. run_zsh_os can't guarantee that: its PATH has
+# /usr/bin, where the ubuntu CI runner ships a real resolvectl. So build a hermetic PATH of
+# ONLY our stubs plus a symlinked zsh + the coreutils dnsflush/is_wsl shell out to (uname,
+# cat) — no /usr/bin at all, so resolvectl simply does not exist on it.
+@test "dnsflush falls back to systemd-resolve when resolvectl is absent" {
+  STUBDIR="$(mktemp -d)"
+  local osrel="$STUBDIR/osrelease" ver="$STUBDIR/version"
+  printf '6.8.0-generic\n' > "$osrel"
+  printf 'Linux version 6.8.0-generic\n' > "$ver"
+  printf '#!/bin/sh\necho Linux\n' > "$STUBDIR/uname"
+  printf '#!/bin/sh\nexec "$@"\n' > "$STUBDIR/sudo"
+  printf '#!/bin/sh\necho ran > "%s/ran"\n' "$STUBDIR" > "$STUBDIR/systemd-resolve"
+  chmod +x "$STUBDIR/uname" "$STUBDIR/sudo" "$STUBDIR/systemd-resolve"
+  ln -s "$(command -v cat)" "$STUBDIR/cat"
+  ln -s "$(command -v zsh)" "$STUBDIR/zsh"
+  run env -i PATH="$STUBDIR" HOME="$HOME" TERM="${TERM:-xterm}" "$STUBDIR/zsh" -f -c \
+    "fpath=('$FUNCDIR' \$fpath); autoload -Uz '$FUNCDIR'/*(N:t); unset WSL_DISTRO_NAME; __dotfiles_osrelease='$osrel'; __dotfiles_proc_version='$ver'; dnsflush"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"systemd-resolve"* ]]
+  [ -f "$STUBDIR/ran" ]     # systemd-resolve was actually invoked (non-vacuous)
+  rm -rf "$STUBDIR"
 }

@@ -49,12 +49,59 @@ def test_is_wsl_false_off_linux(monkeypatch: pytest.MonkeyPatch) -> None:
     assert is_wsl() is False
 
 
-def test_is_wsl_reads_microsoft_marker(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """``is_wsl`` is True when the kernel osrelease names Microsoft."""
-    osrelease = tmp_path / "osrelease"
-    osrelease.write_text("5.15.0-microsoft-standard-WSL2\n")
+def _wsl_seams(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    osrelease: str,
+    version: str,
+) -> None:
+    """Point both injectable WSL sources at fixtures and clear the env fast-path.
+
+    Lets each test isolate one signal: a real host's ``/proc/version`` (Linux CI) or an
+    inherited ``$WSL_DISTRO_NAME`` can't leak in and decide the result.
+    """
+    osrelease_file = tmp_path / "osrelease"
+    osrelease_file.write_text(osrelease)
+    version_file = tmp_path / "version"
+    version_file.write_text(version)
+    monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
     monkeypatch.setattr(os_detect.sys, "platform", "linux")
-    monkeypatch.setattr(os_detect, "_WSL_OSRELEASE", osrelease)
+    monkeypatch.setattr(os_detect, "_WSL_OSRELEASE", osrelease_file)
+    monkeypatch.setattr(os_detect, "_WSL_VERSION", version_file)
+
+
+def test_is_wsl_reads_microsoft_marker(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``is_wsl`` is True when the kernel osrelease names Microsoft (version bare)."""
+    _wsl_seams(
+        monkeypatch,
+        tmp_path,
+        osrelease="5.15.0-microsoft-standard-WSL2\n",
+        version="Linux version 6.8.0-generic\n",
+    )
+    assert is_wsl() is True
+
+
+def test_is_wsl_reads_proc_version_marker(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``is_wsl`` is True when only /proc/version carries the marker (osrelease bare)."""
+    _wsl_seams(
+        monkeypatch,
+        tmp_path,
+        osrelease="6.8.0-generic\n",
+        version="Linux version 5.15.167.4-microsoft-standard-WSL2 (oe-user@oe-host)\n",
+    )
+    assert is_wsl() is True
+
+
+def test_is_wsl_env_fast_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``$WSL_DISTRO_NAME`` alone identifies WSL, even with bare-metal osrelease + version."""
+    _wsl_seams(
+        monkeypatch,
+        tmp_path,
+        osrelease="6.8.0-generic\n",
+        version="Linux version 6.8.0-generic\n",
+    )
+    monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
     assert is_wsl() is True
 
 
@@ -62,19 +109,23 @@ def test_is_wsl_false_on_bare_metal_linux(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """``is_wsl`` is False for a stock Linux osrelease."""
-    osrelease = tmp_path / "osrelease"
-    osrelease.write_text("6.8.0-generic\n")
-    monkeypatch.setattr(os_detect.sys, "platform", "linux")
-    monkeypatch.setattr(os_detect, "_WSL_OSRELEASE", osrelease)
+    """``is_wsl`` is False for a stock Linux osrelease + version with no env marker."""
+    _wsl_seams(
+        monkeypatch,
+        tmp_path,
+        osrelease="6.8.0-generic\n",
+        version="Linux version 6.8.0-generic\n",
+    )
     assert is_wsl() is False
 
 
-def test_is_wsl_false_when_osrelease_absent(
+def test_is_wsl_false_when_sources_absent(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """A missing osrelease file reads as not-WSL, not an error."""
+    """Missing osrelease AND version files read as not-WSL, not an error."""
+    monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
     monkeypatch.setattr(os_detect.sys, "platform", "linux")
-    monkeypatch.setattr(os_detect, "_WSL_OSRELEASE", tmp_path / "missing")
+    monkeypatch.setattr(os_detect, "_WSL_OSRELEASE", tmp_path / "missing-osrelease")
+    monkeypatch.setattr(os_detect, "_WSL_VERSION", tmp_path / "missing-version")
     assert is_wsl() is False

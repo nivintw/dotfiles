@@ -2,17 +2,25 @@
 # SPDX-License-Identifier: MIT
 
 # Exit 0 on a WSL (Windows Subsystem for Linux) kernel. Mirrors
-# src/dotfiles_install/os_detect.py::is_wsl — a Linux kernel whose
-# /proc/sys/kernel/osrelease advertises a Microsoft/WSL marker. The path is overridable
-# via $__dotfiles_osrelease so the bats suite can point it at a fixture and exercise the
-# marker match on any host — the same reason the Python twin's _WSL_OSRELEASE is
-# repointable. Takes an optional pre-resolved kernel name (is_linux already has one, to
-# avoid forking uname twice) — defaults to running uname itself for standalone callers.
+# src/dotfiles_install/os_detect.py::is_wsl. Three conclusive signals, in order: the
+# $WSL_DISTRO_NAME env fast-path (exported inside every WSL distro), then a Microsoft/WSL
+# marker in /proc/sys/kernel/osrelease OR /proc/version (Microsoft's canonical recommended
+# marker — catches variants the single osrelease check misses). Both files are overridable
+# ($__dotfiles_osrelease / $__dotfiles_proc_version) so the bats suite can point them at
+# fixtures on any host — the same reason the Python twin's _WSL_OSRELEASE/_WSL_VERSION are.
+# Takes an optional pre-resolved kernel name (is_linux already has one, to avoid forking
+# uname twice) — defaults to running uname itself for standalone callers.
 is_wsl() {
     local kernel=${1:-$(uname)}
     [[ "$kernel" == Linux ]] || return 1
+    [[ -n "$WSL_DISTRO_NAME" ]] && return 0
     local osrelease=${__dotfiles_osrelease:-/proc/sys/kernel/osrelease}
-    [[ -r "$osrelease" ]] || return 1
-    local release=${(L)"$(<"$osrelease")"}
-    [[ "$release" == *microsoft* || "$release" == *wsl* ]]
+    local procver=${__dotfiles_proc_version:-/proc/version}
+    local src text
+    for src in "$osrelease" "$procver"; do
+        [[ -r "$src" ]] || continue
+        text=${(L)"$(<"$src")"}
+        [[ "$text" == *microsoft* || "$text" == *wsl* ]] && return 0
+    done
+    return 1
 }
