@@ -135,7 +135,7 @@
         </div>
         <div class="note note--warn">
           <div class="note__title">No dry-run, no confirmation</div>
-          <code>forrepos</code> (and the <code>*-all</code> helpers) run your command in <em>every</em> repo it finds, with no preview. Great for <code>git status</code>; think twice before <code>forrepos git reset --hard</code>.
+          <code>forrepos</code> (and the <code>*-all</code> helpers) run your command in <em>every</em> repo it finds, with no preview. Great for <code>git status</code>; think twice before <code>forrepos git reset --hard</code>. As a guard it refuses to run from <code>$HOME</code> or <code>/</code> (symlinks resolved), so a destructive command can't fan out across every repo you own — <code>cd</code> into a specific project subtree first.
         </div>
       </section>
 
