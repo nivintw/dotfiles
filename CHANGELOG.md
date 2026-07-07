@@ -7,6 +7,20 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.24.0](https://github.com/nivintw/dotfiles/compare/v1.23.2...v1.24.0) (2026-07-07)
+
+
+### Features
+
+* **portability:** Harden WSL detection, clipboard, DNS, and docs probes ([fcc6420](https://github.com/nivintw/dotfiles/commit/fcc6420b217d0e3bb03e266d4c5cd230f7518ece)), closes [#160](https://github.com/nivintw/dotfiles/issues/160) [#161](https://github.com/nivintw/dotfiles/issues/161) [#162](https://github.com/nivintw/dotfiles/issues/162) [#163](https://github.com/nivintw/dotfiles/issues/163)
+
+
+### Bug Fixes
+
+* **dock:** Make the rebuild atomic and skip when the Dock already matches ([dad5c51](https://github.com/nivintw/dotfiles/commit/dad5c51298c6cb26eab923ea5846cbdf1ecf625d)), closes [#155](https://github.com/nivintw/dotfiles/issues/155) [#156](https://github.com/nivintw/dotfiles/issues/156)
+* **forrepos:** Refuse to fan out from $HOME or / ([2538585](https://github.com/nivintw/dotfiles/commit/2538585a5b6cfcecbb5fd8795a9c6824cb21f90a)), closes [#154](https://github.com/nivintw/dotfiles/issues/154)
+* **install:** Harden stow cleanup, screencapture, and verify brew check ([da197d7](https://github.com/nivintw/dotfiles/commit/da197d75bbcc215da9a2259913f5ea6bc81992c6)), closes [#153](https://github.com/nivintw/dotfiles/issues/153) [#157](https://github.com/nivintw/dotfiles/issues/157) [#158](https://github.com/nivintw/dotfiles/issues/158)
+
 ## [1.23.2](https://github.com/nivintw/dotfiles/compare/v1.23.1...v1.23.2) (2026-07-06)
 
 
