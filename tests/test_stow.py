@@ -7,7 +7,8 @@ Behaviors covered:
 - MANAGED_FILES constant contains exactly the expected three $HOME-relative paths.
 - _clear_managed_files: removes real files byte-identical to the repo copy with an active
   message; backs up differing files to numbered .pre-stow.bak paths (never clobbering earlier
-  ones) with a warn; skips symlinks silently; skips absent files silently; warns when no repo
+  ones) with a warn; skips symlinks silently; skips a file reached through a folded parent that
+  resolves into the repo (#153) silently; skips absent files silently; warns when no repo
   copy exists (stow won't manage the path).
 - _migrate_git_template_hooks: removes prek-generated shims (matched by the marker text),
   leaves hand-written hooks untouched, skips symlinks, emits an active message listing removed
@@ -242,6 +243,46 @@ def test_clear_managed_files_skips_symlinks(
     assert ctx.ui.warnings == [], f"no warnings expected for symlinks; got: {ctx.ui.warnings!r}"
     assert "removing" not in out.getvalue(), (
         f"no active message expected for symlinks; got: {out.getvalue()!r}"
+    )
+
+
+def test_clear_managed_files_skips_folded_parent_into_repo(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A managed file reached through a folded parent symlink into the repo is left intact.
+
+    Regression for #153: with ``~/.config/atuin`` folded to ``DOTFILES/home/.config/atuin``
+    (the whole dir linked as one symlink), ``~/.config/atuin/config.toml`` resolves to the
+    repo's own tracked file. The leaf-only ``is_symlink()`` guard missed the fold and
+    ``filecmp`` saw them as identical (same inode), so the old code unlinked the repo's copy.
+    It must skip instead — no delete, no backup, no message.
+    """
+    dotfiles, home_dir = _setup_repo(tmp_path)
+    rel = ".config/atuin/config.toml"
+    content = b"[settings]\nfilter_mode = workspace\n"
+
+    repo_src = dotfiles / "home" / rel
+    repo_src.parent.mkdir(parents=True)
+    repo_src.write_bytes(content)
+
+    # Fold the whole managed dir into the repo, like a pre-`--no-folding` install did.
+    (home_dir / ".config").mkdir(parents=True)
+    (home_dir / ".config" / "atuin").symlink_to(repo_src.parent)
+
+    monkeypatch.setattr(stow, "DOTFILES", dotfiles)
+    monkeypatch.setenv("HOME", str(home_dir))
+    ctx, out = _ctx()
+
+    stow._clear_managed_files(ctx)
+
+    assert repo_src.exists(), "repo's tracked file must not be deleted through the fold (#153)"
+    assert repo_src.read_bytes() == content, "repo file contents must be intact"
+    assert ctx.ui.warnings == [], (
+        f"no warnings expected for a folded parent; got: {ctx.ui.warnings!r}"
+    )
+    assert "removing" not in out.getvalue(), (
+        f"no active removal message expected for a folded parent; got: {out.getvalue()!r}"
     )
 
 

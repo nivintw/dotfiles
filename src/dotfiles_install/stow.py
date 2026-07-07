@@ -81,6 +81,16 @@ def _clear_managed_files(ctx: InstallContext) -> None:
             # No repo copy means stow won't link it — leave the user's file untouched.
             ctx.ui.warn(f"no repo copy for {target} (skipping; not a stow-managed path)")
             continue
+        # A folded Stow symlink on an ancestor dir (e.g. ~/.config/atuin -> the repo's
+        # home/.config/atuin) makes this "real file" resolve back into the repo — same inode
+        # as repo_src. is_symlink() tests only the leaf, so it misses the fold, and filecmp
+        # sees the two as identical; the identical branch below would then unlink()/rename()
+        # through the fold and delete the repo's own tracked copy (#153, silent data loss).
+        # It's already stow-managed via the fold, so skip it like a leaf symlink.
+        home_root = (DOTFILES / "home").resolve()
+        resolved = target.resolve()
+        if resolved == repo_src.resolve() or home_root in resolved.parents:
+            continue
         if filecmp.cmp(target, repo_src, shallow=False):
             ctx.ui.active(f"removing existing real file so stow can symlink it: {target}")
             # Identical to the repo copy — nothing to preserve; unlink ignores write-protection
