@@ -37,6 +37,13 @@ fish_history
 fish_variables
 config.local.fish
 
+### Zsh ###
+# Runtime artifacts of the opt-in zsh shell: the compiled completion dump (and its
+# platform/version-suffixed variants), shell history, and the per-session state dir.
+.zcompdump*
+.zsh_history
+.zsh_sessions/
+
 ### Git ###
 # Created by git for backups. To disable backups in Git:
 # $ git config --global mergetool.keepBackup false
