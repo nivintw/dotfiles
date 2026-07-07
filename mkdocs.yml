@@ -104,6 +104,12 @@ plugins:
       sections:
         Documentation:
           - index.md
+          - getting-started.md
+          - architecture.md
+          - stack.md
+          - commands.md
+          - quality.md
+          - security.md
 
 # Fleet-general baseline only — each entry earns its place with real content it enables,
 # not just because Material supports it (no mermaid custom_fences here; pymdownx.emoji is
@@ -164,6 +170,18 @@ markdown_extensions:
 exclude_docs: |
   superpowers/
   includes/
+  # The hand-authored legacy site (docs/*.html + its JS/CSS) still ships until the batch
+  # Pages-source flip lands (issue #138) — exclude it from the MkDocs build so the old
+  # index.html doesn't collide with the generated index.md, and the old assets aren't
+  # copied into the new site. The shared assets the new theme DOES use (favicon.svg, the
+  # vendored asciinema player) live at their own paths and are not matched here.
+  *.html
+  assets/main.js
+  assets/style.css
+  # The llmstxt plugin regenerates llms.txt from the nav; keep the hand-maintained legacy
+  # copies out of the build so they don't collide with the generated output.
+  llms.txt
+  llms-full.txt
 
 # MkDocs 1.5+'s own validation checks, made explicit rather than left to its undocumented
 # defaults — `warn` is what `--strict` (this fleet's `generate-docs` Stage 4 always builds
@@ -181,3 +199,9 @@ validation:
 
 nav:
   - Home: index.md
+  - Getting Started: getting-started.md
+  - Architecture: architecture.md
+  - The Stack: stack.md
+  - Commands: commands.md
+  - Quality & Testing: quality.md
+  - Security: security.md

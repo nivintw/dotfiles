@@ -12,6 +12,9 @@
 .github/workflows/link-check.yml       # extra crawl targets for markdown-shaped docs/llms.txt + docs/llms-full.txt (excludes themselves now live in .config/lychee.toml, matching upstream)
 .github/workflows/main.yml             # release docs describe the pyproject + uv.lock version mirroring via extra-files
 .gitignore                             # mirrors the global ignore so VS Code explorer.excludeGitIgnore matches git, plus repo rules
+docs/index.md                          # real landing page (MkDocs migration, issue #138) vs the template stub
+docs/includes/install.md               # real shared install snippet (MkDocs migration, issue #138) vs the template stub
+mkdocs.yml                             # real per-repo nav + llmstxt sections + legacy-HTML exclude_docs (MkDocs migration, issue #138) on top of the template's theme scaffold
 .pre-commit-config.yaml                # emoji hook names + grouped sections; repo hooks (fish, ssh, installer); pre-push vm-smoke stage
 CHANGELOG.md                           # release-please-generated; grows every release
 pyproject.toml                         # real installer package (deps, console script, dev groups) vs the template stub
