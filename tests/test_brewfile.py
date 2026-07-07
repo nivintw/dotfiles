@@ -11,7 +11,7 @@ everything else — taps, brews, and comments — verbatim.
 
 from __future__ import annotations
 
-from dotfiles_install.brewfile import brewfile_core, brewfile_taps
+from dotfiles_install.brewfile import brewfile_core, brewfile_taps, brewfile_without_vscode
 
 
 def test_taps_extracts_first_quoted_name() -> None:
@@ -73,3 +73,36 @@ def test_core_is_a_no_op_without_gui_entries() -> None:
     """A Brewfile with only taps and brews is returned unchanged."""
     text = 'tap "a/b"\nbrew "git"\nbrew "jq"\n'
     assert brewfile_core(text) == text
+
+
+def test_without_vscode_drops_only_vscode_lines() -> None:
+    """Only ``vscode`` extension lines are removed; casks, mas, whalebrew, brews stay.
+
+    Regression for issue #158: VS Code extensions come via Settings Sync, so they must be
+    excluded from the Homebrew baseline check — but a genuinely missing cask/mas/whalebrew
+    package must still be caught, so those lines are kept.
+    """
+    text = (
+        '# header\n'
+        'tap "a/b"\n'
+        'brew "git"\n'
+        'cask "firefox"\n'
+        'vscode "anthropic.claude-code" # Claude Code\n'
+        '  vscode "aaron-bond.better-comments"\n'
+        'mas "Xcode", id: 497799835\n'
+        'whalebrew "w"\n'
+    )
+    assert brewfile_without_vscode(text) == (
+        '# header\n'
+        'tap "a/b"\n'
+        'brew "git"\n'
+        'cask "firefox"\n'
+        'mas "Xcode", id: 497799835\n'
+        'whalebrew "w"\n'
+    )
+
+
+def test_without_vscode_is_a_no_op_without_extensions() -> None:
+    """A Brewfile with no vscode lines is returned unchanged."""
+    text = 'brew "git"\ncask "firefox"\n'
+    assert brewfile_without_vscode(text) == text

@@ -245,6 +245,50 @@ def test_clear_managed_files_skips_symlinks(
     )
 
 
+def test_clear_managed_files_skips_folded_parent_into_repo(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A managed file reached through a FOLDED parent symlink into the repo is never deleted.
+
+    Regression for issue #153: when a managed dir (~/.config/atuin) is a single folded Stow
+    symlink into the repo, the managed file inside it (config.toml) is not itself a symlink
+    (is_symlink tests only the final component) but resolves to the repo's own tracked file.
+    The old code unlinked it, deleting home/.config/atuin/config.toml from the repo. The guard
+    must skip any target that resolves into the repo, treating the fold like a managed symlink.
+    """
+    dotfiles, home_dir = _setup_repo(tmp_path)
+    rel = ".config/atuin/config.toml"
+
+    repo_src = dotfiles / "home" / rel
+    repo_src.parent.mkdir(parents=True)
+    repo_src.write_bytes(b"[settings]\nfilter_mode = workspace\n")
+
+    # Fold: ~/.config/atuin is a symlink to the repo's home/.config/atuin directory, so
+    # ~/.config/atuin/config.toml IS the repo file (same inode) reached through the fold.
+    (home_dir / ".config").mkdir(parents=True)
+    (home_dir / ".config" / "atuin").symlink_to(repo_src.parent)
+
+    target = home_dir / rel
+    assert target.is_file(), "sanity: the folded target is a real file, not a leaf symlink"
+    assert not target.is_symlink(), "sanity: only the parent dir is the symlink"
+
+    monkeypatch.setattr(stow, "DOTFILES", dotfiles)
+    monkeypatch.setenv("HOME", str(home_dir))
+    ctx, out = _ctx()
+
+    stow._clear_managed_files(ctx)
+
+    assert repo_src.exists(), "the repo's tracked config must NOT be deleted through the fold"
+    assert repo_src.read_bytes() == b"[settings]\nfilter_mode = workspace\n"
+    backup = repo_src.with_name(f"{repo_src.name}.pre-stow.bak")
+    assert not backup.exists(), "the repo file must not be renamed to a backup either"
+    assert ctx.ui.warnings == [], f"no warnings expected for a fold; got: {ctx.ui.warnings!r}"
+    assert "removing" not in out.getvalue(), (
+        f"no active removal message expected for a fold; got: {out.getvalue()!r}"
+    )
+
+
 def test_clear_managed_files_skips_missing_file(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

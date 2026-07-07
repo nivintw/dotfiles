@@ -941,3 +941,54 @@ def test_iter_records_linux_distinguishes_missing_ufw(
     records = list(verify_install.iter_records(repo, core=False))
     assert any(status == "BAD" and "ufw is not installed" in msg for status, msg in records)
     assert not any("sudo ufw enable" in msg for _s, msg in records)
+
+
+# --- Homebrew baseline excludes VS Code extensions (issue #158) -------------------------------
+
+
+def test_baseline_excludes_sync_managed_vscode_extensions(
+    tmp_path: Path,
+    monkeypatch: "pytest.MonkeyPatch",
+) -> None:
+    """The baseline passes when only ``vscode`` extensions are 'missing' (Settings Sync owns them).
+
+    Simulates ``brew bundle check`` failing on any file that still lists a vscode extension; the
+    baseline record must be OK because verify checks the Brewfile with those lines stripped.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    (repo / "Brewfile").write_text('brew "git"\nvscode "ms-python.python"\n', encoding="utf-8")
+    monkeypatch.setattr(commands, "which", _brew_present)
+
+    def fake_check(brewfile: Path) -> bool:
+        # A vscode line still present would (falsely) fail the check; stripped, it passes.
+        return "vscode" not in Path(brewfile).read_text(encoding="utf-8")
+
+    monkeypatch.setattr(verify_install, "_brew_bundle_check", fake_check)
+    _disable_system_probes(monkeypatch)
+    records = list(verify_install.iter_records(repo, core=False))
+    assert ("OK", "Homebrew baseline packages all installed") in records
+
+
+def test_baseline_still_flags_a_genuinely_missing_package(
+    tmp_path: Path,
+    monkeypatch: "pytest.MonkeyPatch",
+) -> None:
+    """A genuinely missing non-vscode Homebrew package is still reported BAD."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    (repo / "Brewfile").write_text('brew "git"\nvscode "ms-python.python"\n', encoding="utf-8")
+    monkeypatch.setattr(commands, "which", _brew_present)
+    # git is genuinely missing → the (vscode-stripped) baseline check still fails.
+    monkeypatch.setattr(verify_install, "_brew_bundle_check", lambda _bf: False)
+    _disable_system_probes(monkeypatch)
+    records = list(verify_install.iter_records(repo, core=False))
+    assert any(
+        status == "BAD" and "Homebrew baseline packages missing" in msg for status, msg in records
+    )

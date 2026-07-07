@@ -71,10 +71,19 @@ def stow_dotfiles(ctx: InstallContext) -> None:
 def _clear_managed_files(ctx: InstallContext) -> None:
     """Remove/back up real files that would block stow (only real files, never symlinks)."""
     home = Path.home()
+    repo_home = (DOTFILES / "home").resolve()
     for rel in MANAGED_FILES:
         target = home / rel
         # Act only on a real file: skip symlinks (already stow-managed) and missing paths.
         if not target.is_file() or target.is_symlink():
+            continue
+        # A folded Stow symlink on a PARENT dir (e.g. ~/.config/atuin -> repo/home/.config/atuin)
+        # makes target a real file reachable *through* the fold — target.is_symlink() is False
+        # (it only tests the final component), yet target.resolve() lands inside the repo, so it
+        # IS the repo's own tracked file. Unlinking/renaming it here would delete the repo copy
+        # (silent data loss). Treat a target that resolves into the repo like an already-managed
+        # symlink and skip it — the fold is stow's own, not a real file to clear. See issue #153.
+        if repo_home in target.resolve().parents or target.resolve() == repo_home:
             continue
         repo_src = DOTFILES / "home" / rel
         if not repo_src.exists():

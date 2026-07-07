@@ -27,6 +27,9 @@ _TAP = re.compile(r'^[ \t]*tap[ \t]+"([^"]+)"')
 # A GUI-bound directive line whose first non-space token is one of these — dropped under --core.
 _GUI_DIRECTIVE = re.compile(r"^[ \t]*(?:cask|vscode|mas|whalebrew)[ \t]")
 
+# A VS Code extension line (`vscode "publisher.name"`). Its first non-space token is `vscode`.
+_VSCODE_DIRECTIVE = re.compile(r"^[ \t]*vscode[ \t]")
+
 
 def brewfile_taps(text: str) -> list[str]:
     """Return the tap names declared in Brewfile ``text``, one per ``tap`` line, in order."""
@@ -41,4 +44,18 @@ def brewfile_core(text: str) -> str:
     """
     return "".join(
         line for line in text.splitlines(keepends=True) if not _GUI_DIRECTIVE.match(line)
+    )
+
+
+def brewfile_without_vscode(text: str) -> str:
+    """Return Brewfile ``text`` with only the ``vscode`` extension lines removed.
+
+    Unlike :func:`brewfile_core`, this drops *just* the VS Code extension directives — casks,
+    Mac App Store apps, and whalebrew images are all kept. VS Code Settings Sync installs those
+    extensions out-of-band, so ``brew bundle check`` reports them "missing" on a correctly
+    set-up machine; verify checks the Homebrew baseline over this filtered text so a
+    Sync-managed extension can't produce a false "baseline missing" (see issue #158).
+    """
+    return "".join(
+        line for line in text.splitlines(keepends=True) if not _VSCODE_DIRECTIVE.match(line)
     )

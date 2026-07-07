@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from dotfiles_install import commands, shell_select
-from dotfiles_install.brewfile import brewfile_core
+from dotfiles_install.brewfile import brewfile_core, brewfile_without_vscode
 from dotfiles_install.bundle_select import parse_bundles
 from dotfiles_install.layout import DOTFILES
 from dotfiles_install.os_detect import OS, current_os
@@ -329,11 +329,19 @@ def _brew_records(dotfiles: Path, *, core: bool) -> Iterator[Record]:
             passed=core_ok,
         )
     else:
+        # Check the baseline over the Brewfile with the `vscode` extension lines stripped: VS
+        # Code Settings Sync installs those out-of-band, so `brew bundle check` reports them
+        # "missing" even on a correctly-set-up machine and would emit a false baseline BAD. All
+        # other directives (casks, mas, whalebrew) are kept, so a genuinely missing Homebrew
+        # package is still caught. See issue #158.
+        baseline_text = brewfile_without_vscode(commands.read_text_or_empty(brewfile))
+        baseline_ok, baseline_bf = _brew_bundle_check_text(baseline_text)
         yield _record(
             "Homebrew baseline packages all installed",
-            f"Homebrew baseline packages missing — run: "
-            f"brew bundle check --verbose --file={brewfile}",
-            passed=_brew_bundle_check(brewfile),
+            f"Homebrew baseline packages missing — re-check: "
+            f"brew bundle check --verbose --file={baseline_bf} (kept for inspection; VS Code "
+            f"extensions excluded — Settings Sync manages those)",
+            passed=baseline_ok,
         )
     yield from _opt_in_bundle_records(dotfiles)
     yield from _brewfile_local_records()

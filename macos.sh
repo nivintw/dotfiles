@@ -107,8 +107,16 @@ dwrite write com.apple.finder FXEnableExtensionChangeWarning -bool false
 # ---------------------------------------------------------------------------
 # Screenshots
 # ---------------------------------------------------------------------------
-mkdir -p "${HOME}/Pictures/Screenshots"
-dwrite write com.apple.screencapture location -string "${HOME}/Pictures/Screenshots"
+# Only repoint the screencapture location if the directory actually exists afterward. On a
+# managed Mac the mkdir can be blocked (the same reason dwrite exists to survive blocked
+# writes) — pointing screencapture at a directory that isn't there would silently break
+# screenshots, so leave the location unchanged when the dir couldn't be created.
+screenshot_dir="${HOME}/Pictures/Screenshots"
+if mkdir -p "$screenshot_dir" 2>/dev/null && [ -d "$screenshot_dir" ]; then
+  dwrite write com.apple.screencapture location -string "$screenshot_dir"
+else
+  log_warn "could not create $screenshot_dir — leaving the screencapture location unchanged"
+fi
 dwrite write com.apple.screencapture type -string "png"
 # Disable the drop shadow on window screenshots.
 dwrite write com.apple.screencapture disable-shadow -bool true
