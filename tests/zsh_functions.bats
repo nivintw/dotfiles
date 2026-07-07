@@ -265,3 +265,99 @@ run_zsh_os() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"Windows host"* ]]
 }
+
+# --- WSL detection additions: $WSL_DISTRO_NAME + /proc/version (issue #160) ----------------
+
+@test "is_wsl detects WSL via \$WSL_DISTRO_NAME even with a clean osrelease" {
+  local osrel="$NONREPO/osrelease-clean"
+  printf '6.8.0-generic\n' > "$osrel"
+  run_zsh_os Linux "WSL_DISTRO_NAME=Ubuntu __dotfiles_osrelease='$osrel' is_wsl"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_wsl detects WSL via /proc/version when osrelease is clean" {
+  local osrel="$NONREPO/osrelease-clean" pv="$NONREPO/procversion-wsl"
+  printf '6.8.0-generic\n' > "$osrel"
+  printf 'Linux version 5.15.0 (Microsoft@Microsoft.com)\n' > "$pv"
+  run_zsh_os Linux "__dotfiles_osrelease='$osrel' __dotfiles_procversion='$pv' is_wsl"
+  [ "$status" -eq 0 ]
+}
+
+# --- __clipboard_copy WSL/Wayland additions (issue #162) ----------------------------------
+
+@test "__clipboard_copy prefers win32yank over clip.exe on WSL" {
+  STUBDIR="$(mktemp -d)"
+  local osrel="$STUBDIR/osrelease"; printf '5.15.0-microsoft-standard-WSL2\n' > "$osrel"
+  printf '#!/bin/sh\ncat > "%s/via-win32yank"\n' "$STUBDIR" > "$STUBDIR/win32yank.exe"
+  printf '#!/bin/sh\ncat > "%s/via-clip"\n' "$STUBDIR" > "$STUBDIR/clip.exe"
+  chmod +x "$STUBDIR/win32yank.exe" "$STUBDIR/clip.exe"
+  run_zsh_os Linux "printf héllo | __dotfiles_osrelease='$osrel' __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/via-win32yank")" = "héllo" ]
+  [ ! -f "$STUBDIR/via-clip" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+@test "__clipboard_copy falls back to clip.exe on WSL without win32yank" {
+  STUBDIR="$(mktemp -d)"
+  local osrel="$STUBDIR/osrelease"; printf '5.15.0-microsoft-standard-WSL2\n' > "$osrel"
+  printf '#!/bin/sh\ncat > "%s/via-clip"\n' "$STUBDIR" > "$STUBDIR/clip.exe"
+  chmod +x "$STUBDIR/clip.exe"
+  run_zsh_os Linux "printf hi | __dotfiles_osrelease='$osrel' __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/via-clip")" = "hi" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+@test "__clipboard_copy uses wl-copy when \$WAYLAND_DISPLAY is set" {
+  STUBDIR="$(mktemp -d)"
+  local osrel="$STUBDIR/osrelease"; printf '6.8.0-generic\n' > "$osrel"
+  printf '#!/bin/sh\ncat > "%s/via-wl"\n' "$STUBDIR" > "$STUBDIR/wl-copy"
+  chmod +x "$STUBDIR/wl-copy"
+  run_zsh_os Linux "printf wl | WAYLAND_DISPLAY=wayland-0 __dotfiles_osrelease='$osrel' __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/via-wl")" = "wl" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+@test "__clipboard_copy skips wl-copy without \$WAYLAND_DISPLAY and uses xclip" {
+  STUBDIR="$(mktemp -d)"
+  local osrel="$STUBDIR/osrelease"; printf '6.8.0-generic\n' > "$osrel"
+  printf '#!/bin/sh\ncat > "%s/via-wl"\n' "$STUBDIR" > "$STUBDIR/wl-copy"
+  printf '#!/bin/sh\ncat > "%s/via-xclip"\n' "$STUBDIR" > "$STUBDIR/xclip"
+  chmod +x "$STUBDIR/wl-copy" "$STUBDIR/xclip"
+  run_zsh_os Linux "printf x | WAYLAND_DISPLAY= __dotfiles_osrelease='$osrel' __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ -f "$STUBDIR/via-xclip" ]
+  [ ! -f "$STUBDIR/via-wl" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+# --- dnsflush systemd-resolve fallback (issue #163) ---------------------------------------
+
+# Run a zsh snippet with a MINIMAL PATH: ONLY the STUBDIR (with zsh symlinked in) and a uname
+# shim. resolvectl ships in /usr/bin on many Linux CI runners; keeping /usr/bin off PATH is the
+# only way to actually exercise the "resolvectl absent" fallback. zsh is symlinked INTO the
+# STUBDIR (not via its bindir, which on CI is /usr/bin and would drag resolvectl back).
+run_zsh_isolated() {
+  local os="$1"; shift
+  local unameshim; unameshim="$(mktemp -d)"
+  printf '#!/bin/sh\necho %s\n' "$os" > "$unameshim/uname"; chmod +x "$unameshim/uname"
+  ln -sf "$(command -v zsh)" "$STUBDIR/zsh"
+  run env PATH="$STUBDIR:$unameshim" zsh -f -c \
+    "fpath=('$FUNCDIR' \$fpath); autoload -Uz '$FUNCDIR'/*(N:t); $*"
+  rm -rf "$unameshim"
+}
+
+@test "dnsflush falls back to systemd-resolve when resolvectl is absent" {
+  STUBDIR="$(mktemp -d)"
+  local osrel="$STUBDIR/osrelease"; printf '6.8.0-generic\n' > "$osrel"   # bare-metal, not WSL
+  printf '#!/bin/sh\nexec "$@"\n' > "$STUBDIR/sudo"
+  printf '#!/bin/sh\necho ran > "%s/ran"\n' "$STUBDIR" > "$STUBDIR/systemd-resolve"
+  chmod +x "$STUBDIR/sudo" "$STUBDIR/systemd-resolve"
+  run_zsh_isolated Linux "__dotfiles_osrelease='$osrel' dnsflush"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"(systemd-resolve)"* ]]
+  [ -f "$STUBDIR/ran" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}

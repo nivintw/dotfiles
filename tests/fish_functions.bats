@@ -487,3 +487,112 @@ run_launchdocs_stubbed() {
   [ ! -f "$STUBDIR/ran" ]   # resolvectl must not have run
   rm -rf "$STUBDIR"; unset STUBDIR
 }
+
+# --- WSL detection additions: $WSL_DISTRO_NAME + /proc/version (issue #160) ----------------
+
+# The env fast-path: WSL always exports $WSL_DISTRO_NAME, so it alone identifies WSL even when
+# osrelease is a clean bare-metal string (catches variants the single-file check misses).
+@test "is_wsl detects WSL via \$WSL_DISTRO_NAME even with a clean osrelease" {
+  osrel="$(mktemp)"; printf '6.8.0-generic\n' > "$osrel"
+  run_fish_os Linux "set -gx __dotfiles_osrelease '$osrel'; set -gx WSL_DISTRO_NAME Ubuntu; is_wsl"
+  [ "$status" -eq 0 ]
+  rm -f "$osrel"
+}
+
+# /proc/version is Microsoft's canonical recommended marker; a match there is WSL even when
+# osrelease is clean. Exercised via the $__dotfiles_procversion seam.
+@test "is_wsl detects WSL via /proc/version when osrelease is clean" {
+  osrel="$(mktemp)"; printf '6.8.0-generic\n' > "$osrel"
+  pv="$(mktemp)"; printf 'Linux version 5.15.0 (Microsoft@Microsoft.com)\n' > "$pv"
+  run_fish_os Linux "set -e WSL_DISTRO_NAME; set -gx __dotfiles_osrelease '$osrel'; set -gx __dotfiles_procversion '$pv'; is_wsl"
+  [ "$status" -eq 0 ]
+  rm -f "$osrel" "$pv"
+}
+
+# --- __clipboard_copy WSL/Wayland additions (issue #162) ----------------------------------
+
+# On WSL, win32yank is preferred over clip.exe: it's codepage-clean (round-trips non-ASCII)
+# and stores stdin verbatim (no trailing CR). Both are present; win32yank must win.
+@test "__clipboard_copy prefers win32yank over clip.exe on WSL" {
+  STUBDIR="$(mktemp -d)"
+  osrel="$STUBDIR/osrelease"; printf '5.15.0-microsoft-standard-WSL2\n' > "$osrel"
+  printf '#!/bin/sh\ncat > "%s/via-win32yank"\n' "$STUBDIR" > "$STUBDIR/win32yank.exe"
+  printf '#!/bin/sh\ncat > "%s/via-clip"\n' "$STUBDIR" > "$STUBDIR/clip.exe"
+  chmod +x "$STUBDIR/win32yank.exe" "$STUBDIR/clip.exe"
+  run_fish_os Linux "set -gx __dotfiles_osrelease '$osrel'; printf 'héllo' | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/via-win32yank")" = "héllo" ]   # non-ASCII round-trips verbatim
+  [ ! -f "$STUBDIR/via-clip" ]                       # clip.exe was NOT used
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+# When win32yank is absent on WSL, it falls back to clip.exe (always present).
+@test "__clipboard_copy falls back to clip.exe on WSL without win32yank" {
+  STUBDIR="$(mktemp -d)"
+  osrel="$STUBDIR/osrelease"; printf '5.15.0-microsoft-standard-WSL2\n' > "$osrel"
+  printf '#!/bin/sh\ncat > "%s/via-clip"\n' "$STUBDIR" > "$STUBDIR/clip.exe"
+  chmod +x "$STUBDIR/clip.exe"
+  run_fish_os Linux "set -gx __dotfiles_osrelease '$osrel'; printf hi | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/via-clip")" = "hi" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+# wl-copy is only attempted under an actual Wayland session ($WAYLAND_DISPLAY set).
+@test "__clipboard_copy uses wl-copy when \$WAYLAND_DISPLAY is set" {
+  STUBDIR="$(mktemp -d)"
+  osrel="$STUBDIR/osrelease"; printf '6.8.0-generic\n' > "$osrel"   # plain Linux, not WSL
+  printf '#!/bin/sh\ncat > "%s/via-wl"\n' "$STUBDIR" > "$STUBDIR/wl-copy"
+  chmod +x "$STUBDIR/wl-copy"
+  run_fish_os Linux "set -gx __dotfiles_osrelease '$osrel'; set -gx WAYLAND_DISPLAY wayland-0; printf wl | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUBDIR/via-wl")" = "wl" ]
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+# On a display-less box ($WAYLAND_DISPLAY unset), wl-copy is skipped and it falls through to
+# xclip/xsel instead of failing on a Wayland connection error.
+@test "__clipboard_copy skips wl-copy without \$WAYLAND_DISPLAY and uses xclip" {
+  STUBDIR="$(mktemp -d)"
+  osrel="$STUBDIR/osrelease"; printf '6.8.0-generic\n' > "$osrel"
+  printf '#!/bin/sh\ncat > "%s/via-wl"\n' "$STUBDIR" > "$STUBDIR/wl-copy"
+  printf '#!/bin/sh\ncat > "%s/via-xclip"\n' "$STUBDIR" > "$STUBDIR/xclip"
+  chmod +x "$STUBDIR/wl-copy" "$STUBDIR/xclip"
+  run_fish_os Linux "set -e WAYLAND_DISPLAY; set -gx __dotfiles_osrelease '$osrel'; printf x | __clipboard_copy"
+  [ "$status" -eq 0 ]
+  [ -f "$STUBDIR/via-xclip" ]     # fell through to xclip
+  [ ! -f "$STUBDIR/via-wl" ]      # wl-copy was NOT attempted
+  rm -rf "$STUBDIR"; unset STUBDIR
+}
+
+# --- dnsflush systemd-resolve fallback (issue #163) ---------------------------------------
+
+# Run a fish snippet with a MINIMAL PATH: ONLY the STUBDIR (with fish + cat symlinked in) and a
+# uname shim. A real system binary — notably resolvectl, which ships in /usr/bin on many Linux
+# CI runners — must stay off PATH so the "resolvectl absent" branch is actually exercised.
+# fish is symlinked INTO the STUBDIR rather than adding its bindir, because on CI that bindir is
+# /usr/bin and would drag resolvectl back onto PATH. STUBDIR must be set by the caller.
+run_fish_isolated() {
+  local os="$1"; shift
+  local unameshim; unameshim="$(mktemp -d)"
+  printf '#!/bin/sh\necho %s\n' "$os" > "$unameshim/uname"; chmod +x "$unameshim/uname"
+  ln -sf "$(command -v cat)" "$STUBDIR/cat"
+  ln -sf "$(command -v fish)" "$STUBDIR/fish"
+  run env PATH="$STUBDIR:$unameshim" fish --no-config -c \
+    "set -p fish_function_path '$FUNCDIR'; $*"
+  rm -rf "$unameshim"
+}
+
+@test "dnsflush falls back to systemd-resolve when resolvectl is absent" {
+  STUBDIR="$(mktemp -d)"
+  osrel="$STUBDIR/osrelease"; printf '6.8.0-generic\n' > "$osrel"   # bare-metal, not WSL
+  printf '#!/bin/sh\nexec "$@"\n' > "$STUBDIR/sudo"                 # run the wrapped command
+  # No resolvectl on the (isolated) PATH; only the legacy systemd-resolve binary.
+  printf '#!/bin/sh\necho ran > "%s/ran"\n' "$STUBDIR" > "$STUBDIR/systemd-resolve"
+  chmod +x "$STUBDIR/sudo" "$STUBDIR/systemd-resolve"
+  run_fish_isolated Linux "set -gx __dotfiles_osrelease '$osrel'; dnsflush"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"(systemd-resolve)"* ]]
+  [ -f "$STUBDIR/ran" ]   # the legacy binary was actually invoked (non-vacuous)
+  rm -rf "$STUBDIR"; unset STUBDIR
+}

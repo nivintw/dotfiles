@@ -31,6 +31,15 @@ dnsflush() {
         fi
         echo "dnsflush: resolvectl flush-caches failed" >&2
         return 1
+    elif command -v systemd-resolve >/dev/null 2>&1; then
+        # Older systemd (pre-resolvectl) ships the legacy `systemd-resolve --flush-caches`
+        # binary instead — same resolver cache, older CLI.
+        if sudo systemd-resolve --flush-caches; then
+            echo "DNS cache flushed (systemd-resolve)."
+            return 0
+        fi
+        echo "dnsflush: systemd-resolve --flush-caches failed" >&2
+        return 1
     else
         # Plain Linux without systemd-resolved.
         echo "dnsflush: no supported DNS cache to flush on this system" >&2

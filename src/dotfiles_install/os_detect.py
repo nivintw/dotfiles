@@ -12,11 +12,13 @@ vocabulary, mirroring the bash installer's ``uname`` / ``is_wsl`` checks.
 
 from __future__ import annotations
 
+import os
 import sys
 from enum import Enum
 from pathlib import Path
 
 _WSL_OSRELEASE = Path("/proc/sys/kernel/osrelease")
+_WSL_PROCVERSION = Path("/proc/version")
 _WSL_MARKERS = ("microsoft", "wsl")
 
 
@@ -29,14 +31,25 @@ class OS(Enum):
 
 
 def is_wsl() -> bool:
-    """Report whether the current Linux kernel is running under WSL."""
+    """Report whether the current Linux kernel is running under WSL.
+
+    Three markers, any one is sufficient (checked cheapest-first): the ``$WSL_DISTRO_NAME``
+    env fast-path WSL always exports, then ``/proc/version`` (Microsoft's canonical
+    recommended marker), then ``/proc/sys/kernel/osrelease`` (the original single-file check).
+    Both proc paths are module-level so tests can repoint them at fixtures.
+    """
     if not sys.platform.startswith("linux"):
         return False
-    try:
-        release = _WSL_OSRELEASE.read_text(encoding="utf-8").lower()
-    except OSError:
-        return False
-    return any(marker in release for marker in _WSL_MARKERS)
+    if os.environ.get("WSL_DISTRO_NAME"):
+        return True
+    for marker_file in (_WSL_PROCVERSION, _WSL_OSRELEASE):
+        try:
+            contents = marker_file.read_text(encoding="utf-8").lower()
+        except OSError:
+            continue
+        if any(marker in contents for marker in _WSL_MARKERS):
+            return True
+    return False
 
 
 def current_os() -> OS:

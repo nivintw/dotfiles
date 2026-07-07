@@ -65,8 +65,12 @@ def test_is_wsl_false_on_bare_metal_linux(
     """``is_wsl`` is False for a stock Linux osrelease."""
     osrelease = tmp_path / "osrelease"
     osrelease.write_text("6.8.0-generic\n")
+    procversion = tmp_path / "version"
+    procversion.write_text("Linux version 6.8.0-generic (buildd@lcy02)\n")
     monkeypatch.setattr(os_detect.sys, "platform", "linux")
     monkeypatch.setattr(os_detect, "_WSL_OSRELEASE", osrelease)
+    monkeypatch.setattr(os_detect, "_WSL_PROCVERSION", procversion)
+    monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
     assert is_wsl() is False
 
 
@@ -77,4 +81,43 @@ def test_is_wsl_false_when_osrelease_absent(
     """A missing osrelease file reads as not-WSL, not an error."""
     monkeypatch.setattr(os_detect.sys, "platform", "linux")
     monkeypatch.setattr(os_detect, "_WSL_OSRELEASE", tmp_path / "missing")
+    monkeypatch.setattr(os_detect, "_WSL_PROCVERSION", tmp_path / "missing2")
+    monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
+    assert is_wsl() is False
+
+
+def test_is_wsl_reads_procversion_marker(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``is_wsl`` is True when only /proc/version names Microsoft (osrelease is clean).
+
+    Covers the WSL variant the single-file osrelease check misses — /proc/version is
+    Microsoft's canonical recommended marker.
+    """
+    procversion = tmp_path / "version"
+    procversion.write_text(
+        "Linux version 5.15.0 (Microsoft@Microsoft.com) #1 SMP\n",
+        encoding="utf-8",
+    )
+    osrelease = tmp_path / "osrelease"
+    osrelease.write_text("5.15.0-generic\n", encoding="utf-8")
+    monkeypatch.setattr(os_detect.sys, "platform", "linux")
+    monkeypatch.setattr(os_detect, "_WSL_PROCVERSION", procversion)
+    monkeypatch.setattr(os_detect, "_WSL_OSRELEASE", osrelease)
+    monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
+    assert is_wsl() is True
+
+
+def test_is_wsl_env_fast_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``$WSL_DISTRO_NAME`` alone identifies WSL, without reading any /proc file."""
+    monkeypatch.setattr(os_detect.sys, "platform", "linux")
+    # Both proc files absent — the env var must be sufficient on its own.
+    monkeypatch.setattr(os_detect, "_WSL_PROCVERSION", tmp_path / "missing")
+    monkeypatch.setattr(os_detect, "_WSL_OSRELEASE", tmp_path / "missing2")
+    monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
+    assert is_wsl() is True
+
+
+def test_is_wsl_env_fast_path_ignored_off_linux(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The env fast-path never fires off Linux (a stray var on macOS must not read as WSL)."""
+    monkeypatch.setattr(os_detect.sys, "platform", "darwin")
+    monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
     assert is_wsl() is False

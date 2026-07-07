@@ -2,14 +2,25 @@
 # SPDX-License-Identifier: MIT
 
 # Copy stdin to the system clipboard (macOS/Linux/WSL). Cross-platform replacement for a
-# bare `pbcopy`. macOS has pbcopy; WSL reaches the Windows clipboard via clip.exe; Linux
-# uses the Wayland (wl-copy) or X11 (xclip/xsel) tool that's installed.
+# bare `pbcopy`. macOS has pbcopy; WSL reaches the Windows clipboard (win32yank preferred,
+# else clip.exe); Linux uses the Wayland (wl-copy) or X11 (xclip/xsel) tool that's installed.
 __clipboard_copy() {
     if is_macos; then
         pbcopy
+    elif is_wsl && command -v win32yank.exe >/dev/null 2>&1; then
+        # Prefer win32yank on WSL: it writes the clipboard via the Unicode API (codepage-clean,
+        # so non-ASCII round-trips) and stores stdin verbatim — no --crlf, so it can't append
+        # the trailing CR that clip.exe does.
+        win32yank.exe -i
+    elif is_wsl && command -v win32yank >/dev/null 2>&1; then
+        win32yank -i
     elif is_wsl && command -v clip.exe >/dev/null 2>&1; then
+        # Fallback: clip.exe mangles non-ASCII (codepage) and appends a CR, but it's always
+        # present on WSL when win32yank isn't installed.
         clip.exe
-    elif command -v wl-copy >/dev/null 2>&1; then
+    elif command -v wl-copy >/dev/null 2>&1 && [[ -n "$WAYLAND_DISPLAY" ]]; then
+        # Only attempt wl-copy under an actual Wayland session; on a display-less box it
+        # would fail, so fall through to xsel/xclip below.
         wl-copy
     elif command -v xclip >/dev/null 2>&1; then
         xclip -selection clipboard

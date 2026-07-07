@@ -29,6 +29,15 @@ function dnsflush --description "Flush the DNS resolver cache (macOS / systemd-r
         end
         echo "dnsflush: resolvectl flush-caches failed" >&2
         return 1
+    else if command -q systemd-resolve
+        # Older systemd (pre-resolvectl) ships the legacy `systemd-resolve --flush-caches`
+        # binary instead — same resolver cache, older CLI.
+        if sudo systemd-resolve --flush-caches
+            echo "DNS cache flushed (systemd-resolve)."
+            return 0
+        end
+        echo "dnsflush: systemd-resolve --flush-caches failed" >&2
+        return 1
     else
         # Plain Linux without systemd-resolved.
         echo "dnsflush: no supported DNS cache to flush on this system" >&2
