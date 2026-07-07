@@ -6,28 +6,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-managed-files.sh"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_version_bumps.py\""
+          },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/lint-edited-file.sh"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_managed_files.py\""
+          },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/typecheck-touched.sh"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_config_drift.py\""
           }
         ]
       }

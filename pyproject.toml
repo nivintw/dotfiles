@@ -84,6 +84,10 @@ line-length = 100
 # PEP-723 `uv run --script` CLI is otherwise invisible to `ruff check .` — the exact
 # command the ruff-check prek hook runs — despite carrying real Python to lint.
 extend-include = ["home/.local/bin/ollm-tools-loop"]
+# The Claude Code guard hooks ship from the template as-is, so they aren't this project's own
+# code to lint (a future ruff rule shouldn't redden your CI over them). The `**/.claude/hooks`
+# glob matches them at any depth.
+extend-exclude = ["**/.claude/hooks"]
 
 [tool.ruff.format]
 docstring-code-format = true # format code in docstrings
@@ -99,6 +103,9 @@ ignore = ["D203", "D212", "D401", "COM812", "ISC001"]
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
+# CLI/maintenance scripts print to the user (T201) and aren't an importable package (INP001).
+# Covers the template's own scripts/check_copier_src_path.py alongside this repo's helpers.
+"scripts/**" = ["T201", "INP001"]
 # Tests legitimately use `assert` (S101) and shell out to git/fish via subprocess
 # (S603/S607) with controlled, non-user input.
 "tests/**" = [

@@ -70,18 +70,15 @@ theme:
 # long identifiers (e.g. `project_name`) mid-word inside narrow table columns — see
 # stylesheets/extra.css (scaffolded alongside this file) for the fix itself.
 #
-# Wired for the vendored asciinema-player assets (see castify's embedding.md reference doc)
-# so a repo only needs to drop the vendored files at these conventional paths under
-# docs/assets/ to embed a `<figure class="cast">` terminal recording. Harmless to wire
-# unconditionally for a repo with no casts yet — mkdocs doesn't fail to build over a missing
-# extra_css/extra_javascript path — though a browser visiting the live site will 404 the two
-# asset requests until a repo actually adds the files.
+# The asciinema-player assets are deliberately NOT wired here. extra_css/extra_javascript load
+# site-wide on EVERY page, and no template task vendors docs/assets/asciinema-player.{css,min.js},
+# so wiring them unconditionally 404s both requests on every page of any docs site that hasn't
+# embedded a cast yet (nivintw/copier-everything#172). Embedding a cast is an opt-in step that
+# adds the two vendored asset files AND their extra_css/extra_javascript lines together (see
+# castify's embedding.md reference doc) — never one without the other. tests/test_docs_site.py
+# guards against a #196-style "restore the missing wiring" change reintroducing the 404.
 extra_css:
   - stylesheets/extra.css
-  - assets/asciinema-player.css
-
-extra_javascript:
-  - assets/asciinema-player.min.js
 
 # Adding this key at all switches MkDocs off its implicit default plugin set (just
 # `search`), so `search` is listed explicitly below or built-in search silently
@@ -107,6 +104,12 @@ plugins:
       sections:
         Documentation:
           - index.md
+          - getting-started.md
+          - architecture.md
+          - stack.md
+          - commands.md
+          - quality.md
+          - security.md
 
 # Fleet-general baseline only — each entry earns its place with real content it enables,
 # not just because Material supports it (no mermaid custom_fences here; pymdownx.emoji is
@@ -167,6 +170,19 @@ markdown_extensions:
 exclude_docs: |
   superpowers/
   includes/
+  # Legacy hand-authored static site. It is still served by the current Pages config until the
+  # batched Pages-source flip (#138's deferred follow-up, which must land with two sibling
+  # repos), so it stays in the repo for now — but it must NOT enter the MkDocs build: index.html
+  # collides with the new index.md, and the rest would ship as stale pages/assets in the
+  # generated site. Deleted, and these excludes removed, when the Pages source flips.
+  *.html
+  assets/main.js
+  assets/style.css
+  assets/asciinema-player.*
+  casts/
+  llms.txt
+  llms-full.txt
+  .nojekyll
 
 # MkDocs 1.5+'s own validation checks, made explicit rather than left to its undocumented
 # defaults — `warn` is what `--strict` (this fleet's `generate-docs` Stage 4 always builds
@@ -184,3 +200,9 @@ validation:
 
 nav:
   - Home: index.md
+  - Getting Started: getting-started.md
+  - Architecture: architecture.md
+  - The Stack: stack.md
+  - Commands: commands.md
+  - Quality: quality.md
+  - Security: security.md

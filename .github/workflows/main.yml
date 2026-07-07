@@ -4,7 +4,9 @@
 # Main pipeline: on every push to main, run the SAME quality gate as PRs, then — only
 # here — release-please (gated by `needs: ci`).
 #
-# RELEASE FLOW (release-please, manifest mode — single package):
+# RELEASE FLOW (release-please, manifest mode, separate-pull-requests: true — N-package
+# generic; this template scaffolds a single package "." by default, the N=1 case of the
+# same mechanism):
 #   1. On push to main, release-please scans Conventional Commits since the last release
 #      and maintains a "Release PR" that bumps the version in .config/.release-please-manifest.json
 #      + CHANGELOG.md. The version-of-record is the manifest + the vX.Y.Z git tags; it is also
@@ -99,7 +101,7 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Run release-please (Release PR, tag, release)
+      - name: Run release-please (Release PRs, tags, releases)
         id: release
         uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         with:
@@ -107,40 +109,60 @@ jobs:
           config-file: .config/release-please-config.json
           manifest-file: .config/.release-please-manifest.json
 
-      # Continuous release: enable auto-merge on the Release PR so it lands (rebase) once
-      # required checks pass. On the next run (release cut, no PR) `pr` is empty and this
-      # skips. PR JSON travels via env, never inline `${{ }}`, to dodge script injection.
-      # GH_REPO tells gh which repo to act on: this job has no checkout, so without it
-      # `gh pr merge` probes the working dir for a git remote and dies ("not a git
-      # repository"). gh reads GH_REPO natively, so no `actions/checkout` is needed.
+      # Continuous release: enable auto-merge on EVERY open Release PR, so each lands
+      # (rebase) once required checks pass. Because separate-pull-requests is on,
+      # release-please emits `prs` (a JSON array of every Release PR touched this run) —
+      # iterating it is what makes this generic across however many packages the config
+      # declares, from this template's default of one up to however many a consumer adds
+      # by hand. On the next run (a release was cut, no PR) `prs` is unset and this skips.
+      # PR JSON travels via env, never inline `${{ }}`, to dodge script injection. GH_REPO
+      # tells gh which repo to act on: this job has no checkout, so without it `gh pr merge`
+      # probes the working dir for a git remote and dies ("not a git repository"). gh reads
+      # GH_REPO natively, so no `actions/checkout` is needed.
       # Tolerate ONLY the documented setup gap — a repo that hasn't turned on "Allow
       # auto-merge" — by detecting it up front (the repo's allow_auto_merge flag) and warning
       # cleanly. Every OTHER failure (gh API 5xx, auth, a missing required check on main)
       # then reddens the job under `set -euo pipefail`, so a stalled release is loud instead
       # of hiding as a ::warning:: on an otherwise-green run.
-      - name: Auto-merge the Release PR
-        if: ${{ steps.release.outputs.pr }}
+      # `!= '[]'` is defensive belt-and-suspenders, not load-bearing today: verified against
+      # release-please-action v4.4.1's source that `prs` is only ever set (never to `"[]"`)
+      # when at least one PR exists — but the action isn't pinned by version, just by commit
+      # SHA that Renovate bumps, so this guards against a future release changing that.
+      - name: Auto-merge the Release PRs
+        if: ${{ steps.release.outputs.prs && steps.release.outputs.prs != '[]' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_PR: ${{ steps.release.outputs.pr }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
         run: |
           set -euo pipefail
-          num="$(printf '%s' "$RELEASE_PR" | jq -r '.number')"
+          # Capture jq's output first (not `jq | while`): under `set -e` a jq failure (null /
+          # non-array `prs`) aborts the step loudly instead of being swallowed by the pipe and
+          # silently enabling auto-merge on nothing. Computed before the auto_merge_allowed
+          # check too, so a disabled-auto-merge warning can name the exact PR(s) to merge
+          # manually instead of pointing at a discovery step.
+          numbers="$(printf '%s' "$RELEASE_PRS" | jq -r '.[].number')"
           # Read the setting in its own statement so a gh API failure here (5xx/auth) trips
           # set -e and reddens the job, rather than the empty result masquerading as "off".
           auto_merge_allowed="$(gh api "repos/${GH_REPO}" --jq '.allow_auto_merge')"
           if [ "$auto_merge_allowed" != "true" ]; then
-            echo "::warning::Auto-merge is off for ${GH_REPO}, so Release PR #${num} was left open. Enable 'Allow auto-merge' + 'Allow rebase merging' and require a status check on main, then merge it (manually for now)."
+            # `paste -d` treats a multi-char delimiter as a cycling set of characters, not a
+            # literal string, so it'd alternate ',' and ' ' across 3+ items — join on a single
+            # char first, then widen it to ", ".
+            pr_list="$(echo "$numbers" | sed 's/^/#/' | paste -sd, - | sed 's/,/, /g')"
+            echo "::warning::Auto-merge is off for ${GH_REPO}, so Release PR(s) ${pr_list} were left open (merge manually once ready). Enable 'Allow auto-merge' + 'Allow rebase merging' and require a status check on main to automate this."
             exit 0
           fi
-          gh pr merge "$num" --auto --rebase
+          for num in $numbers; do
+            gh pr merge "$num" --auto --rebase
+          done
 
       # This template's own release-please-config.json.jinja always scaffolds a single
-      # package, so this never fires against a freshly-generated repo as-is — it guards the
-      # moment a consumer extends that config to 2+ packages by hand (release-please
-      # supports it; the config is a plain file a consumer can and does edit), which is
-      # exactly the real-world incident that motivated this fix. Once that happens: each
+      # package by default, so this never fires against a freshly-generated repo as-is —
+      # it guards the moment a consumer extends that config to 2+ packages by hand
+      # (release-please supports it, separate-pull-requests is already on above, and the
+      # config is a plain file a consumer can and does edit), which is exactly the
+      # real-world incident that motivated this fix. Once that happens: each
       # package's Release PR bumps its own line in the SHARED manifest, so the first to
       # auto-merge above changes main and every other Release PR's branch now textually
       # conflicts with main on that shared file (mergeStateStatus DIRTY) and can never
@@ -167,53 +189,65 @@ jobs:
           CI_APP_SLUG: ${{ vars.CI_APP_SLUG }}
         run: |
           set -euo pipefail
-          # `gh pr list --jq` only accepts a single filter expression (no `--arg` passthrough,
-          # unlike standalone jq) — piping through jq directly instead. Assigning the listing
-          # to a variable (rather than `mapfile < <(...)`, which runs the producer in a process
-          # substitution whose exit status `set -e` can't see) makes a `gh pr list` failure
-          # (auth, API 5xx) abort the step loudly instead of silently reading as "none found".
-          # --limit raised well past gh's 30-item default so a busier repo's stranded PR can't
-          # fall off the first page.
-          # commits is fetched here (not a separate gh pr view per candidate below) so the
-          # non-bot-commit check has no extra API round trip per stranded PR. gh caps this
-          # at the first 100 commits per PR — irrelevant in practice, since a release-please
-          # Release PR carries one generated bump commit (plus, rarely, a handful of manual
-          # fixups), nowhere near that limit.
+          # Two-phase on purpose. Phase 1 lists open PRs on CHEAP fields only and must NOT
+          # request `commits`: `gh pr list --json ...,commits` makes GitHub's GraphQL cost
+          # estimator score the nested commits→authors connection across the whole requested
+          # page (roughly limit × 100 commits × authors) and REJECT the query before it runs
+          # once the page size passes ~50 ("requesting up to N possible nodes ... exceeds the
+          # maximum limit of 500,000"). It fails on the query SHAPE, independent of how many PRs
+          # or commits actually exist — so requesting commits here reddened this step on
+          # essentially every run once CI_APP_SLUG was set. `commits` is fetched per stranded
+          # candidate in phase 2 instead (a repo normally has 0-1 stranded Release PRs open at
+          # once, so that's a couple of extra calls, not one per open PR).
+          # Plain assignment (not `mapfile < <(...)`, a process substitution whose exit status
+          # `set -e` can't see) so a `gh pr list` failure (auth, API 5xx) aborts the step loudly
+          # instead of silently reading as "none found". --limit raised well past gh's 30-item
+          # default so a busier repo's stranded PR can't fall off the first page.
           prs_json="$(gh pr list --state open --limit 100 \
-            --json number,author,labels,mergeStateStatus,commits)"
-          # Same reasoning as above: a plain assignment (not `mapfile < <(...)`) so a jq
-          # failure trips `set -e` too, instead of silently reading as "none found". An empty
-          # filter result is a legitimate zero-matches outcome, not a failure — `mapfile` from
-          # an empty string yields a one-element array holding "", so that case is normalized
-          # back to a true zero-length array below. Each stranded candidate's non-bot commit
-          # logins (if any) are computed here too and carried alongside the number as a TSV
-          # pair, rather than re-fetched per PR in the loop below.
-          # A commit author with no linked GitHub account (an unlinked git email) comes
-          # back with a null OR empty-string `.login` — falling straight to `.login` and
-          # joining would silently collapse a real human commit to an empty string (jq's
-          # `//` treats "" as truthy, so a bare `.login // .email` wouldn't fall through
-          # for that case either), defeating this whole check. Explicitly treat both null
-          # and "" as "no login" before falling back to `.email`/`.name`.
-          stranded_str="$(printf '%s' "$prs_json" | jq -r --arg app "${CI_APP_SLUG}[bot]" \
-            '.[] | select(.author.login == $app and (.labels[]?.name == "autorelease: pending") and .mergeStateStatus == "DIRTY") | [.number, ([.commits[].authors[]? | select(.login != $app) | ((.login | select(. != null and . != "")) // .email // .name // "unknown-author")] | unique | join(", "))] | @tsv')"
-          stranded=()
-          if [ -n "$stranded_str" ]; then
-            mapfile -t stranded <<<"$stranded_str"
-          fi
-          if [ "${#stranded[@]}" -eq 0 ]; then
+            --json number,author,labels,mergeStateStatus)"
+          # Narrow to the stranded candidates on those cheap fields: authored by the release
+          # bot, labeled `autorelease: pending`, and DIRTY. Literal equality against DIRTY (not
+          # "!= CLEAN"): mergeStateStatus is transiently UNKNOWN right after a push, so a
+          # just-orphaned PR simply isn't caught this run and converges on a later one rather
+          # than being misclassified. Plain assignment again so a jq failure trips `set -e`.
+          candidates="$(printf '%s' "$prs_json" | jq -r --arg app "${CI_APP_SLUG}[bot]" \
+            '.[] | select(.author.login == $app and (.labels[]?.name == "autorelease: pending") and .mergeStateStatus == "DIRTY") | .number')"
+          if [ -z "$candidates" ]; then
             echo "No stranded Release PRs found."
             exit 0
           fi
-          for entry in "${stranded[@]}"; do
-            # Never auto-close a stranded PR carrying a human's manual commit: the PR's
-            # author field is immutable (release-please's bot login), so a maintainer's
-            # fixup pushed directly onto the bot's branch still matches the filter above —
-            # closing it under the "release-please will regenerate this PR" message would
-            # silently discard those commits, not just an auto-generated bump. Checked above
-            # from the branch's actual commits (a persistent record, unlike the mutable
-            # `author` field) rather than trusting the PR-level author.
-            IFS=$'\t' read -r num non_bot_logins <<<"$entry"
+          mapfile -t nums <<<"$candidates"
+          for num in "${nums[@]}"; do
+            [ -n "$num" ] || continue
+            # Phase 2: fetch THIS candidate's commits (the split's cost, bought back cheaply).
+            # Its own statement so a `gh pr view` failure trips `set -e` instead of reading as
+            # "no commits".
+            commits_json="$(gh pr view "$num" --json commits)"
+            # Never auto-close a stranded PR carrying a human's manual commit: closing it under
+            # the "release-please will regenerate this PR" message would silently discard those
+            # commits, not just an auto-generated bump. Checked from the branch's actual commits
+            # (which can gain new commits over time) rather than trusting the PR-level `author`
+            # field (fixed once the PR opens, so it can't reflect who pushed a later fixup
+            # commit — it stays the release bot's login either way).
+            # Fail SAFE (leave open) on any degraded shape this check can't verify, resolving it
+            # to a non-empty "unknown-authors" marker rather than an empty string:
+            #   - a null/absent `.commits` (whole response degraded), and
+            #   - a commit whose `.authors` is empty/null/absent (per-commit degraded) — without
+            #     this, that commit's authors iterate to nothing, the list collapses to "", and
+            #     the [ -n ] check below reads "" as "verified bot-only" and auto-closes the PR,
+            #     discarding a human's commit (the opposite of this guard's fail-safe direction).
+            # A naive `.commits[]?`/`.authors[]?` would silently swallow both into "verified
+            # bot-only" instead. A commit author with no linked GitHub account comes back with a
+            # null OR empty-string `.login` AND/OR `.email`; jq's `//` treats "" as truthy, so
+            # guard both null and "" on EACH field before falling through, or a `login: null,
+            # email: ""` human commit would collapse to "" and be misread as bot-only.
+            non_bot_logins="$(printf '%s' "$commits_json" | jq -r --arg app "${CI_APP_SLUG}[bot]" \
+              'if .commits == null then "unknown-authors (commits field missing from API response)" elif any(.commits[]; (.authors // []) | length == 0) then "unknown-authors (a commit is missing author data)" else ([.commits[].authors[]? | select(.login != $app) | ((.login | select(. != null and . != "")) // (.email | select(. != null and . != "")) // .name // "unknown-author")] | unique | join(", ")) end')"
             if [ -n "$non_bot_logins" ]; then
+              # Strip CR/LF from the (attacker-influenceable) author string before echoing it
+              # into a ::warning:: — a forged commit author name containing a newline could
+              # otherwise inject spurious GitHub Actions workflow-command annotations (log spoof).
+              non_bot_logins="${non_bot_logins//[$'\r\n']/ }"
               echo "::warning::Release PR #${num} is DIRTY but carries a commit from ${non_bot_logins} (not just ${CI_APP_SLUG}[bot]) — leaving it open rather than auto-closing, since that would discard those commits. Resolve the conflict manually."
               continue
             fi

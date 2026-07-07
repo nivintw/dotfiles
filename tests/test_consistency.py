@@ -55,24 +55,38 @@ def test_required_tools_are_in_brewfile() -> None:
     assert not missing, f"tools used by scripts/hooks but not in Brewfile: {missing}"
 
 
+# Commands that run the next token as a script through an interpreter — so that script needs
+# no executable bit of its own (`python3 scripts/foo.py`), unlike one invoked directly.
+_HOOK_INTERPRETERS = frozenset({"python3", "python", "bash", "sh", "uv", "uvx"})
+
+
 def test_local_hook_scripts_exist_and_are_executable() -> None:
-    """Local hooks that shell out to scripts/ point at real, executable files."""
+    """Local hooks that shell out to scripts/ point at real files (executable when run directly).
+
+    A script invoked through an interpreter (``python3 scripts/foo.py``) doesn't need its own
+    executable bit; one invoked directly (``exec scripts/foo.sh``) does.
+    """
     cfg = yaml.safe_load((REPO / ".pre-commit-config.yaml").read_text())
-    referenced = [
-        # Strip shell punctuation: an entry like `bash -c '... exec scripts/vm-smoke.sh; ...'`
-        # tokenizes the path as `scripts/vm-smoke.sh;` — the trailing `;` isn't part of the path.
-        tok.strip("'\";")
-        for repo in cfg.get("repos", [])
-        if repo.get("repo") == "local"
-        for hook in repo.get("hooks", [])
-        for tok in hook.get("entry", "").split()
-        if tok.strip("'\";").startswith("scripts/")
-    ]
+    # (path, invoked_directly) per scripts/ reference. Strip shell punctuation: an entry like
+    # `bash -c '... exec scripts/vm-smoke.sh; ...'` tokenizes the path as `scripts/vm-smoke.sh;`
+    # — the trailing `;` isn't part of the path.
+    referenced: list[tuple[str, bool]] = []
+    for repo in cfg.get("repos", []):
+        if repo.get("repo") != "local":
+            continue
+        for hook in repo.get("hooks", []):
+            toks = [tok.strip("'\";") for tok in hook.get("entry", "").split()]
+            for i, tok in enumerate(toks):
+                if not tok.startswith("scripts/"):
+                    continue
+                direct = i == 0 or toks[i - 1] not in _HOOK_INTERPRETERS
+                referenced.append((tok, direct))
     assert referenced, "expected at least one local hook to reference scripts/"
-    for rel in referenced:
+    for rel, direct in referenced:
         path = REPO / rel
         assert path.is_file(), f"hook references missing script: {rel}"
-        assert os.access(path, os.X_OK), f"hook script not executable: {rel}"
+        if direct:
+            assert os.access(path, os.X_OK), f"hook script not executable: {rel}"
 
 
 # An <a>/<\a> open or close tag. Literal `<a` shown in prose is HTML-escaped
@@ -191,11 +205,14 @@ def test_claude_settings_hooks_point_at_executable_scripts() -> None:
     ]
     assert commands, "expected hook commands wired in .claude/settings.json"
     for cmd in commands:
-        match = re.search(r"\.claude/hooks/[\w.+-]+\.sh", cmd)
+        match = re.search(r"\.claude/hooks/[\w.+-]+\.(?:sh|py)", cmd)
         assert match, f"hook command doesn't reference a .claude/hooks script: {cmd}"
         path = REPO / match.group(0)
         assert path.is_file(), f"settings.json hook references missing script: {match.group(0)}"
-        assert os.access(path, os.X_OK), f"hook script not executable: {match.group(0)}"
+        # A `.py` hook runs via `python3 <path>`, so it needn't carry the executable bit; a
+        # directly-invoked `.sh` hook must.
+        if match.group(0).endswith(".sh"):
+            assert os.access(path, os.X_OK), f"hook script not executable: {match.group(0)}"
 
 
 def test_claude_baseline_settings_hooks_point_at_executable_scripts() -> None:
