@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY.
-_commit: v1.11.1
+_commit: v1.12.0
 _src_path: gh:nivintw/copier-everything
 author_email: tyler@nivin.tech
 author_name: Tyler Nivin
@@ -22,6 +22,7 @@ project_name: dotfiles
 project_slug: dotfiles
 python_source: false
 python_version: '3.14'
+release_model: single
 repo_name: dotfiles
 repo_owner: nivintw
 test_frameworks:
