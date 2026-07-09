@@ -8,7 +8,12 @@
 # MD033 (no inline HTML) is off too: the MkDocs docs-site design deliberately relies on raw
 # HTML passing through Markdown unmodified — castify's <figure class="cast"> embeds and a
 # per-plugin <span data-version="..."> version-badge convention both need it.
-disable = ["MD013", "MD033"]
+# MD046 (fenced-over-indented code blocks) is off GLOBALLY: its --fix rewrites the 4-space
+# indented continuation lines of admonitions (`!!! tip`) and pymdownx tabs into stray ```text
+# fences, corrupting them (nivintw/copier-everything#178). The narrower [per-file-ignores]
+# scope for docs/**/*.md below did NOT reliably suppress this when rumdl runs via the
+# pre-commit hook on a file that also carries raw-HTML <figure> embeds, so it's off repo-wide.
+disable = ["MD013", "MD033", "MD046"]
 # Skip the .claude tree (those .md carry Claude Code frontmatter we don't want rumdl
 # reformatting) and the generated changelog: release-please owns CHANGELOG.md and
 # regenerates it with multiple consecutive blank lines (MD012) on every release PR.

@@ -6,6 +6,14 @@ The one repo cloned onto every machine — Mac, Linux, or WSL2 — and built to 
 Stow symlink farm with a single source of truth, driven by an idempotent Python installer that
 is careful never to fight the machine it is setting up.
 
+<figure class="cast" markdown="1">
+  <div class="cast__player"
+       data-cast="casts/install.cast" data-cols="98" data-rows="30"
+       aria-label="Recorded terminal demo: running install.sh to converge a Mac"></div>
+
+  <figcaption markdown="span">`install.sh` converging a fresh Mac — Homebrew, the Stow symlink farm, macOS defaults, and the privileged setup, run idempotently.</figcaption>
+</figure>
+
 ## Quick start
 
 --8<-- "install.md"

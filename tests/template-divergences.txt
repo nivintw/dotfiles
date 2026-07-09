@@ -4,7 +4,7 @@
 .config/.release-please-manifest.json  # release-please-owned version-of-record; changes every release
 .config/licenserc.toml                 # repo-specific hawkeye excludes (.claude frontmatter, binary iterm2 plist, vendored asciinema player)
 .config/lychee.toml                    # local additions: gnu.org + readthedocs.io excludes (both rate-limit/blackhole GitHub runner IPs) alongside the doc-universal excludes ported upstream
-.config/rumdl.toml                     # excludes .claude frontmatter markdown + the release-please-generated CHANGELOG
+.config/rumdl.toml                     # excludes .claude frontmatter markdown + the release-please-generated CHANGELOG; MD046 disabled globally (stopgap for nivintw/copier-everything#254 — its --fix corrupts admonitions)
 .config/typos.toml                     # excludes vendored asciinema player, recorded .cast files, and the generated CHANGELOG (hash-fragment false positives)
 .editorconfig                          # adds fish alongside python in the 4-space-indent rule
 .github/workflows/ci.yml               # adds the installer jobs (installer-smoke-macos) + system-tool bootstrap (fish, bats, ripgrep)
