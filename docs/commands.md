@@ -56,6 +56,14 @@ fco
 # type to filter the branch list; Enter checks the pick out
 ```
 
+<figure class="cast" markdown="1">
+  <div class="cast__player"
+       data-cast="../casts/fco.cast" data-cols="92" data-rows="22"
+       aria-label="Recorded terminal demo of the fco command"></div>
+
+  <figcaption markdown="span">`fco` — fuzzy-checkout any branch, local or remote (remotes get a tracking branch automatically).</figcaption>
+</figure>
+
 ### `fcor` · `gcor`
 
 Two recency-oriented siblings of `fco`:
@@ -92,6 +100,14 @@ initial pattern can seed the search, or start empty and type.
 fif                 # start empty, search live
 fif TODO            # seed the search with a pattern
 ```
+
+<figure class="cast" markdown="1">
+  <div class="cast__player"
+       data-cast="../casts/fif.cast" data-cols="92" data-rows="22"
+       aria-label="Recorded terminal demo of the fif command"></div>
+
+  <figcaption markdown="span">`fif` — “find in files”: ripgrep re-runs on every keystroke with a `bat` preview; ++enter++ opens the hit in your editor.</figcaption>
+</figure>
 
 ### `fsearch`
 
@@ -131,6 +147,14 @@ wtfis ls
 # ── ls ──
 # ls is an alias for eza --group-directories-first
 ```
+
+<figure class="cast" markdown="1">
+  <div class="cast__player"
+       data-cast="../casts/wtfis.cast" data-cols="92" data-rows="16"
+       aria-label="Recorded terminal demo of the wtfis command"></div>
+
+  <figcaption markdown="span">`wtfis` — “what is this?”: resolves a name to alias / function / builtin / binary, following symlinks.</figcaption>
+</figure>
 
 ### `pset`
 
@@ -201,6 +225,14 @@ gs-all                       # status of every repo below here
 forrepos git fetch --all     # arbitrary command, fanned out
 ```
 
+<figure class="cast" markdown="1">
+  <div class="cast__player"
+       data-cast="../casts/gs-all.cast" data-cols="92" data-rows="20"
+       aria-label="Recorded terminal demo of the gs-all command"></div>
+
+  <figcaption markdown="span">`gs-all` — `git status` across every repo under `$PWD` at once. `gp-all` is the `git pull --ff-only` sibling.</figcaption>
+</figure>
+
 !!! warning "No dry-run, no confirmation — and a `$HOME`/root guard"
     `forrepos` (and the `*-all` helpers) run your command in **every** repo they find,
     with no preview. Great for `git status`; think twice before
@@ -224,6 +256,14 @@ it fail rather than fall through to the destructive path.
 pyclean --dry-run   # preview
 pyclean             # delete
 ```
+
+<figure class="cast" markdown="1">
+  <div class="cast__player"
+       data-cast="../casts/pyclean.cast" data-cols="92" data-rows="18"
+       aria-label="Recorded terminal demo of the pyclean command"></div>
+
+  <figcaption markdown="span">`pyclean --dry-run` — preview the Python caches (`__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `*.pyc`) it would delete; drop `--dry-run` to remove them.</figcaption>
+</figure>
 
 ### `git_prune_local`
 
