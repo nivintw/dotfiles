@@ -7,6 +7,13 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.25.0](https://github.com/nivintw/dotfiles/compare/v1.24.0...v1.25.0) (2026-07-10)
+
+
+### Features
+
+* **docs:** re-embed the terminal casts, delete the dead bespoke site ([86501ed](https://github.com/nivintw/dotfiles/commit/86501ed4b06f68544c5107da309c77b8f39c8912))
+
 ## [1.24.0](https://github.com/nivintw/dotfiles/compare/v1.23.2...v1.24.0) (2026-07-07)
 
 
