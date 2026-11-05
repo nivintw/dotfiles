@@ -111,7 +111,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up uv (+ managed Python)
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
 
@@ -389,7 +389,7 @@ jobs:
 
       - name: Set up uv (+ managed Python)
         if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-macos == 'true'
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
 
@@ -442,7 +442,7 @@ jobs:
 
       - name: Set up uv (+ managed Python)
         if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-linux == 'true'
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
 
