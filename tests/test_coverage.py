@@ -54,9 +54,14 @@ UNTESTED_SCRIPTS = {
     "refresh-binary-checksums.sh": "template-authored (copier-everything); recomputes the CI"
     " binary SHA256 pins by downloading upstream release assets, so its real behavior is"
     " network-dependent and a poor fit for the offline bats suite. Coverage is integration-level"
-    " instead: Renovate runs it as a postUpgradeTask (.github/renovate.json) on any PR bumping"
-    " one of the 5 pinned tools (failing loud), and the pins it maintains are independently"
-    " re-verified by ci.yml's `sha256sum -c`; guarded by shellcheck",
+    " instead: Renovate runs it as a postUpgradeTask (the shared nivintw/repo-management preset"
+    " .github/renovate.json5 extends) on any PR bumping one of the pinned tools (failing loud),"
+    " and the pins it maintains are independently re-verified by ci.yml's `sha256sum -c`;"
+    " guarded by shellcheck",
+    "check-binary-pins.sh": "template-authored (copier-everything, which unit-tests it in its own"
+    " tests/test_check_binary_pins.py); compares workflow pins against a PR's base commit, so it"
+    " needs real git history rather than the offline bats fixtures. Exercised on every PR by"
+    " ci.yml's `Binary pins only move with their version` step; guarded by shellcheck",
 }
 
 

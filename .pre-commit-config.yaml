@@ -6,8 +6,8 @@
 # `language: system` hooks (fish, ty, taplo, the local scripts) need their tool
 # present: CI installs fish (Brewfile/apt) and taplo, and runs ty via `uv run`.
 #
-#   Run on demand:  uvx prek@0.4.8 run --all-files
-#   Install hooks:  uvx prek@0.4.8 install   (also auto-installed via the git template dir)
+#   Run on demand:  uvx prek@0.5.10 run --all-files
+#   Install hooks:  uvx prek@0.5.10 install   (also auto-installed via the git template dir)
 #   Bump pins:      prek autoupdate   (keep `typos` pinned to the local typos-cli
 #                   version so local and CI flag identically)
 
