@@ -400,7 +400,7 @@ jobs:
 
       - name: Set up uv (+ managed Python)
         if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-macos == 'true'
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
 
@@ -453,7 +453,7 @@ jobs:
 
       - name: Set up uv (+ managed Python)
         if: needs.installer-path-gate.result == 'success' && inputs.skip-quality-gate != true && needs.installer-path-gate.outputs.run-linux == 'true'
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
 
