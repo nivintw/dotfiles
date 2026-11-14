@@ -303,7 +303,7 @@ jobs:
       run-macos: ${{ steps.decide.outputs.run-macos }}
       run-linux: ${{ steps.decide.outputs.run-linux }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           # Full history so the path gate can diff this PR/push against its base.
@@ -393,7 +393,7 @@ jobs:
 
       # Shallow checkout: the path-gate decision already happened in installer-path-gate, so
       # this job only needs the working tree to actually run the installer, not its history.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: needs.installer-path-gate.result == 'success'
         with:
           persist-credentials: false
@@ -446,7 +446,7 @@ jobs:
           exit 1
 
       # Shallow checkout — see installer-smoke-macos's identical comment above.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: needs.installer-path-gate.result == 'success'
         with:
           persist-credentials: false
