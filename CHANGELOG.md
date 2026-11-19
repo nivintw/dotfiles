@@ -7,6 +7,13 @@ SPDX-License-Identifier: MIT
 
 <!-- release-please prepends new releases above; entries below predate the release-please migration. -->
 
+## [1.25.1](https://github.com/nivintw/dotfiles/compare/v1.25.0...v1.25.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **deps:** Upgrade certifi and urllib3 past known vulnerabilities ([1dd5c58](https://github.com/nivintw/dotfiles/commit/1dd5c588f922a3e477f7e0f6dc7b1d8785141517))
+
 ## [1.25.0](https://github.com/nivintw/dotfiles/compare/v1.24.0...v1.25.0) (2026-07-10)
 
 
