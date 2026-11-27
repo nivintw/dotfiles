@@ -236,7 +236,7 @@ repos:
   # ----------------------------- ⚙️ Environment Management -------------------------- #
   # Keep uv.lock in sync with pyproject.toml so CI's `uv sync` never drifts.
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.13.9
+    rev: 0.13.10
     hooks:
       - id: uv-lock
         name: "⚙️ uv · Keep uv.lock in sync with pyproject.toml"
